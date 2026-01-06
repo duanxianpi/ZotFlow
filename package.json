@@ -5,6 +5,7 @@
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
+		"generate-zotero-item-schema": "node scripts/generate-zotero-item-schema.js",
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
@@ -13,17 +14,20 @@
 	"keywords": [],
 	"license": "0-BSD",
 	"devDependencies": {
+		"@eslint/js": "9.30.1",
 		"@types/node": "^16.11.6",
+		"axios": "^1.13.2",
 		"esbuild": "0.25.5",
 		"eslint-plugin-obsidianmd": "0.1.9",
 		"globals": "14.0.0",
+		"jiti": "2.6.1",
+		"prettier": "^3.7.4",
 		"tslib": "2.4.0",
 		"typescript": "^5.8.3",
-		"typescript-eslint": "8.35.1",
-		"@eslint/js": "9.30.1",
-		"jiti": "2.6.1"
+		"typescript-eslint": "8.35.1"
 	},
 	"dependencies": {
+		"dexie": "^4.2.1",
 		"obsidian": "latest"
 	}
 }
