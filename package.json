@@ -28,6 +28,7 @@
 	},
 	"dependencies": {
 		"dexie": "^4.2.1",
-		"obsidian": "latest"
+		"obsidian": "latest",
+		"zotero-api-client": "^0.47.0"
 	}
 }
