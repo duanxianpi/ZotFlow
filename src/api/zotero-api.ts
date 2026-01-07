@@ -1,4 +1,4 @@
-import api from 'zotero-api-client';
+import api, { ApiChain } from 'zotero-api-client';
 
 export interface ZoteroKeyAccess {
     user: {
@@ -25,7 +25,7 @@ export interface ZoteroKeyResponse {
 
 export class ZoteroApiClient {
     private apiKey: string;
-    private client: any;
+    private client: ApiChain;
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;

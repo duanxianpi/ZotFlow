@@ -19,6 +19,7 @@ export class ZotFlowDB extends Dexie {
                 libraryID, 
                 itemType, 
                 parentItem, 
+                trashed,
                 *collections, 
                 *_searchCreators, 
                 *_searchTags, 
@@ -34,6 +35,7 @@ export class ZotFlowDB extends Dexie {
                 libraryID, 
                 parentCollection, 
                 name,
+                trashed,
                 _syncStatus,
                 [libraryID+version]
             `,

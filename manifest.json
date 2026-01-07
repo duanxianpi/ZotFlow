@@ -1,6 +1,6 @@
 {
-	"id": "zotflow",
-	"name": "ZotFlow",
+	"id": "obsidian-zotflow",
+	"name": "Obsidian ZotFlow",
 	"version": "0.1.0",
 	"minAppVersion": "0.15.0",
 	"description": "Keep your research in flow!",

@@ -1,13 +1,18 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, ZotFlowSettings, ZotFlowSettingTab } from "./settings";
+import { SyncService } from 'sync/sync-service';
 
 // Remember to rename these classes and interfaces!
 
-export default class MyPlugin extends Plugin {
+export default class ObsidianZotFlow extends Plugin {
 	settings: ZotFlowSettings;
+	syncService: SyncService;
 
 	async onload() {
 		await this.loadSettings();
+
+		this.syncService = new SyncService();
+		this.syncService.startSync(this.settings.zoteroApiKey, this.settings.zoteroUser!.userID);
 
 		// // This creates an icon in the left ribbon.
 		// this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {

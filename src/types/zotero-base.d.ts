@@ -21,7 +21,6 @@ export interface ZoteroCollection {
     version: number;
     name: string;
     parentCollection?: string;
-    _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
 }
 
 // Zotero Library
@@ -29,6 +28,4 @@ export interface ZoteroLibrary {
     id: number;          // Library ID
     type: 'user' | 'group';
     name: string;
-    version: number;
-    lastSyncAttempt: number;
 }

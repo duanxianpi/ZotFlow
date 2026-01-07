@@ -10,6 +10,7 @@ export interface IndexedDBZoteroItem {
     itemType: ZoteroItemType; // 'journalArticle', 'attachment', 'annotation', etc.
     parentItem?: string;      // Parent Item Key
     collections: string[];    // Collection Key Array
+    trashed: boolean;         // Whether the item is trashed
 
     // Sorting & Versioning
     title: string;            // Title (normalized for sorting)
@@ -23,7 +24,7 @@ export interface IndexedDBZoteroItem {
 
     // Sync State
     _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
-    _syncedAt?: number;
+    _syncedAt?: string;
 
     // Local Extension
     local: {
@@ -46,12 +47,19 @@ export interface IndexedDBZoteroFile {
     blob: Blob;          // File Blob
     mimeType: string;
     md5: string;         // File MD5 (API returned), used to determine if re-download is needed
-    downloadedAt: number; // LRU cleanup strategy
+    downloadedAt: string; // LRU cleanup strategy
 }
 
-export interface IndexedDBZoteroCollection extends ZoteroCollection { }
+export interface IndexedDBZoteroCollection extends ZoteroCollection {
+    trashed: boolean;         // Whether the collection is trashed
+    _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
+    _syncedAt?: string;
+}
 
-export interface IndexedDBZoteroLibrary extends ZoteroLibrary { }
+export interface IndexedDBZoteroLibrary extends ZoteroLibrary {
+    collectionVersion?: number; // For collection sync, indicates the global version of the library
+    itemVersion?: number; // For item sync, indicates the global version of the library
+}
 
 // Mutation Task
 export interface MutationTask {
@@ -61,7 +69,7 @@ export interface MutationTask {
     dataType: 'item' | 'collection';
     key: string;         // Key to perform action on
     payload: any;        // JSON Body to send to API
-    createdAt: number;
+    createdAt: string;
     retryCount: number;
     error?: string;      // Last failure reason
 }
