@@ -6,3 +6,26 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+/* ZotLit Suggestion Modal Styles */
+.zotlit-suggestion-header {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.zotlit-suggestion-icon {
+    margin-right: 8px;
+    font-size: 1.1em;
+    opacity: 0.7;
+}
+
+.zotlit-suggestion-meta {
+    font-size: 0.85em;
+    color: var(--text-muted);
+    margin-left: 24px;
+    /* Align with title */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

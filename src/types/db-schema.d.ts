@@ -1,19 +1,43 @@
-import { ZoteroCollection, ZoteroLibrary } from "./zotero-base";
-import { ZoteroItem, ZoteroItemType } from "./zotero-item-schema";
+import { ZoteroCollection, ZoteroItem, ZoteroLibrary } from "./zotero";
+import { ZoteroItemData, ZoteroItemDataTypeMap } from "./zotero-item";
 
-export interface IndexedDBZoteroItem {
+// Zotero Library
+export interface IndexedDBZoteroLibrary extends ZoteroLibrary {
+    collectionVersion?: number; // For collection sync, indicates the global version of the library
+    itemVersion?: number; // For item sync, indicates the global version of the library
+}
+
+// Zotero Collection
+export interface IndexedDBZoteroCollection {
+    key: string;
+    libraryID: number;
+    version: number;
+    name: string;
+    parentCollection: false | string;
+    trashed: boolean;         // Whether the collection is trashed
+
+    // Sync State
+    _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
+    _syncedAt?: string;
+
+    // Raw Payload
+    raw: ZoteroCollection;
+}
+
+// Zotero Item
+interface _IndexedDBZoteroItem<T extends ZoteroItemData> {
     // Core Zotero Data
     key: string;              // Zotero Item Key (8 chars)
     libraryID: number;        // Library ID (User or Group ID)
 
     // Core Indexed Fields
-    itemType: ZoteroItemType; // 'journalArticle', 'attachment', 'annotation', etc.
-    parentItem?: string;      // Parent Item Key
-    collections: string[];    // Collection Key Array
-    trashed: boolean;         // Whether the item is trashed
+    itemType: T['itemType']; // 'journalArticle', 'attachment', 'annotation', etc.
+    parentItem: string;      // Parent Item Key
+    trashed: boolean;        // Whether the item is trashed
 
     // Sorting & Versioning
-    title: string;            // Title (normalized for sorting)
+    title?: string;            // Title (normalized for sorting)
+    collections?: string[];    // Collection Key Array
     dateAdded: string;        // ISO String
     dateModified: string;     // ISO String (Zotero Cloud's last modified time)
     version: number;          // Zotero Cloud Version (for optimistic locking)
@@ -25,21 +49,15 @@ export interface IndexedDBZoteroItem {
     // Sync State
     _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
     _syncedAt?: string;
-
-    // Local Extension
-    local: {
-        lastAccessed?: number;
-        readingProgress?: number;
-        privateTags?: string[];
-        kanbanStatus?: string;
-        notes?: string;
-        fileSize?: number;
-        fileExtension?: string;  // pdf, epub, etc.
-    };
+    _lastAccessed?: string;
+    _readingProgress?: number;
 
     // Raw Payload
-    data: ZoteroItem;
+    raw: ZoteroItem<T>;
 }
+
+export type IndexedDBZoteroItem<T extends ZoteroItemData> = _IndexedDBZoteroItem<T>;
+export type AnyIndexedDBZoteroItem = { [K in keyof ZoteroItemDataTypeMap]: IndexedDBZoteroItem<ZoteroItemDataTypeMap[K]> }[keyof ZoteroItemDataTypeMap];
 
 // Zotero File
 export interface IndexedDBZoteroFile {
@@ -50,18 +68,6 @@ export interface IndexedDBZoteroFile {
     downloadedAt: string; // LRU cleanup strategy
 }
 
-export interface IndexedDBZoteroCollection extends ZoteroCollection {
-    trashed: boolean;         // Whether the collection is trashed
-    _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
-    _syncedAt?: string;
-}
-
-export interface IndexedDBZoteroLibrary extends ZoteroLibrary {
-    collectionVersion?: number; // For collection sync, indicates the global version of the library
-    itemVersion?: number; // For item sync, indicates the global version of the library
-}
-
-// Mutation Task
 export interface MutationTask {
     id?: number;         // Auto-increment ID
     libraryID: number;

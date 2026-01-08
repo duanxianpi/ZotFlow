@@ -3,6 +3,8 @@ import { ZoteroApiClient } from '../api/zotero-api';
 import { normalizeItem, normalizeCollection } from '../utils/normalize';
 import { Notice } from 'obsidian';
 import { ApiChain } from 'zotero-api-client';
+import { ZoteroItemData } from 'types/zotero-item';
+import { ZoteroItem, AnyZoteroItem } from 'types/zotero';
 
 const BULK_SIZE = 50; // Limit due to URL length
 
@@ -97,7 +99,7 @@ export class SyncService {
         const batchRes = await libHandle.collections().get({
           collectionKey: slice.join(','),
         });
-        const collections = batchRes.getData();
+        const collections = batchRes.raw;
 
         if (collections.length > 0) {
           const cleanCollections = collections.map((raw: any) => normalizeCollection(raw, this.userID));
@@ -167,10 +169,10 @@ export class SyncService {
           itemKey: slice.join(',')
         });
 
-        const items = batchRes.getData();
+        const items = batchRes.raw;
 
         if (items.length > 0) {
-          const cleanItems = items.map((raw: any) => normalizeItem(raw, this.userID));
+          const cleanItems = items.map((raw: any) => normalizeItem(raw as AnyZoteroItem, this.userID));
 
           // Transaction Write
           await db.transaction('rw', db.items, async () => {

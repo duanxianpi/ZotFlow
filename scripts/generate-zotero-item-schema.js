@@ -19,7 +19,19 @@ async function generate() {
  * Source: schema.json (v${schema.version})
  */
 
-import { ZoteroItemBase } from './zotero-base';
+interface BaseZoteroItemData {
+  key: string;
+  version: number;
+  itemType: string;
+  parentItem: string;
+  title?: string;
+  collections?: string[];
+  dateAdded: string;
+  dateModified: string;
+  tags: Array<{ tag: string; type?: number }>;
+  relations: { [key: string]: string | string[] };
+  deleted: boolean;
+}
 `;
 
 
@@ -62,10 +74,9 @@ import { ZoteroItemBase } from './zotero-base';
 
     // Generate Interface
     output += `
-export interface ${interfaceName} extends ZoteroItemBase {
-  data: ZoteroItemBase['data'] & {
-    itemType: '${itemType}';
-${fieldsStr}  };
+interface ${interfaceName}Data extends BaseZoteroItemData {
+  itemType: '${itemType}';
+  ${fieldsStr}
 }
 `;
   }
@@ -79,15 +90,17 @@ ${fieldsStr}  };
   output += `}\n`;
 
   // Generate Union Type
-  output += `\nexport type ZoteroItem = ${typeNames.join(' | ')};\n`;
+  output += `\nexport type ZoteroItemData = ${typeNames.map(t => t + 'Data').join(' | ')};\n`;
 
   // Generate Item Type Union & Guard
-  output += `\nexport type ZoteroItemType = ${itemTypes.map(t => `'${t}'`).join(' | ')};\n`;
+  output += `\nexport interface ZoteroItemDataTypeMap {
+    ${itemTypes.map(t => `'${t}': ${pascalCase(t)}Data`).join(' ;\n')}
+  }\n`;
 
   output = await format(output, { parser: 'typescript' });
 
   // Write to file
-  fs.writeFileSync(path.join(__dirname, './src/types/zotero-item-schema.d.ts'), output);
+  fs.writeFileSync(path.join(__dirname, './src/types/zotero-item.d.ts'), output);
   console.log('✅ Types generated!');
 }
 
