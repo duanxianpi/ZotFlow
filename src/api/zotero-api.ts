@@ -24,12 +24,16 @@ export interface ZoteroKeyResponse {
 }
 
 export class ZoteroApiClient {
-    private apiKey: string;
     private client: ApiChain;
 
+
     constructor(apiKey: string) {
-        this.apiKey = apiKey;
         // zotero-api-client handles Auth Header, Rate Limiting (Retry-After), and Retries automatically.
+        this.client = api.default(apiKey);
+        this.updateCredentials(apiKey);
+    }
+
+    updateCredentials(apiKey: string) {
         this.client = api.default(apiKey);
     }
 

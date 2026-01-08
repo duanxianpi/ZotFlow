@@ -64,8 +64,10 @@ export interface IDBZoteroFile {
     key: string;         // Zotero Item Key (itemType='attachment')
     blob: Blob;          // File Blob
     mimeType: string;
+    fileName: string;
     md5: string;         // File MD5 (API returned), used to determine if re-download is needed
-    downloadedAt: string; // LRU cleanup strategy
+    lastAccessedAt: string;
+    size: number;
 }
 
 export interface MutationTask {

@@ -1,34 +1,26 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, ZotFlowSettings, ZotFlowSettingTab } from "./settings";
-import { SyncService } from 'services/sync';
-import { db } from './db/db';
+import { SyncService } from 'services/sync-service';
 import { ZoteroSearchModal } from './ui/zotero-suggest-modal';
+import { services } from './services/serivces';
 
 // Remember to rename these classes and interfaces!
 
 export default class ObsidianZotFlow extends Plugin {
 	settings: ZotFlowSettings;
-	syncService: SyncService;
 
 	async onload() {
 		await this.loadSettings();
 
-		this.syncService = new SyncService();
-		this.syncService.startSync(this.settings.zoteroApiKey, this.settings.zoteroUser!.userID);
-
-
+		services.initialize(this.settings);
 		this.addRibbonIcon('library', 'ZotFlow: Open Library', (evt: MouseEvent) => {
-			new ZoteroSearchModal(this.app).open();
+			new ZoteroSearchModal(this.app, this.settings).open();
 		});
 
-		// Add Command
-		this.addCommand({
-			id: 'open-zotflow-search',
-			name: 'Search Zotero Library',
-			callback: () => {
-				new ZoteroSearchModal(this.app).open();
-			}
+		this.addRibbonIcon('sync', 'ZotFlow: Sync Library', (evt: MouseEvent) => {
+			services.sync.startSync(this.settings.zoteroUser!.userID);
 		});
+
 		// // This creates an icon in the left ribbon.
 		// this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
 		// 	// Called when the user clicks the icon.

@@ -41,8 +41,10 @@ export type AnyZoteroItem = { [K in keyof ZoteroItemDataTypeMap]: ZoteroItem<Zot
 
 declare module './zotero-item' {
     interface AttachmentData {
+        linkMode: "imported_file" | "linked_file" | "imported_url";
         contentType: string;
         filename: string;
+        md5?: string;
     }
 
     interface NoteData {

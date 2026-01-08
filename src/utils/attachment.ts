@@ -1,24 +1,30 @@
 import { ZoteroItem } from "types/zotero";
 import { AttachmentData } from "types/zotero-item";
 import { Notice } from "obsidian";
-
+import { services } from "services/serivces";
 /**
  * Open an attachment in the default application.
  * @param item The attachment item to open.
  * @param fallback Optional fallback function to execute if the attachment type is not supported.
  */
 export async function openAttachment(item: ZoteroItem<AttachmentData>, fallback?: () => void | Promise<void>) {
-  const { contentType, title, filename } = item.data;
+  const { key, contentType, filename } = item.data;
 
   switch (contentType) {
     case 'application/pdf':
-      console.log('Opening PDF:', title || filename);
+      console.log('Opening PDF:', filename);
+      const pdfBlob = await services.files.getFileBlob(key);
+      console.log('PDF Blob:', pdfBlob);
       return;
     case 'application/epub+zip':
-      console.log('Opening EPUB:', title || filename);
+      console.log('Opening EPUB:', filename);
+      const epubBlob = await services.files.getFileBlob(key);
+      console.log('EPUB Blob:', epubBlob);
       return;
     case 'text/html':
-      console.log('Opening Snapshot:', title || filename);
+      console.log('Opening Snapshot:', filename);
+      const snapshotBlob = await services.files.getFileBlob(key);
+      console.log('Snapshot Blob:', snapshotBlob);
       return;
     default:
       if (!fallback) {

@@ -13,10 +13,15 @@ const BULK_SIZE = 50; // Limit due to URL length
  */
 export class SyncService {
   private syncing = false;
-  private api: ApiChain | null = null;
   private userID: number = 0;
 
-  async startSync(apiKey: string, userID: number) {
+  private api: ApiChain;
+
+  constructor(api: ZoteroApiClient) {
+    this.api = api.getClient();
+  }
+
+  async startSync(userID: number) {
     if (this.syncing) {
       new Notice('ZotFlow: Sync is already running.');
       return;
@@ -28,7 +33,6 @@ export class SyncService {
 
     this.syncing = true;
     this.userID = userID;
-    this.api = new ZoteroApiClient(apiKey).getClient();
 
     new Notice('ZotFlow: Started syncing...');
     console.log(`[ZotFlow] Start syncing for User ${userID}`);
@@ -60,7 +64,6 @@ export class SyncService {
       new Notice(`ZotFlow Sync Failed: ${error.message}`);
     } finally {
       this.syncing = false;
-      this.api = null;
     }
   }
 

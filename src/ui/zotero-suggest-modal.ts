@@ -3,7 +3,7 @@ import { db } from '../db/db';
 import { AnyIDBZoteroItem } from '../types/db-schema';
 import { AttachmentSelectModal } from './attachment-select-modal';
 import { openAttachment } from 'utils/attachment';
-
+import { ZotFlowSettings } from '../settings';
 
 interface SearchHeader {
     isHeader: true;
@@ -13,8 +13,10 @@ type SuggestionItem = AnyIDBZoteroItem | SearchHeader;
 
 export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
-    constructor(app: App) {
+    settings: ZotFlowSettings;
+    constructor(app: App, settings: ZotFlowSettings) {
         super(app);
+        this.settings = settings;
         this.setPlaceholder("Search Zotero Library...");
         this.modalEl.addClass("zotflow-search-modal");
         this.limit = 20; // Limit for suggestions
@@ -23,6 +25,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
     // Get suggestions based on query
     async getSuggestions(query: string): Promise<SuggestionItem[]> {
         const isValidTopLevel = (type: string) => !['attachment', 'note', 'annotation'].includes(type);
+        const { userID } = this.settings.zoteroUser!;
 
         // No input -> Show Recent Access
         if (!query) {
@@ -30,7 +33,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
             const recentItems = await db.items
                 .orderBy('_lastAccessed')
                 .reverse() // Latest first
-                .filter(item => !item.parentItem && isValidTopLevel(item.itemType))
+                .filter(item => item.libraryID === userID && !item.parentItem && isValidTopLevel(item.itemType))
                 .limit(20)
                 .toArray();
 
@@ -46,7 +49,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
             const fallbackItems = await db.items
                 .orderBy('dateModified')
                 .reverse()
-                .filter(item => !item.parentItem && isValidTopLevel(item.itemType))
+                .filter(item => item.libraryID === userID && !item.parentItem && isValidTopLevel(item.itemType))
                 .limit(20)
                 .toArray();
 
@@ -65,7 +68,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
         // Use Dexie's Collection to filter (in memory, for multi-field fuzzy search)
         const searchResults = await db.items.filter(item => {
-            if (item.parentItem || !isValidTopLevel(item.itemType)) return false;
+            if (item.libraryID !== userID || item.parentItem || !isValidTopLevel(item.itemType)) return false;
 
             const titleMatch = (item.title || "").toLowerCase().includes(lowerQuery);
             const creatorMatch = (item._searchCreators || []).some(c => c.toLowerCase().includes(lowerQuery));

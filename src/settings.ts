@@ -1,15 +1,28 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import MyPlugin from "./main";
 import { ZoteroApiClient, ZoteroKeyResponse } from "./api/zotero-api";
+import { WebDavClient } from "./api/webdav-api";
 
 export interface ZotFlowSettings {
 	zoteroApiKey: string;
 	zoteroUser?: ZoteroKeyResponse;
+	useWebDav: boolean;
+	webDavUrl?: string;
+	webDavUser?: string;
+	webDavPassword?: string;
+	useCache: boolean;
+	maxCacheSizeMB: number;
 }
 
 export const DEFAULT_SETTINGS: ZotFlowSettings = {
 	zoteroApiKey: '',
 	zoteroUser: undefined,
+	useWebDav: true,
+	webDavUrl: '',
+	webDavUser: '',
+	webDavPassword: '',
+	useCache: true,
+	maxCacheSizeMB: 500,
 }
 
 export class ZotFlowSettingTab extends PluginSettingTab {
@@ -21,12 +34,186 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
+		this.plugin.loadSettings().then(() => {
+
+			this.renderApiKeySetting();
+			this.renderCacheSettings();
+			this.renderWebDavSettings();
+
+		});
+
+	}
+
+	// ========== Cache Settings ==========
+	private renderCacheSettings() {
+		const { containerEl } = this;
+
+		containerEl.createEl('h2', { text: 'Cache Settings' });
+
+		// Enable/Disable Cache
+		new Setting(containerEl)
+			.setName('Enable Cache')
+			.setDesc('Enable caching of attachments to prevent repeated downloads.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.useCache)
+				.onChange(async (value) => {
+					this.plugin.settings.useCache = value;
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		if (this.plugin.settings.useCache) {
+			// Max Cache Size
+			new Setting(containerEl)
+				.setName('Max Cache Size (MB)')
+				.setDesc('Maximum size of the cache in megabytes. Set to 0 allow unlimited cache.')
+				.addText(text => text
+					.setValue((this.plugin.settings.maxCacheSizeMB || DEFAULT_SETTINGS.maxCacheSizeMB).toString())
+					.onChange(async (value) => {
+						if (value && !/^[0-9]+$/.test(value)) {
+							new Notice("Max cache size must be a positive number.");
+							if (this.plugin.settings.maxCacheSizeMB) {
+								text.setValue(this.plugin.settings.maxCacheSizeMB.toString());
+							} else {
+								text.setValue(DEFAULT_SETTINGS.maxCacheSizeMB.toString());
+							}
+							return;
+						}
+						this.plugin.settings.maxCacheSizeMB = parseInt(value);
+						await this.plugin.saveSettings();
+					})
+				);
+		}
+	}
+
+	// ========== WebDAV Settings ==========
+	private renderWebDavSettings() {
+		const { containerEl } = this;
+
+		containerEl.createEl('h2', { text: 'WebDAV Settings' });
+
+		// Toggle to enable/disable WebDAV
+		new Setting(containerEl)
+			.setName('Use WebDAV for Attachments')
+			.setDesc('Enable syncing attachments via WebDAV.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.useWebDav)
+				.onChange(async (value) => {
+					this.plugin.settings.useWebDav = value;
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		if (this.plugin.settings.useWebDav) {
+			const isVerified = !!this.plugin.settings.webDavUrl;
+
+			// Temporary storage for credentials before verification
+			// If verified, these values are just for display (and are equal to settings)
+			let tempUrl = this.plugin.settings.webDavUrl || '';
+			let tempUser = this.plugin.settings.webDavUser || '';
+			// For password, if verified, we might want to show it masked or placeholder
+			// But since we can't retrieve it back from settings if we didn't store it in temp (well we did store it in settings)
+			// Let's just use what's in settings.
+			let tempPassword = this.plugin.settings.webDavPassword || '';
+
+			new Setting(containerEl)
+				.setName('WebDAV URL')
+				.setDesc('The full URL to your WebDAV folder (e.g., https://webdav.service.com/zotero/)')
+				.addText(text => {
+					text.setPlaceholder('https://...')
+						.setValue(tempUrl)
+						.onChange((value) => {
+							tempUrl = value.trim();
+						});
+					if (isVerified) text.setDisabled(true);
+				});
+
+			new Setting(containerEl)
+				.setName('Username')
+				.setDesc('WebDAV Username')
+				.addText(text => {
+					text.setPlaceholder('username')
+						.setValue(tempUser)
+						.onChange((value) => {
+							tempUser = value.trim();
+						});
+					if (isVerified) text.setDisabled(true);
+				});
+
+			new Setting(containerEl)
+				.setName('Password')
+				.setDesc('WebDAV Password')
+				.addText(text => {
+					text.setPlaceholder('password')
+						.setValue(tempPassword)
+						.onChange((value) => {
+							tempPassword = value.trim();
+						});
+					text.inputEl.type = "password";
+					if (isVerified) text.setDisabled(true);
+				});
+
+			// Verify or Clear Button
+			if (isVerified) {
+				new Setting(containerEl)
+					.addButton(button => button
+						.setButtonText("Disconnect")
+						.setWarning()
+						.onClick(async () => {
+							this.plugin.settings.webDavUrl = '';
+							this.plugin.settings.webDavUser = '';
+							this.plugin.settings.webDavPassword = '';
+							await this.plugin.saveSettings();
+							this.display();
+							new Notice("WebDAV settings cleared.");
+						}));
+			} else {
+				new Setting(containerEl)
+					.addButton(button => button
+						.setButtonText("Verify WebDAV")
+						.setCta()
+						.onClick(async () => {
+							if (!tempUrl || !tempUser || !tempPassword) {
+								new Notice("Please fill in all WebDAV fields.");
+								return;
+							}
+
+							button.setButtonText("Verifying...");
+							button.setDisabled(true);
+
+							try {
+								await WebDavClient.verify(tempUrl, tempUser, tempPassword);
+								new Notice("WebDAV connected successfully!");
+
+								// Only save if verified
+								this.plugin.settings.webDavUrl = tempUrl;
+								this.plugin.settings.webDavUser = tempUser;
+								this.plugin.settings.webDavPassword = tempPassword;
+
+								await this.plugin.saveSettings();
+								this.display(); // Re-render to lock fields
+
+							} catch (error: any) {
+								console.error("WebDAV Verification Failed", error);
+								new Notice(`Verification failed: ${error.message || "Unknown error"}`);
+								button.setButtonText("Verify WebDAV");
+								button.setDisabled(false);
+							}
+						}));
+			}
+		}
+	}
+
+
+
+	// ========== API Key Settings ==========
+	private renderApiKeySetting() {
+
 		const { containerEl } = this;
 
 		containerEl.empty();
-		containerEl.createEl('h2', { text: 'Zotero Integration' });
+		containerEl.createEl('h2', { text: 'Zotero API Key' });
 
-		// ========== API Key Settings ==========
 		const user = this.plugin.settings.zoteroUser;
 
 		// Description text
@@ -61,7 +248,6 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.zoteroApiKey = value.trim();
 						this.plugin.settings.zoteroUser = undefined;
-						await this.plugin.saveSettings();
 					});
 				text.inputEl.type = "text";
 				text.inputEl.size = 32;
@@ -87,7 +273,6 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 
 				try {
 					const keyInfo = await ZoteroApiClient.verifyKey(apiKey);
-					this.plugin.settings.zoteroUser = keyInfo;
 
 					if (
 						keyInfo.access.user &&
@@ -96,8 +281,11 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 						keyInfo.access.user.files &&
 						keyInfo.access.user.write
 					) {
+						this.plugin.settings.zoteroUser = keyInfo;
 						new Notice("Verified as " + keyInfo.username);
 					} else {
+						this.plugin.settings.zoteroApiKey = '';
+						this.plugin.settings.zoteroUser = undefined;
 						new Notice("Invalid API Key. Please check your permissions");
 					}
 

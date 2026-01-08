@@ -44,7 +44,7 @@ export class ZotFlowDB extends Dexie {
             `,
 
             // Zotero Files
-            files: '&key, downloadedAt',
+            files: '&key, lastAccessedAt',
 
             // Mutation Queue
             mutationQueue: '++id, libraryID, key'

@@ -53,7 +53,21 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
 
             const data = att.raw.data;
 
-            let desc = data.filename || "";
+            let desc = ""
+            switch (data.contentType) {
+                case 'application/pdf':
+                    desc = data.filename;
+                    break;
+                case 'application/epub+zip':
+                    desc = data.filename;
+                    break;
+                case 'text/html':
+                    desc = data.url || data.filename;
+                    break;
+                default:
+                    desc = data.filename;
+                    break;
+            }
 
             options.push({
                 label: data.title || data.filename || "Untitled Attachment",
@@ -90,6 +104,6 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
     }
 
     async onChooseSuggestion(option: ActionOption, evt: MouseEvent | KeyboardEvent) {
-        openAttachment(option.item.raw);
+        await openAttachment(option.item.raw);
     }
 }
