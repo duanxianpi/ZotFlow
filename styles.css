@@ -1,31 +1,147 @@
-/*
-
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
-*/
-/* ZotLit Suggestion Modal Styles */
-.zotlit-suggestion-header {
+/* Container for the whole item */
+.zotflow-search-item {
     display: flex;
     align-items: center;
-    font-weight: 600;
-    margin-bottom: 2px;
+    padding: 8px 10px;
+    width: 100%;
+    /* Ensure full width usage */
 }
 
-.zotlit-suggestion-icon {
-    margin-right: 8px;
-    font-size: 1.1em;
+/* The Icon */
+.zotflow-item-icon {
+    margin-right: 12px;
     opacity: 0.7;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--text-accent);
+    /* Icon should never shrink */
 }
 
-.zotlit-suggestion-meta {
-    font-size: 0.85em;
-    color: var(--text-muted);
-    margin-left: 24px;
-    /* Align with title */
+/* The Content Column (Up/Down Wrapper) */
+.zotflow-item-content {
+    display: flex;
+    flex-direction: column;
+    /* Stack Title and Bottom Row */
+    flex-grow: 1;
+    min-width: 0;
+    /* Critical for text-overflow to work inside flex children */
+    overflow: hidden;
+}
+
+/* UP: Title */
+.zotflow-row-top .zotflow-title {
+    font-weight: normal;
+    font-size: 1em;
+    margin-bottom: 2px;
+    color: var(--text-normal);
+
+    /* Truncation Logic */
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* DOWN: Meta and Tags */
+.zotflow-row-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    width: 100%;
+}
+
+/* Down-Left: Meta info (Author • Year) */
+.zotflow-meta {
+    flex-grow: 1;
+    margin-right: 10px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Down-Right: Tags */
+.zotflow-tags {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    align-items: center;
+}
+
+/* Tag Styling */
+.zotflow-tags .tag {
+    background-color: var(--tag-background);
+    border: var(--tag-border-width) solid var(--tag-border-color);
+    border-radius: var(--tag-radius);
+    color: var(--tag-color);
+    font-size: 0.9em;
+    /* Slightly smaller for search modal context */
+    font-weight: var(--tag-weight);
+    text-decoration: var(--tag-decoration);
+    padding: var(--tag-padding-y) var(--tag-padding-x);
+    line-height: 1.2;
+
+    /* Tag Length Limits */
+    max-width: 100px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Suggestion Header */
+.suggestion-item.zotflow-suggestion-header {
+    background-color: transparent !important;
+    padding: 8px 10px 4px 10px;
+    font-size: 0.8em;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    border-bottom: none;
+}
+
+/* Reset Padding */
+.suggestion-item.zotflow-suggestion-header .zotflow-search-item {
+    padding: 0;
+}
+
+/* Attachment Select Modal */
+.zotflow-attachment-option {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+}
+
+.zotflow-option-icon {
+    margin-right: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.zotflow-option-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.zotflow-option-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.zotflow-option-title {
+    margin-bottom: 2px;
+    color: var(--text-normal);
+}
+
+.zotflow-option-desc {
+    font-size: 0.8em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

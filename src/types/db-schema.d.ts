@@ -2,13 +2,13 @@ import { ZoteroCollection, ZoteroItem, ZoteroLibrary } from "./zotero";
 import { ZoteroItemData, ZoteroItemDataTypeMap } from "./zotero-item";
 
 // Zotero Library
-export interface IndexedDBZoteroLibrary extends ZoteroLibrary {
+export interface IDBZoteroLibrary extends ZoteroLibrary {
     collectionVersion?: number; // For collection sync, indicates the global version of the library
     itemVersion?: number; // For item sync, indicates the global version of the library
 }
 
 // Zotero Collection
-export interface IndexedDBZoteroCollection {
+export interface IDBZoteroCollection {
     key: string;
     libraryID: number;
     version: number;
@@ -25,7 +25,7 @@ export interface IndexedDBZoteroCollection {
 }
 
 // Zotero Item
-interface _IndexedDBZoteroItem<T extends ZoteroItemData> {
+interface _IDBZoteroItem<T extends ZoteroItemData> {
     // Core Zotero Data
     key: string;              // Zotero Item Key (8 chars)
     libraryID: number;        // Library ID (User or Group ID)
@@ -56,11 +56,11 @@ interface _IndexedDBZoteroItem<T extends ZoteroItemData> {
     raw: ZoteroItem<T>;
 }
 
-export type IndexedDBZoteroItem<T extends ZoteroItemData> = _IndexedDBZoteroItem<T>;
-export type AnyIndexedDBZoteroItem = { [K in keyof ZoteroItemDataTypeMap]: IndexedDBZoteroItem<ZoteroItemDataTypeMap[K]> }[keyof ZoteroItemDataTypeMap];
+export type IDBZoteroItem<T extends ZoteroItemData> = _IDBZoteroItem<T>;
+export type AnyIDBZoteroItem = { [K in keyof ZoteroItemDataTypeMap]: IDBZoteroItem<ZoteroItemDataTypeMap[K]> }[keyof ZoteroItemDataTypeMap];
 
 // Zotero File
-export interface IndexedDBZoteroFile {
+export interface IDBZoteroFile {
     key: string;         // Zotero Item Key (itemType='attachment')
     blob: Blob;          // File Blob
     mimeType: string;

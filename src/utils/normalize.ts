@@ -1,15 +1,15 @@
 import { ZoteroItemData } from 'types/zotero-item';
-import { IndexedDBZoteroCollection, AnyIndexedDBZoteroItem } from '../types/db-schema';
+import { IDBZoteroCollection, AnyIDBZoteroItem } from '../types/db-schema';
 import { ZoteroCollection, AnyZoteroItem } from 'types/zotero';
 
 /**
- * Normalize a raw Zotero collection from the API into our IndexedDB schema.
+ * Normalize a raw Zotero collection from the API into our IDB schema.
  * @param raw - The raw collection object from Zotero API (containing .data, .key, etc.)
  * @param libraryID - The library ID this collection belongs to
  */
-export function normalizeCollection(raw: ZoteroCollection, libraryID: number): IndexedDBZoteroCollection {
+export function normalizeCollection(raw: ZoteroCollection, libraryID: number): IDBZoteroCollection {
     console.log(raw);
-    const collection: IndexedDBZoteroCollection = {
+    const collection: IDBZoteroCollection = {
         key: raw.key,
         libraryID: libraryID,
         version: raw.version,
@@ -25,16 +25,16 @@ export function normalizeCollection(raw: ZoteroCollection, libraryID: number): I
 
 
 /**
- * Normalize a raw Zotero item from the API into our IndexedDB schema.
+ * Normalize a raw Zotero item from the API into our IDB schema.
  * @param raw - The raw item object from Zotero API (containing .data, .key, etc.)
  * @param libraryID - The library ID this item belongs to
  */
 /**
- * Normalize a raw Zotero item from the API into our IndexedDB schema.
+ * Normalize a raw Zotero item from the API into our IDB schema.
  * @param raw - The raw item object from Zotero API (containing .data, .key, etc.)
  * @param libraryID - The library ID this item belongs to
  */
-export function normalizeItem(raw: AnyZoteroItem, libraryID: number): AnyIndexedDBZoteroItem {
+export function normalizeItem(raw: AnyZoteroItem, libraryID: number): AnyIDBZoteroItem {
     // Safety check for title
     let title = '';
 
@@ -78,7 +78,7 @@ export function normalizeItem(raw: AnyZoteroItem, libraryID: number): AnyIndexed
         });
     }
 
-    const item: AnyIndexedDBZoteroItem = {
+    const item: AnyIDBZoteroItem = {
         key: raw.data.key,
         libraryID: libraryID,
         itemType: raw.data.itemType,
@@ -97,7 +97,7 @@ export function normalizeItem(raw: AnyZoteroItem, libraryID: number): AnyIndexed
         _readingProgress: 0,
 
         raw: raw
-    } as AnyIndexedDBZoteroItem;
+    } as AnyIDBZoteroItem;
 
     return item;
 }

@@ -51,6 +51,10 @@ export class ZoteroApiClient {
         }
     }
 
+    /**
+     * Get the API client instance.
+     * This is used to make API requests to Zotero.
+     */
     public getClient() {
         return this.client;
     }

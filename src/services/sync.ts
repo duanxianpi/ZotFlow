@@ -3,11 +3,14 @@ import { ZoteroApiClient } from '../api/zotero-api';
 import { normalizeItem, normalizeCollection } from '../utils/normalize';
 import { Notice } from 'obsidian';
 import { ApiChain } from 'zotero-api-client';
-import { ZoteroItemData } from 'types/zotero-item';
-import { ZoteroItem, AnyZoteroItem } from 'types/zotero';
+import { AnyZoteroItem } from 'types/zotero';
 
 const BULK_SIZE = 50; // Limit due to URL length
 
+/**
+ * Sync service for ZotFlow.
+ * Handles the entire sync process, including collections and items.
+ */
 export class SyncService {
   private syncing = false;
   private api: ApiChain | null = null;
@@ -115,7 +118,7 @@ export class SyncService {
 
     // Handle Deletions
     if (localVersion > 0) {
-      const delResponse = await libHandle.collections().deleted(localVersion).get();
+      const delResponse = await libHandle.deleted(localVersion).get();
       const deletedKeys = delResponse.getData().collections;
 
       if (deletedKeys.length > 0) {
@@ -187,7 +190,7 @@ export class SyncService {
 
     // Handle Deletions
     if (localVersion > 0) {
-      const delResponse = await libHandle.items().deleted(localVersion).get();
+      const delResponse = await libHandle.deleted(localVersion).get();
       const deletedKeys = delResponse.getData().items;
 
       if (deletedKeys && deletedKeys.length > 0) {

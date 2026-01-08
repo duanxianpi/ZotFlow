@@ -1,8 +1,8 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, ZotFlowSettings, ZotFlowSettingTab } from "./settings";
-import { SyncService } from 'sync/sync-service';
+import { SyncService } from 'services/sync';
 import { db } from './db/db';
-import { ZoteroSearchModal } from './ui/suggest-modal';
+import { ZoteroSearchModal } from './ui/zotero-suggest-modal';
 
 // Remember to rename these classes and interfaces!
 
@@ -17,18 +17,16 @@ export default class ObsidianZotFlow extends Plugin {
 		this.syncService.startSync(this.settings.zoteroApiKey, this.settings.zoteroUser!.userID);
 
 
-		this.addCommand({
-			id: 'open-zotlit-search',
-			name: 'Open Zotero Library',
-			callback: async () => {
-				// 1. 从 DB 获取顶级条目
-				// 规则：parentItem 为空 (顶级) 且 不是笔记
-				let items = await db.items
-					.filter(i => !i.parentItem && i.itemType !== 'note' && i.itemType !== 'annotation')
-					.toArray();
+		this.addRibbonIcon('library', 'ZotFlow: Open Library', (evt: MouseEvent) => {
+			new ZoteroSearchModal(this.app).open();
+		});
 
-				// 2. 打开搜索框
-				new ZoteroSearchModal(this.app, items as any).open();
+		// Add Command
+		this.addCommand({
+			id: 'open-zotflow-search',
+			name: 'Search Zotero Library',
+			callback: () => {
+				new ZoteroSearchModal(this.app).open();
 			}
 		});
 		// // This creates an icon in the left ribbon.

@@ -1,12 +1,11 @@
 import Dexie, { Table } from 'dexie';
-import { MutationTask, IndexedDBZoteroFile, IndexedDBZoteroItem, IndexedDBZoteroCollection, IndexedDBZoteroLibrary } from 'types/db-schema';
-import { ZoteroItemData } from 'types/zotero-item';
+import { MutationTask, IDBZoteroFile, IDBZoteroCollection, IDBZoteroLibrary, AnyIDBZoteroItem } from 'types/db-schema';
 
 export class ZotFlowDB extends Dexie {
-    items!: Table<IndexedDBZoteroItem<ZoteroItemData>, string>;
-    collections!: Table<IndexedDBZoteroCollection, string>;
-    libraries!: Table<IndexedDBZoteroLibrary, number>;
-    files!: Table<IndexedDBZoteroFile, string>;
+    items!: Table<AnyIDBZoteroItem, string>;
+    collections!: Table<IDBZoteroCollection, string>;
+    libraries!: Table<IDBZoteroLibrary, number>;
+    files!: Table<IDBZoteroFile, string>;
     mutationQueue!: Table<MutationTask, number>;
 
     constructor() {
