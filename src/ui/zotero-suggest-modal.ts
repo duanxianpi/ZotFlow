@@ -165,7 +165,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         // Logic for Top Level Item
         // If this item is an attachment (despite being filtered out), open it directly
         if (zItem.itemType === 'attachment') {
-            openAttachment(zItem.raw);
+            openAttachment(zItem.key, this.app);
             return;
         }
 
@@ -180,7 +180,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         }
         // If there is only one attachment, open it directly
         else if (attachments.length === 1) {
-            openAttachment(attachments[0]!.raw);
+            openAttachment(attachments[0]!.key, this.app);
             this.close();
         }
         // If there are multiple attachments, open the attachment select modal

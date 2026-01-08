@@ -104,6 +104,6 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
     }
 
     async onChooseSuggestion(option: ActionOption, evt: MouseEvent | KeyboardEvent) {
-        await openAttachment(option.item.raw);
+        await openAttachment(option.item.key, this.app);
     }
 }

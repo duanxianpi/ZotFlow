@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, ZotFlowSettings, ZotFlowSettingTab } from "./settings
 import { SyncService } from 'services/sync-service';
 import { ZoteroSearchModal } from './ui/zotero-suggest-modal';
 import { services } from './services/serivces';
+import { VIEW_TYPE_ZOTERO_READER, ZoteroReaderView } from './ui/reader-view';
 
 // Remember to rename these classes and interfaces!
 
@@ -13,6 +14,13 @@ export default class ObsidianZotFlow extends Plugin {
 		await this.loadSettings();
 
 		services.initialize(this.settings);
+
+		this.registerView(
+			VIEW_TYPE_ZOTERO_READER,
+			(leaf) => new ZoteroReaderView(leaf)
+		);
+
+
 		this.addRibbonIcon('library', 'ZotFlow: Open Library', (evt: MouseEvent) => {
 			new ZoteroSearchModal(this.app, this.settings).open();
 		});

@@ -2,40 +2,27 @@ import { ZoteroItem } from "types/zotero";
 import { AttachmentData } from "types/zotero-item";
 import { Notice } from "obsidian";
 import { services } from "services/serivces";
+import { App } from "obsidian";
+import { VIEW_TYPE_ZOTERO_READER } from "../ui/reader-view";
+
 /**
  * Open an attachment in the default application.
  * @param item The attachment item to open.
  * @param fallback Optional fallback function to execute if the attachment type is not supported.
  */
-export async function openAttachment(item: ZoteroItem<AttachmentData>, fallback?: () => void | Promise<void>) {
-  const { key, contentType, filename } = item.data;
+export async function openAttachment(key: string, app: App) {
 
-  switch (contentType) {
-    case 'application/pdf':
-      console.log('Opening PDF:', filename);
-      const pdfBlob = await services.files.getFileBlob(key);
-      console.log('PDF Blob:', pdfBlob);
-      return;
-    case 'application/epub+zip':
-      console.log('Opening EPUB:', filename);
-      const epubBlob = await services.files.getFileBlob(key);
-      console.log('EPUB Blob:', epubBlob);
-      return;
-    case 'text/html':
-      console.log('Opening Snapshot:', filename);
-      const snapshotBlob = await services.files.getFileBlob(key);
-      console.log('Snapshot Blob:', snapshotBlob);
-      return;
-    default:
-      if (!fallback) {
-        new Notice('Unsupported attachment type: ' + contentType);
-        return;
-      }
-      else {
-        await fallback();
-        return;
-      }
-  }
+  const leaf = app.workspace.getLeaf('tab');
+
+  await leaf.setViewState({
+    type: VIEW_TYPE_ZOTERO_READER,
+    active: true,
+    state: {
+      itemKey: key
+    }
+  });
+
+  app.workspace.revealLeaf(leaf);
 }
 
 /**
