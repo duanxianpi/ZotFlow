@@ -1,23 +1,38 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
+import { App, Component, Editor, MarkdownRenderer, MarkdownView, Modal, Notice, Plugin } from 'obsidian';
 import { DEFAULT_SETTINGS, ZotFlowSettings, ZotFlowSettingTab } from "./settings";
-import { SyncService } from 'services/sync-service';
 import { ZoteroSearchModal } from './ui/zotero-suggest-modal';
 import { services } from './services/serivces';
-import { VIEW_TYPE_ZOTERO_READER, ZoteroReaderView } from './ui/reader-view';
+import { VIEW_TYPE_ZOTERO_READER, ZoteroReaderView } from './ui/zotero-reader-view';
+import { getBlobUrls } from 'bundle-assets/inline-assets';
 
 // Remember to rename these classes and interfaces!
 
 export default class ObsidianZotFlow extends Plugin {
 	settings: ZotFlowSettings;
 
+
 	async onload() {
 		await this.loadSettings();
 
 		services.initialize(this.settings);
 
+		console.time("ReaderInit");
+		console.log(getBlobUrls());
+		console.timeEnd("ReaderInit");
+
+		// Ensure MathJax is loaded
+		MarkdownRenderer.render(
+			this.app,
+			"$\\int$",
+			document.createElement("div"),
+			"",
+			new Component()
+		);
+
+
 		this.registerView(
 			VIEW_TYPE_ZOTERO_READER,
-			(leaf) => new ZoteroReaderView(leaf)
+			(leaf) => new ZoteroReaderView(leaf, this)
 		);
 
 
@@ -92,7 +107,9 @@ export default class ObsidianZotFlow extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		services.updateSettings(this.settings);
 	}
+
 }
 
 // class SampleModal extends Modal {

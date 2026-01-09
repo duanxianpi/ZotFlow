@@ -2,7 +2,7 @@ import { App, SuggestModal, setIcon, Notice } from 'obsidian';
 import { db } from '../db/db';
 import { AnyIDBZoteroItem } from '../types/db-schema';
 import { AttachmentSelectModal } from './attachment-select-modal';
-import { openAttachment } from 'utils/attachment';
+import { getAttachmentTypeIcon, openAttachment } from 'utils/attachment';
 import { ZotFlowSettings } from '../settings';
 
 interface SearchHeader {
@@ -105,7 +105,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
         // Icon
         const iconContainer = el.createDiv({ cls: 'zotflow-item-icon' });
-        setIcon(iconContainer, this.getIconForType(zItem.itemType));
+        setIcon(iconContainer, getAttachmentTypeIcon(zItem.itemType));
 
         // Main Content Container
         const contentContainer = el.createDiv({ cls: 'zotflow-item-content' });
@@ -190,54 +190,6 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
     }
 
     // --- Helpers ---
-
-    // Get Lucide Icon name for itemType
-    private getIconForType(type: string): string {
-        const map: Record<string, string> = {
-            annotation: 'highlighter',
-            artwork: 'palette',
-            attachment: 'paperclip',
-            audioRecording: 'file-audio',
-            bill: 'scroll-text',
-            blogPost: 'rss',
-            book: 'book',
-            bookSection: 'book-open',
-            case: 'gavel',
-            computerProgram: 'code',
-            conferencePaper: 'book-open-text',
-            dataset: 'database',
-            dictionaryEntry: 'book-a',
-            document: 'file',
-            email: 'mail',
-            encyclopediaArticle: 'library',
-            film: 'film',
-            forumPost: 'message-square',
-            hearing: 'mic',
-            instantMessage: 'message-circle',
-            interview: 'mic-2',
-            journalArticle: 'file-text',
-            letter: 'mail-open',
-            magazineArticle: 'newspaper',
-            manuscript: 'feather',
-            map: 'map',
-            newspaperArticle: 'newspaper',
-            note: 'sticky-note',
-            patent: 'lightbulb',
-            podcast: 'podcast',
-            preprint: 'file-clock',
-            presentation: 'presentation',
-            radioBroadcast: 'radio',
-            report: 'file-chart-column',
-            standard: 'ruler',
-            statute: 'scale',
-            thesis: 'graduation-cap',
-            tvBroadcast: 'tv',
-            videoRecording: 'video',
-            webpage: 'globe',
-            default: 'file'
-        };
-        return map[type] || map.default!;
-    }
 
     // Format creators for display
     private formatCreators(creators: string[]): string | null {

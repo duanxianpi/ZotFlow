@@ -1,5 +1,5 @@
 import { Notice, requestUrl } from 'obsidian';
-import JSZip from 'jszip';
+import { unzip, Unzipped } from 'fflate';
 import { db } from '../db/db';
 import { IDBZoteroFile } from '../types/db-schema';
 import SparkMD5 from 'spark-md5';
@@ -52,6 +52,7 @@ export class FileManager {
                     console.log(`[ZotFlow] Cache HIT for ${itemKey}`);
                     // Asynchronously update access time (non-blocking)
                     db.files.update(itemKey, { lastAccessedAt: new Date().toISOString() });
+                    console.log(cached.blob);
                     return cached.blob;
                 } else {
                     console.log(`[ZotFlow] Cache STALE for ${itemKey}. Server: ${serverMd5}, Local: ${cached.md5}`);
@@ -86,16 +87,15 @@ export class FileManager {
                     console.log(`[ZotFlow] Linked file detected for ${itemKey}. Implementation pending.`);
                     break;
                 case 'imported_file':
+                case 'imported_url':
                     console.log(`[ZotFlow] Downloading from Zotero API for ${itemKey}`);
                     buffer = await this.downloadFromZoteroAPI(itemKey, item.libraryID);
-                    break;
-                case 'imported_url':
-                    if (this.settings.useWebDav) {
+
+                    if (!buffer && this.settings.useWebDav) {
                         console.log(`[ZotFlow] Downloading from WebDAV for ${itemKey}`);
                         buffer = await this.downloadFromWebDAV(itemKey);
-                    } else {
-                        buffer = await this.downloadFromZoteroAPI(itemKey, item.libraryID);
                     }
+
                     break;
                 default:
                     buffer = await this.downloadFromZoteroAPI(itemKey, item.libraryID);
@@ -171,25 +171,35 @@ export class FileManager {
      * Download from WebDAV
      * Logic: Download .zip -> Unzip -> Find main file -> Return ArrayBuffer
      */
+
     private async downloadFromWebDAV(key: string): Promise<ArrayBuffer | null> {
         try {
             const zipPath = `${key}.zip`;
-            // 假设 this.webdav.downloadFile 返回 ArrayBuffer
             const buffer = await this.webdav.downloadFile(zipPath);
             if (!buffer) return null;
 
-            const zip = await JSZip.loadAsync(buffer);
+            const uint8Input = new Uint8Array(buffer);
 
-            // 🔍 Fix: Exclude .prop files and hidden files explicitly
-            const targetFile = Object.values(zip.files).find(f =>
-                !f.dir &&
-                !f.name.startsWith('.') &&
-                !f.name.endsWith('.prop') // 关键：忽略 prop 文件
-            );
+            const unzipped = await new Promise<Unzipped>((resolve, reject) => {
+                unzip(uint8Input, {
+                    filter: (file) => {
+                        return !file.name.endsWith('/') &&
+                            !file.name.startsWith('.') &&
+                            !file.name.endsWith('.prop');
+                    }
+                }, (err, data) => {
+                    if (err) reject(err);
+                    else resolve(data);
+                });
+            });
 
-            if (!targetFile) throw new Error("Empty ZIP or only .prop found");
+            const targetFileName = Object.keys(unzipped).first();
 
-            return await targetFile.async('arraybuffer');
+            if (!targetFileName) {
+                throw new Error("Empty ZIP or only .prop found");
+            }
+
+            return unzipped[targetFileName]!.buffer as ArrayBuffer;
 
         } catch (e) {
             console.error("[ZotFlow] WebDAV Error:", e);

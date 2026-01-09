@@ -2,7 +2,7 @@ import { App, SuggestModal, setIcon } from 'obsidian';
 import { IDBZoteroItem, AnyIDBZoteroItem } from '../types/db-schema';
 import { AttachmentData } from '../types/zotero-item';
 import { ZoteroSearchModal } from './zotero-suggest-modal';
-import { getAttachmentIcon, openAttachment } from 'utils/attachment';
+import { getAttachmentFileIcon, openAttachment } from 'utils/attachment';
 
 interface ActionOption {
     label: string;
@@ -86,7 +86,7 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
 
         // Icon
         const iconEl = el.createDiv({ cls: 'zotflow-option-icon' });
-        const iconName = getAttachmentIcon(option.item.raw.data.contentType);
+        const iconName = getAttachmentFileIcon(option.item.raw.data.contentType);
         setIcon(iconEl, iconName);
 
         // Text

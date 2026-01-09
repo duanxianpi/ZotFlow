@@ -18,7 +18,7 @@ export class SyncService {
   private api: ApiChain;
 
   constructor(api: ZoteroApiClient) {
-    this.api = api.getClient();
+    this.api = api.client;
   }
 
   async startSync(userID: number) {

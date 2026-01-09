@@ -36,7 +36,6 @@ class ServiceLocator {
     }
 
     updateSettings(newSettings: ZotFlowSettings) {
-        this.settings = newSettings;
 
         // If API Key changed, rebuild API client
         const apiKeyChanged = this.settings.zoteroApiKey !== newSettings.zoteroApiKey;
@@ -55,6 +54,8 @@ class ServiceLocator {
 
         // Update other settings
         this.files.updateSettings(newSettings);
+
+        this.settings = newSettings;
     }
 
 }
