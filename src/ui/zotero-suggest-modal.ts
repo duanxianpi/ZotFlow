@@ -160,12 +160,12 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         const zItem = item as AnyIDBZoteroItem;
 
         // Update Timestamp
-        db.items.update(zItem.key, { _lastAccessed: new Date().toISOString() }).catch(console.error);
+        db.items.update(zItem, { _lastAccessed: new Date().toISOString() }).catch(console.error);
 
         // Logic for Top Level Item
         // If this item is an attachment (despite being filtered out), open it directly
         if (zItem.itemType === 'attachment') {
-            openAttachment(zItem.key, this.app);
+            openAttachment(zItem.libraryID, zItem.key, this.app);
             return;
         }
 
@@ -180,7 +180,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         }
         // If there is only one attachment, open it directly
         else if (attachments.length === 1) {
-            openAttachment(attachments[0]!.key, this.app);
+            openAttachment(attachments[0]!.libraryID, attachments[0]!.key, this.app);
             this.close();
         }
         // If there are multiple attachments, open the attachment select modal

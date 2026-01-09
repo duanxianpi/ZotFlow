@@ -9,8 +9,8 @@ export interface IDBZoteroLibrary extends ZoteroLibrary {
 
 // Zotero Collection
 export interface IDBZoteroCollection {
-    key: string;
     libraryID: number;
+    key: string;
     version: number;
     name: string;
     parentCollection: false | string;
@@ -27,8 +27,8 @@ export interface IDBZoteroCollection {
 // Zotero Item
 interface _IDBZoteroItem<T extends ZoteroItemData> {
     // Core Zotero Data
-    key: string;              // Zotero Item Key (8 chars)
     libraryID: number;        // Library ID (User or Group ID)
+    key: string;              // Zotero Item Key (8 chars)
 
     // Core Indexed Fields
     itemType: T['itemType']; // 'journalArticle', 'attachment', 'annotation', etc.
@@ -61,6 +61,7 @@ export type AnyIDBZoteroItem = { [K in keyof ZoteroItemDataTypeMap]: IDBZoteroIt
 
 // Zotero File
 export interface IDBZoteroFile {
+    libraryID: number;   // Library ID (User or Group ID)
     key: string;         // Zotero Item Key (itemType='attachment')
     blob: Blob;          // File Blob
     mimeType: string;

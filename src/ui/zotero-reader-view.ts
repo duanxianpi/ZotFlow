@@ -11,6 +11,7 @@ import { AttachmentData } from 'types/zotero-item';
 export const VIEW_TYPE_ZOTERO_READER = 'zotflow-zotero-reader-view';
 
 interface ReaderViewState extends Record<string, unknown> {
+    libraryID: number;
     itemKey: string;
     readerOptions: Partial<CreateReaderOptions>;
 }
@@ -43,8 +44,8 @@ export class ZoteroReaderView extends ItemView {
 
     async setState(state: ReaderViewState, result: ViewStateResult): Promise<void> {
         console.log("TEST", state, result)
-        if (state.itemKey) {
-            const _item = await db.items.get(state.itemKey);
+        if (state.itemKey && state.libraryID) {
+            const _item = await db.items.get([state.libraryID, state.itemKey]);
             if (!_item || _item.itemType !== "attachment") {
                 console.error(`[ZotFlow] Item ${state.itemKey} doesn't exist or is not an attachment`);
                 throw new Error(`Item ${state.itemKey} doesn't exist or is not an attachment`);
@@ -148,7 +149,7 @@ export class ZoteroReaderView extends ItemView {
             console.log("TEST")
             const [_, fileBlob] = await Promise.all([
                 this.bridge.connect(),
-                services.files.getFileBlob(this.attachmentItem.key)
+                services.files.getFileBlob(this.attachmentItem.libraryID, this.attachmentItem.key)
             ]);
 
             if (!fileBlob) {
@@ -222,6 +223,7 @@ export class ZoteroReaderView extends ItemView {
 
     getState(): ReaderViewState {
         return {
+            libraryID: this.attachmentItem.libraryID,
             itemKey: this.attachmentItem.key,
             readerOptions: this.readerOptions
         };

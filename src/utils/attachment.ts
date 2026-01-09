@@ -10,7 +10,7 @@ import { VIEW_TYPE_ZOTERO_READER } from "../ui/zotero-reader-view";
  * @param item The attachment item to open.
  * @param fallback Optional fallback function to execute if the attachment type is not supported.
  */
-export async function openAttachment(key: string, app: App) {
+export async function openAttachment(libraryID: number, key: string, app: App) {
 
   const leaf = app.workspace.getLeaf('tab');
 
@@ -18,6 +18,7 @@ export async function openAttachment(key: string, app: App) {
     type: VIEW_TYPE_ZOTERO_READER,
     active: true,
     state: {
+      libraryID: libraryID,
       itemKey: key
     }
   });

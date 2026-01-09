@@ -15,10 +15,10 @@ export class SyncService {
   private syncing = false;
   private userID: number = 0;
 
-  private api: ApiChain;
+  private api: ZoteroApiClient;
 
   constructor(api: ZoteroApiClient) {
-    this.api = api.client;
+    this.api = api;
   }
 
   async startSync(userID: number) {
@@ -72,7 +72,7 @@ export class SyncService {
   // ========================================================================
   private async pullCollections() {
     if (!this.api) return;
-    const libHandle = this.api.library('user', this.userID);
+    const libHandle = this.api.client.library('user', this.userID);
 
     // Get Local Version
     const libState = await db.libraries.get(this.userID);
@@ -141,7 +141,7 @@ export class SyncService {
   // ========================================================================
   private async pullItems() {
     if (!this.api) return;
-    const libHandle = this.api.library('user', this.userID);
+    const libHandle = this.api.client.library('user', this.userID);
 
     const libState = await db.libraries.get(this.userID);
     const localVersion = libState?.itemVersion || 0;

@@ -27,7 +27,7 @@ export class FileManager {
      * Get file blob from cache or download from Zotero API
      * (Entry Point)
      */
-    async getFileBlob(itemKey: string): Promise<Blob | null> {
+    async getFileBlob(libraryID: number, itemKey: string): Promise<Blob | null> {
         // Check lock first
         if (this.downloadLocks.has(itemKey)) {
             console.log(`[ZotFlow] Download already in progress for ${itemKey}, sharing promise.`);
@@ -35,7 +35,7 @@ export class FileManager {
         }
 
         // Get Item Metadata, We assume it's up-to-date
-        const item = await db.items.get(itemKey);
+        const item = await db.items.get([libraryID, itemKey]);
 
         if (!item || item.itemType !== 'attachment') {
             new Notice(`Item metadata not found for ${itemKey}`);
@@ -44,14 +44,14 @@ export class FileManager {
 
         // Check Cache First (Fast Path)
         if (this.settings.useCache) {
-            const cached = await db.files.get(itemKey);
+            const cached = await db.files.get([libraryID, itemKey]);
             if (cached) {
                 const serverMd5 = item.raw.data.md5;
                 // If MD5 matches, or server doesn't provide MD5 (can't verify), consider cache valid
                 if (!serverMd5 || cached.md5 === serverMd5) {
                     console.log(`[ZotFlow] Cache HIT for ${itemKey}`);
                     // Asynchronously update access time (non-blocking)
-                    db.files.update(itemKey, { lastAccessedAt: new Date().toISOString() });
+                    db.files.update(cached, { lastAccessedAt: new Date().toISOString() });
                     console.log(cached.blob);
                     return cached.blob;
                 } else {
@@ -144,6 +144,7 @@ export class FileManager {
             // Save to Cache
             if (this.settings.useCache) {
                 const fileRecord: IDBZoteroFile = {
+                    libraryID: item.libraryID,
                     key: itemKey,
                     blob: blob,
                     mimeType: item.raw.data.contentType || 'application/pdf',
@@ -253,14 +254,14 @@ export class FileManager {
                 return (a.lastAccessedAt || '').localeCompare(b.lastAccessedAt || '');
             });
 
-            const keysToDelete: string[] = [];
+            const keysToDelete: [number, string][] = [];
 
             // Remove files until we're under the limit
             for (const file of sortedFiles) {
                 if (totalSize <= limitBytes) break;
 
                 totalSize -= (file.size || 0);
-                keysToDelete.push(file.key);
+                keysToDelete.push([file.libraryID, file.key]);
             }
 
             if (keysToDelete.length > 0) {

@@ -2,10 +2,10 @@ import Dexie, { Table } from 'dexie';
 import { MutationTask, IDBZoteroFile, IDBZoteroCollection, IDBZoteroLibrary, AnyIDBZoteroItem } from 'types/db-schema';
 
 export class ZotFlowDB extends Dexie {
-    items!: Table<AnyIDBZoteroItem, string>;
-    collections!: Table<IDBZoteroCollection, string>;
+    items!: Table<AnyIDBZoteroItem, [number, string]>;
+    collections!: Table<IDBZoteroCollection, [number, string]>;
     libraries!: Table<IDBZoteroLibrary, number>;
-    files!: Table<IDBZoteroFile, string>;
+    files!: Table<IDBZoteroFile, [number, string]>;
     mutationQueue!: Table<MutationTask, number>;
 
     constructor() {
@@ -18,8 +18,7 @@ export class ZotFlowDB extends Dexie {
 
             // Zotero Collections
             collections: `
-                &key, 
-                libraryID, 
+                &[libraryID+key], 
                 trashed,
                 name,
                 parentCollection, 
@@ -29,8 +28,7 @@ export class ZotFlowDB extends Dexie {
 
             // Zotero Items
             items: `
-                &key, 
-                libraryID, 
+                &[libraryID+key], 
                 itemType, 
                 parentItem, 
                 trashed,
@@ -44,7 +42,7 @@ export class ZotFlowDB extends Dexie {
             `,
 
             // Zotero Files
-            files: '&key, lastAccessedAt',
+            files: '&[libraryID+key], lastAccessedAt',
 
             // Mutation Queue
             mutationQueue: '++id, libraryID, key'

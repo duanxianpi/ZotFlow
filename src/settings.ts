@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import MyPlugin from "./main";
+import { db } from "./db/db";
 import { ZoteroApiClient, ZoteroKeyResponse } from "./api/zotero-api";
 import { WebDavClient } from "./api/webdav-api";
 
@@ -34,10 +35,10 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		this.plugin.loadSettings().then(() => {
+		this.plugin.loadSettings().then(async () => {
 
 			this.renderApiKeySetting();
-			this.renderCacheSettings();
+			await this.renderCacheSettings();
 			this.renderWebDavSettings();
 
 		});
@@ -45,7 +46,7 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 	}
 
 	// ========== Cache Settings ==========
-	private renderCacheSettings() {
+	private async renderCacheSettings() {
 		const { containerEl } = this;
 
 		containerEl.createEl('h2', { text: 'Cache Settings' });
@@ -63,6 +64,42 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 				}));
 
 		if (this.plugin.settings.useCache) {
+			// Pre-calculate stats
+			let totalSizeBytes = 0;
+			try {
+				const allFiles = await db.files.toArray();
+				totalSizeBytes = allFiles.reduce((acc, file) => acc + (file.size || 0), 0);
+			} catch (e) {
+				console.error("Failed to load cache stats", e);
+			}
+
+			let usageTextEl: HTMLElement;
+			let progressFillEl: HTMLElement;
+
+			const updateProgressBar = (limitMB: number) => {
+				if (!usageTextEl) return;
+
+				const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(2);
+				let limitText = `${limitMB} MB`;
+				let percent = 0;
+
+				if (limitMB > 0) {
+					percent = (totalSizeBytes / (limitMB * 1024 * 1024)) * 100;
+					limitText = `${limitMB} MB`;
+				} else {
+					limitText = "Unlimited";
+					percent = 0;
+				}
+
+				usageTextEl.setText(`${totalSizeMB} MB / ${limitText}`);
+
+				if (progressFillEl) {
+					const visualPercent = Math.min(percent, 100);
+					progressFillEl.style.width = `${visualPercent}%`;
+					progressFillEl.style.backgroundColor = percent > 90 ? 'var(--text-error)' : 'var(--interactive-accent)';
+				}
+			};
+
 			// Max Cache Size
 			new Setting(containerEl)
 				.setName('Max Cache Size (MB)')
@@ -79,10 +116,41 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 							}
 							return;
 						}
-						this.plugin.settings.maxCacheSizeMB = parseInt(value);
+						const newLimit = parseInt(value);
+						this.plugin.settings.maxCacheSizeMB = newLimit;
 						await this.plugin.saveSettings();
+						// Update UI dynamically
+						updateProgressBar(newLimit);
 					})
 				);
+
+			// Cache Usage Progress Bar UI construction
+			const usageContainer = containerEl.createDiv({ cls: 'setting-item' });
+			usageContainer.style.display = 'block';
+			usageContainer.style.borderTop = 'none';
+
+			const infoDiv = usageContainer.createDiv();
+			infoDiv.style.display = 'flex';
+			infoDiv.style.justifyContent = 'space-between';
+			infoDiv.style.marginBottom = '6px';
+			infoDiv.style.fontSize = '0.9em';
+			infoDiv.style.color = 'var(--text-muted)';
+
+			infoDiv.createSpan({ text: 'Cache Usage' });
+			usageTextEl = infoDiv.createSpan({ text: '' }); // Initialized by updateProgressBar
+
+			const progressBg = usageContainer.createDiv();
+			progressBg.style.width = '100%';
+			progressBg.style.height = '8px';
+			progressBg.style.backgroundColor = 'var(--background-modifier-border)';
+			progressBg.style.borderRadius = '4px';
+			progressBg.style.overflow = 'hidden';
+
+			progressFillEl = progressBg.createDiv();
+			progressFillEl.style.height = '100%';
+			
+			// Initial update
+			updateProgressBar(this.plugin.settings.maxCacheSizeMB || DEFAULT_SETTINGS.maxCacheSizeMB);
 		}
 	}
 
