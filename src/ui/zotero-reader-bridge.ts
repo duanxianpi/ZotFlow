@@ -291,6 +291,7 @@ export class IframeReaderBridge {
 		this._readerOpts = opts;
 		return this.enqueueOrRun(async () => {
 			await this.child!.initReader(opts);
+			console.log("We are good")
 		});
 	}
 

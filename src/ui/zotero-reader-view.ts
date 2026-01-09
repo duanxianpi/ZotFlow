@@ -8,7 +8,7 @@ import { db } from 'db/db';
 import { IDBZoteroItem } from 'types/db-schema';
 import { AttachmentData } from 'types/zotero-item';
 
-export const VIEW_TYPE_ZOTERO_READER = 'zotero-reader-view';
+export const VIEW_TYPE_ZOTERO_READER = 'zotflow-zotero-reader-view';
 
 interface ReaderViewState extends Record<string, unknown> {
     itemKey: string;
@@ -42,6 +42,7 @@ export class ZoteroReaderView extends ItemView {
     }
 
     async setState(state: ReaderViewState, result: ViewStateResult): Promise<void> {
+        console.log("TEST", state, result)
         if (state.itemKey) {
             const _item = await db.items.get(state.itemKey);
             if (!_item || _item.itemType !== "attachment") {
@@ -49,7 +50,6 @@ export class ZoteroReaderView extends ItemView {
                 throw new Error(`Item ${state.itemKey} doesn't exist or is not an attachment`);
             }
             this.attachmentItem = _item as IDBZoteroItem<AttachmentData>;
-
             await this.loadDocument();
         }
 
@@ -201,6 +201,8 @@ export class ZoteroReaderView extends ItemView {
                     // title: ... // Optional title
                     ...opts,
                 });
+
+                console.log("INITED")
             }
 
         } catch (e: any) {
@@ -216,6 +218,13 @@ export class ZoteroReaderView extends ItemView {
                 .createEl("div")
                 .setText("Error details: " + e.message);
         }
+    }
+
+    getState(): ReaderViewState {
+        return {
+            itemKey: this.attachmentItem.key,
+            readerOptions: this.readerOptions
+        };
     }
 
     async onClose() {

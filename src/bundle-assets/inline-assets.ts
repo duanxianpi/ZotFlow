@@ -85,7 +85,6 @@ function initializeBlobUrls(): Record<string, string> {
 	const htmlUrl = URL.createObjectURL(htmlBlob);
 
 	BLOB_URL_MAP["pdf/web/viewer.html"] = htmlUrl;
-	// BLOB_URL_MAP["pdf/web/viewer.html.srcdoc"] = patchedViewerHTML;
 
 	return BLOB_URL_MAP;
 }
