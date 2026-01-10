@@ -1,4 +1,4 @@
-import { ZotFlowSettings } from "settings";
+import { ZotFlowSettings } from "settings/settings";
 import { ZoteroApiClient } from 'api/zotero-api';
 import { SyncService } from './sync-service';
 import { FileManager } from './file-manager';
@@ -12,7 +12,7 @@ class ServiceLocator {
     public files: FileManager;
     public webdav: WebDavClient;
 
-    private settings: ZotFlowSettings;
+    public settings: ZotFlowSettings;
 
     initialize(settings: ZotFlowSettings) {
         this.settings = settings;
@@ -29,7 +29,7 @@ class ServiceLocator {
         );
 
         // Inject API client to services
-        this.sync = new SyncService(this.api);
+        this.sync = new SyncService(this.api, this.settings);
         this.files = new FileManager(this.webdav, this.sync, this.settings);
 
         console.log("[ZotFlow] Services initialized.");

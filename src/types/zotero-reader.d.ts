@@ -1,7 +1,5 @@
 // import { EmbeddableMarkdownEditor, MarkdownEditorProps } from "src/editor/markdown-editor";
-import { ViewUpdate } from "@codemirror/view";
-import { ZotFlowSettings } from "settings";
-// import { ZoteroReaderPluginSettings } from "src/main";
+import { ZotFlowSettings } from "settings/settings";
 
 export type ColorScheme = "light" | "dark";
 
@@ -17,7 +15,7 @@ export interface CreateReaderOptions {
 	lightTheme?: string;
 	darkTheme?: string;
 
-	annotations?: ZoteroAnnotation[];
+	annotations?: AnnotationJSON[];
 	sidebarOpen?: boolean;
 	sidebarWidth?: number;
 	primaryViewState?: Record<string, unknown>;
@@ -27,7 +25,7 @@ export interface CreateReaderOptions {
 export type ChildEvents =
 	| { type: "error"; code: string; message: string }
 	| { type: "addToNote" }
-	| { type: "annotationsSaved"; annotations: ZoteroAnnotation[] }
+	| { type: "annotationsSaved"; annotations: AnnotationJSON[] }
 	| { type: "annotationsDeleted"; ids: string[] }
 	| { type: "viewStateChanged"; state: unknown; primary: boolean }
 	| {
@@ -89,31 +87,27 @@ export interface ZoteroPosition {
 	rects: number[][];
 }
 
-export interface ZoteroAnnotation {
+export interface AnnotationJSON {
+	libraryID?: number;
+	id: string;
 	type: string;
-	color: string;
-	sortIndex: string;
-	pageLabel: string;
+	isExternal?: boolean;
+	authorName?: string;
+	isAuthorNameAuthoritative?: boolean;
+	lastModifiedByUser?: string | number;
+	readOnly?: boolean;
+	text?: string | null;
+	comment?: string;
+	pageLabel?: string;
+	color?: string;
+	sortIndex?: string;
 	position: ZoteroPosition;
-	text: string;
-	comment: string;
-	tags: string[];
-	id: string;
-	dateCreated: string;
+	tags: Array<{
+		name: string;
+		color?: string;
+		position?: number;
+	}>;
 	dateModified: string;
-	authorName: string;
-	isAuthorNameAuthoritative: boolean;
-	[key: string]: any; // Allow additional properties
-}
-
-export interface ParsedAnnotation {
-	id: string;
-	header?: string;
-	text: string;
-	comment: string;
-	json: ZoteroAnnotation; // raw JSON object (parsed)
-	range: { start: number; end: number };
-	raw: string;
 }
 
 export interface CustomReaderTheme {

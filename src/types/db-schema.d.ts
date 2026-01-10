@@ -1,10 +1,26 @@
-import { ZoteroCollection, ZoteroItem, ZoteroLibrary } from "./zotero";
+import {
+    ZoteroCollection,
+    ZoteroGroup,
+    ZoteroItem,
+    ZoteroKey,
+    ZoteroLibrary,
+} from "./zotero";
 import { ZoteroItemData, ZoteroItemDataTypeMap } from "./zotero-item";
+
+// Zotero Key
+export interface IDBZoteroKey extends ZoteroKey {
+    joinedGroups: number[]; // Array of Group IDs the key has access to
+}
+
+// Zotero Group
+export interface IDBZoteroGroup extends ZoteroGroup {}
 
 // Zotero Library
 export interface IDBZoteroLibrary extends ZoteroLibrary {
     collectionVersion?: number; // For collection sync, indicates the global version of the library
     itemVersion?: number; // For item sync, indicates the global version of the library
+
+    syncedAt?: string; // ISO String of last successful sync
 }
 
 // Zotero Collection
@@ -14,11 +30,11 @@ export interface IDBZoteroCollection {
     version: number;
     name: string;
     parentCollection: false | string;
-    trashed: boolean;         // Whether the collection is trashed
+    trashed: boolean; // Whether the collection is trashed
 
     // Sync State
-    _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
-    _syncedAt?: string;
+    syncStatus: "synced" | "created" | "updated" | "deleted";
+    syncedAt?: string;
 
     // Raw Payload
     raw: ZoteroCollection;
@@ -27,58 +43,60 @@ export interface IDBZoteroCollection {
 // Zotero Item
 interface _IDBZoteroItem<T extends ZoteroItemData> {
     // Core Zotero Data
-    libraryID: number;        // Library ID (User or Group ID)
-    key: string;              // Zotero Item Key (8 chars)
+    libraryID: number; // Library ID (User or Group ID)
+    key: string; // Zotero Item Key (8 chars)
 
     // Core Indexed Fields
-    itemType: T['itemType']; // 'journalArticle', 'attachment', 'annotation', etc.
-    parentItem: string;      // Parent Item Key
-    trashed: boolean;        // Whether the item is trashed
+    itemType: T["itemType"]; // 'journalArticle', 'attachment', 'annotation', etc.
+    parentItem: string; // Parent Item Key
+    trashed: boolean; // Whether the item is trashed
 
     // Sorting & Versioning
-    title?: string;            // Title (normalized for sorting)
-    collections?: string[];    // Collection Key Array
-    dateAdded: string;        // ISO String
-    dateModified: string;     // ISO String (Zotero Cloud's last modified time)
-    version: number;          // Zotero Cloud Version (for optimistic locking)
+    title?: string; // Title (normalized for sorting)
+    collections?: string[]; // Collection Key Array
+    dateAdded: string; // ISO String
+    dateModified: string; // ISO String (Zotero Cloud's last modified time)
+    version: number; // Zotero Cloud Version (for optimistic locking)
 
     // Derived Fields for Search
-    _searchCreators: string[];
-    _searchTags: string[];
+    searchCreators: string[];
+    searchTags: string[];
 
     // Sync State
-    _syncStatus: 'synced' | 'created' | 'updated' | 'deleted';
-    _syncedAt?: string;
-    _lastAccessed?: string;
-    _readingProgress?: number;
+    syncStatus: "synced" | "created" | "updated" | "deleted";
+    syncedAt?: string;
+    lastAccessedAt?: string;
+    readingProgress?: number;
 
     // Raw Payload
     raw: ZoteroItem<T>;
 }
 
 export type IDBZoteroItem<T extends ZoteroItemData> = _IDBZoteroItem<T>;
-export type AnyIDBZoteroItem = { [K in keyof ZoteroItemDataTypeMap]: IDBZoteroItem<ZoteroItemDataTypeMap[K]> }[keyof ZoteroItemDataTypeMap];
+export type AnyIDBZoteroItem = {
+    [K in keyof ZoteroItemDataTypeMap]: IDBZoteroItem<ZoteroItemDataTypeMap[K]>;
+}[keyof ZoteroItemDataTypeMap];
 
 // Zotero File
 export interface IDBZoteroFile {
-    libraryID: number;   // Library ID (User or Group ID)
-    key: string;         // Zotero Item Key (itemType='attachment')
-    blob: Blob;          // File Blob
+    libraryID: number; // Library ID (User or Group ID)
+    key: string; // Zotero Item Key (itemType='attachment')
+    blob: Blob; // File Blob
     mimeType: string;
     fileName: string;
-    md5: string;         // File MD5 (API returned), used to determine if re-download is needed
+    md5: string; // File MD5 (API returned), used to determine if re-download is needed
     lastAccessedAt: string;
     size: number;
 }
 
 export interface MutationTask {
-    id?: number;         // Auto-increment ID
+    id?: number; // Auto-increment ID
     libraryID: number;
-    actionType: 'create' | 'update' | 'delete';
-    dataType: 'item' | 'collection';
-    key: string;         // Key to perform action on
-    payload: any;        // JSON Body to send to API
+    actionType: "create" | "update" | "delete";
+    dataType: "item" | "collection";
+    key: string; // Key to perform action on
+    payload: any; // JSON Body to send to API
     createdAt: string;
     retryCount: number;
-    error?: string;      // Last failure reason
+    error?: string; // Last failure reason
 }

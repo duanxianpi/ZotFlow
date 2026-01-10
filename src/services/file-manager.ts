@@ -1,11 +1,12 @@
-import { Notice, requestUrl } from 'obsidian';
-import { unzip, Unzipped } from 'fflate';
-import { db } from '../db/db';
-import { IDBZoteroFile } from '../types/db-schema';
-import SparkMD5 from 'spark-md5';
-import { WebDavClient } from '../api/webdav-api';
-import { ZotFlowSettings } from '../settings';
-import { SyncService } from './sync-service';
+import { Notice, requestUrl } from "obsidian";
+import { unzip, Unzipped } from "fflate";
+import { db } from "db/db";
+import { IDBZoteroFile, IDBZoteroItem } from "types/db-schema";
+import SparkMD5 from "spark-md5";
+import { WebDavClient } from "api/webdav-api";
+import { ZotFlowSettings } from "settings/settings";
+import { SyncService } from "./sync-service";
+import { AttachmentData } from "types/zotero-item";
 
 export class FileManager {
     private webdav: WebDavClient;
@@ -13,7 +14,11 @@ export class FileManager {
     private settings: ZotFlowSettings;
     private downloadLocks: Map<string, Promise<Blob | null>> = new Map();
 
-    constructor(webdav: WebDavClient, sync: SyncService, settings: ZotFlowSettings) {
+    constructor(
+        webdav: WebDavClient,
+        sync: SyncService,
+        settings: ZotFlowSettings,
+    ) {
         this.webdav = webdav;
         this.sync = sync;
         this.settings = settings;
@@ -27,17 +32,23 @@ export class FileManager {
      * Get file blob from cache or download from Zotero API
      * (Entry Point)
      */
-    async getFileBlob(libraryID: number, itemKey: string): Promise<Blob | null> {
+    async getFileBlob(
+        attachmentItem: IDBZoteroItem<AttachmentData>,
+    ): Promise<Blob | null> {
+        const { libraryID, key: itemKey } = attachmentItem;
+
         // Check lock first
         if (this.downloadLocks.has(itemKey)) {
-            console.log(`[ZotFlow] Download already in progress for ${itemKey}, sharing promise.`);
+            console.log(
+                `[ZotFlow] Download already in progress for ${itemKey}, sharing promise.`,
+            );
             return this.downloadLocks.get(itemKey)!;
         }
 
         // Get Item Metadata, We assume it's up-to-date
         const item = await db.items.get([libraryID, itemKey]);
 
-        if (!item || item.itemType !== 'attachment') {
+        if (!item || item.itemType !== "attachment") {
             new Notice(`Item metadata not found for ${itemKey}`);
             return null;
         }
@@ -51,22 +62,26 @@ export class FileManager {
                 if (!serverMd5 || cached.md5 === serverMd5) {
                     console.log(`[ZotFlow] Cache HIT for ${itemKey}`);
                     // Asynchronously update access time (non-blocking)
-                    db.files.update(cached, { lastAccessedAt: new Date().toISOString() });
+                    db.files.update(cached, {
+                        lastAccessedAt: new Date().toISOString(),
+                    });
                     console.log(cached.blob);
                     return cached.blob;
                 } else {
-                    console.log(`[ZotFlow] Cache STALE for ${itemKey}. Server: ${serverMd5}, Local: ${cached.md5}`);
+                    console.log(
+                        `[ZotFlow] Cache STALE for ${itemKey}. Server: ${serverMd5}, Local: ${cached.md5}`,
+                    );
                     // Cache is stale, continue to download task...
                 }
             }
         }
 
         // Start Download Task with Lock
-        const task = this._downloadTask(itemKey, item).finally(() => {
-            this.downloadLocks.delete(itemKey);
+        const task = this._downloadTask(item).finally(() => {
+            this.downloadLocks.delete(item.key);
         });
 
-        this.downloadLocks.set(itemKey, task);
+        this.downloadLocks.set(item.key, task);
         return task;
     }
 
@@ -74,31 +89,39 @@ export class FileManager {
      * Internal Download Task
      * Encapsulates logic for Download -> Verify -> Save -> Prune
      */
-    private async _downloadTask(itemKey: string, item: any): Promise<Blob | null> {
+    private async _downloadTask(
+        item: IDBZoteroItem<AttachmentData>,
+    ): Promise<Blob | null> {
         try {
-            if (item.itemType !== 'attachment') return null;
+            if (item.itemType !== "attachment") return null;
 
             let buffer: ArrayBuffer | null = null;
             const linkMode = item.raw.data.linkMode;
 
             // Download Strategy
             switch (linkMode) {
-                case 'linked_file':
-                    console.log(`[ZotFlow] Linked file detected for ${itemKey}. Implementation pending.`);
+                case "linked_file":
+                    console.log(
+                        `[ZotFlow] Linked file detected for ${item.key}. Implementation pending.`,
+                    );
                     break;
-                case 'imported_file':
-                case 'imported_url':
-                    console.log(`[ZotFlow] Downloading from Zotero API for ${itemKey}`);
-                    buffer = await this.downloadFromZoteroAPI(itemKey, item.libraryID);
+                case "imported_file":
+                case "imported_url":
+                    console.log(
+                        `[ZotFlow] Downloading from Zotero API for ${item.key}`,
+                    );
+                    buffer = await this.downloadFromZoteroAPI(item);
 
                     if (!buffer && this.settings.useWebDav) {
-                        console.log(`[ZotFlow] Downloading from WebDAV for ${itemKey}`);
-                        buffer = await this.downloadFromWebDAV(itemKey);
+                        console.log(
+                            `[ZotFlow] Downloading from WebDAV for ${item.key}`,
+                        );
+                        buffer = await this.downloadFromWebDAV(item.key);
                     }
 
                     break;
                 default:
-                    buffer = await this.downloadFromZoteroAPI(itemKey, item.libraryID);
+                    buffer = await this.downloadFromZoteroAPI(item);
                     break;
             }
 
@@ -109,26 +132,33 @@ export class FileManager {
 
             // Integrity Check & Auto-Repair
             const serverMd5 = item.raw.data.md5;
-            let finalMd5 = serverMd5 || '';
+            let finalMd5 = serverMd5 || "";
 
             if (serverMd5) {
                 const calculatedMd5 = SparkMD5.ArrayBuffer.hash(buffer);
 
                 if (calculatedMd5 !== serverMd5) {
-                    const msg = `MD5 Mismatch for ${itemKey}!\nExpected: ${serverMd5}\nGot: ${calculatedMd5}`;
+                    const msg = `MD5 Mismatch for ${item.key}!\nExpected: ${serverMd5}\nGot: ${calculatedMd5}`;
                     console.warn(`[ZotFlow] ${msg}`);
 
                     // Smart Repair Strategy:
                     // If downloaded from Zotero API, we trust the downloaded file is the latest.
                     // At this point, update local record's MD5, instead of erroring out.
-                    if (linkMode === 'imported_file' || !this.settings.useWebDav) {
-                        console.log("[ZotFlow] Trusting live download. Auto-updating metadata.");
+                    if (
+                        linkMode === "imported_file" ||
+                        !this.settings.useWebDav
+                    ) {
+                        console.log(
+                            "[ZotFlow] Trusting live download. Auto-updating metadata.",
+                        );
                         finalMd5 = calculatedMd5; // Use actual calculated value
                         // Optional: Notify Sync service to refresh Item Metadata
-                        // services.sync.refreshItem(itemKey); 
+                        // services.sync.refreshItem(itemKey);
                     } else {
                         // WebDAV might be old, or sync not completed
-                        new Notice(`⚠️ Integrity Warning: WebDAV file might be outdated.`);
+                        new Notice(
+                            `⚠️ Integrity Warning: WebDAV file might be outdated.`,
+                        );
                         // Still allow through, to prevent user from being unable to read
                     }
                 } else {
@@ -139,19 +169,21 @@ export class FileManager {
                 finalMd5 = SparkMD5.ArrayBuffer.hash(buffer);
             }
 
-            const blob = new Blob([buffer], { type: item.raw.data.contentType || 'application/pdf' });
+            const blob = new Blob([buffer], {
+                type: item.raw.data.contentType || "application/pdf",
+            });
 
             // Save to Cache
             if (this.settings.useCache) {
                 const fileRecord: IDBZoteroFile = {
                     libraryID: item.libraryID,
-                    key: itemKey,
+                    key: item.key,
                     blob: blob,
-                    mimeType: item.raw.data.contentType || 'application/pdf',
-                    fileName: item.raw.data.filename || 'file.pdf',
+                    mimeType: item.raw.data.contentType || "application/pdf",
+                    fileName: item.raw.data.filename || "file.pdf",
                     md5: finalMd5, // Use verified or repaired MD5
                     lastAccessedAt: new Date().toISOString(),
-                    size: buffer.byteLength
+                    size: buffer.byteLength,
                 };
 
                 await db.files.put(fileRecord);
@@ -161,7 +193,6 @@ export class FileManager {
             }
 
             return blob;
-
         } catch (error) {
             console.error("[ZotFlow] Download task error:", error);
             return null;
@@ -182,16 +213,22 @@ export class FileManager {
             const uint8Input = new Uint8Array(buffer);
 
             const unzipped = await new Promise<Unzipped>((resolve, reject) => {
-                unzip(uint8Input, {
-                    filter: (file) => {
-                        return !file.name.endsWith('/') &&
-                            !file.name.startsWith('.') &&
-                            !file.name.endsWith('.prop');
-                    }
-                }, (err, data) => {
-                    if (err) reject(err);
-                    else resolve(data);
-                });
+                unzip(
+                    uint8Input,
+                    {
+                        filter: (file) => {
+                            return (
+                                !file.name.endsWith("/") &&
+                                !file.name.startsWith(".") &&
+                                !file.name.endsWith(".prop")
+                            );
+                        },
+                    },
+                    (err, data) => {
+                        if (err) reject(err);
+                        else resolve(data);
+                    },
+                );
             });
 
             const targetFileName = Object.keys(unzipped).first();
@@ -201,7 +238,6 @@ export class FileManager {
             }
 
             return unzipped[targetFileName]!.buffer as ArrayBuffer;
-
         } catch (e) {
             console.error("[ZotFlow] WebDAV Error:", e);
             return null;
@@ -211,23 +247,24 @@ export class FileManager {
     /**
      * Zotero API
      */
-    private async downloadFromZoteroAPI(key: string, libraryID: number): Promise<ArrayBuffer | null> {
-        const url = `https://api.zotero.org/users/${libraryID}/items/${key}/file/view`;
-
+    private async downloadFromZoteroAPI(
+        item: IDBZoteroItem<AttachmentData>,
+    ): Promise<ArrayBuffer | null> {
+        const url = `https://api.zotero.org/${item.raw.library.type}s/${item.libraryID}/items/${item.key}/file/view`;
         try {
             const response = await requestUrl({
                 url: url,
-                method: 'GET',
+                method: "GET",
                 headers: {
-                    'Zotero-API-Version': '3',
-                    'Zotero-API-Key': this.settings.zoteroApiKey
-                }
+                    "Zotero-API-Version": "3",
+                    "Zotero-API-Key": this.settings.zoteroApiKey,
+                },
             });
 
-            if (response.status !== 200) throw new Error(`API Error ${response.status}`);
+            if (response.status !== 200)
+                throw new Error(`API Error ${response.status}`);
 
             return response.arrayBuffer;
-
         } catch (e) {
             console.error("[ZotFlow] API Download Error:", e);
             return null;
@@ -244,14 +281,21 @@ export class FileManager {
             const limitBytes = limitMB * 1024 * 1024;
 
             const allFiles = await db.files.toArray();
-            let totalSize = allFiles.reduce((acc, file) => acc + (file.size || 0), 0);
+            let totalSize = allFiles.reduce(
+                (acc, file) => acc + (file.size || 0),
+                0,
+            );
 
             if (totalSize <= limitBytes || limitBytes === 0) return;
 
-            console.log(`[ZotFlow] Cache size (${(totalSize / 1024 / 1024).toFixed(1)}MB) exceeds limit (${limitMB}MB). Pruning...`);
+            console.log(
+                `[ZotFlow] Cache size (${(totalSize / 1024 / 1024).toFixed(1)}MB) exceeds limit (${limitMB}MB). Pruning...`,
+            );
 
             const sortedFiles = allFiles.sort((a, b) => {
-                return (a.lastAccessedAt || '').localeCompare(b.lastAccessedAt || '');
+                return (a.lastAccessedAt || "").localeCompare(
+                    b.lastAccessedAt || "",
+                );
             });
 
             const keysToDelete: [number, string][] = [];
@@ -260,7 +304,7 @@ export class FileManager {
             for (const file of sortedFiles) {
                 if (totalSize <= limitBytes) break;
 
-                totalSize -= (file.size || 0);
+                totalSize -= file.size || 0;
                 keysToDelete.push([file.libraryID, file.key]);
             }
 
@@ -268,7 +312,6 @@ export class FileManager {
                 await db.files.bulkDelete(keysToDelete);
                 console.log(`[ZotFlow] Pruned ${keysToDelete.length} files.`);
             }
-
         } catch (e) {
             console.error("[ZotFlow] Prune cache failed:", e);
         }

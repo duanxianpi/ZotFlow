@@ -1,14 +1,15 @@
-import { ItemView, WorkspaceLeaf, Notice, ViewStateResult } from 'obsidian';
-import { services } from '../services/serivces';
-import { IframeReaderBridge } from './zotero-reader-bridge';
-import { ColorScheme } from 'types/zotero-reader';
-import ObsidianZotFlow from '../main';
-import { CreateReaderOptions } from 'types/zotero-reader';
-import { db } from 'db/db';
-import { IDBZoteroItem } from 'types/db-schema';
-import { AttachmentData } from 'types/zotero-item';
+import { ItemView, WorkspaceLeaf, Notice, ViewStateResult } from "obsidian";
+import { services } from "../services/serivces";
+import { IframeReaderBridge } from "./zotero-reader-bridge";
+import { ColorScheme } from "types/zotero-reader";
+import ObsidianZotFlow from "../main";
+import { CreateReaderOptions } from "types/zotero-reader";
+import { db } from "db/db";
+import { IDBZoteroItem } from "types/db-schema";
+import { AttachmentData } from "types/zotero-item";
+import { getAnnotationJson } from "utils/annotation";
 
-export const VIEW_TYPE_ZOTERO_READER = 'zotflow-zotero-reader-view';
+export const VIEW_TYPE_ZOTERO_READER = "zotflow-zotero-reader-view";
 
 interface ReaderViewState extends Record<string, unknown> {
     libraryID: number;
@@ -20,14 +21,12 @@ export class ZoteroReaderView extends ItemView {
     private attachmentItem: IDBZoteroItem<AttachmentData>;
     private readerOptions: Partial<CreateReaderOptions>;
 
-    private plugin: ObsidianZotFlow;
     private bridge?: IframeReaderBridge;
     private colorSchemeObserver?: MutationObserver;
     private colorScheme: ColorScheme = "light"; // Default to light
 
-    constructor(leaf: WorkspaceLeaf, plugin: ObsidianZotFlow) {
+    constructor(leaf: WorkspaceLeaf) {
         super(leaf);
-        this.plugin = plugin;
     }
 
     getViewType() {
@@ -42,13 +41,19 @@ export class ZoteroReaderView extends ItemView {
         return "book-open";
     }
 
-    async setState(state: ReaderViewState, result: ViewStateResult): Promise<void> {
-        console.log("TEST", state, result)
+    async setState(
+        state: ReaderViewState,
+        result: ViewStateResult,
+    ): Promise<void> {
         if (state.itemKey && state.libraryID) {
             const _item = await db.items.get([state.libraryID, state.itemKey]);
             if (!_item || _item.itemType !== "attachment") {
-                console.error(`[ZotFlow] Item ${state.itemKey} doesn't exist or is not an attachment`);
-                throw new Error(`Item ${state.itemKey} doesn't exist or is not an attachment`);
+                console.error(
+                    `[ZotFlow] Item ${state.itemKey} doesn't exist or is not an attachment`,
+                );
+                throw new Error(
+                    `Item ${state.itemKey} doesn't exist or is not an attachment`,
+                );
             }
             this.attachmentItem = _item as IDBZoteroItem<AttachmentData>;
             await this.loadDocument();
@@ -62,7 +67,7 @@ export class ZoteroReaderView extends ItemView {
         const container = this.contentEl;
         container.empty();
 
-        const loadingEl = container.createDiv({ cls: 'zotflow-loading' });
+        const loadingEl = container.createDiv({ cls: "zotflow-loading" });
         loadingEl.setText(`Downloading/Loading ${this.attachmentItem.key}...`);
 
         try {
@@ -77,14 +82,15 @@ export class ZoteroReaderView extends ItemView {
         const container = this.contentEl;
 
         // Ensure color scheme is set initially
-        this.colorScheme = getComputedStyle(document.body).colorScheme as ColorScheme;
+        this.colorScheme = getComputedStyle(document.body)
+            .colorScheme as ColorScheme;
 
         try {
             // Create bridge once
             if (!this.bridge) {
                 this.bridge = new IframeReaderBridge(
                     container,
-                    this.plugin.settings
+                    services.settings,
                 );
 
                 // Register event listeners
@@ -142,18 +148,21 @@ export class ZoteroReaderView extends ItemView {
                     attributes: true,
                     attributeFilter: ["class"],
                 });
-
             }
 
             // Connect Bridge & Get File concurrently
-            console.log("TEST")
-            const [_, fileBlob] = await Promise.all([
+            const [_, fileBlob, annotationJson] = await Promise.all([
                 this.bridge.connect(),
-                services.files.getFileBlob(this.attachmentItem.libraryID, this.attachmentItem.key)
+                services.files.getFileBlob(this.attachmentItem),
+                getAnnotationJson(this.attachmentItem),
             ]);
 
+            console.log(annotationJson);
+
             if (!fileBlob) {
-                console.error(`[ZotFlow] Failed to get file blob for ${this.attachmentItem.key}`);
+                console.error(
+                    `[ZotFlow] Failed to get file blob for ${this.attachmentItem.key}`,
+                );
                 throw new Error("File not found or failed to download");
             }
 
@@ -170,7 +179,7 @@ export class ZoteroReaderView extends ItemView {
                 const opts = {
                     ...this.readerOptions,
                     colorScheme: this.colorScheme,
-                    // annotations: annotations, // You would fetch these from DB using this.parentItemKey
+                    annotations: annotationJson,
                     // primaryViewState,
                     // secondaryViewState,
                     // customThemes: this.plugin.settings.readerThemes, // Using settings
@@ -179,23 +188,23 @@ export class ZoteroReaderView extends ItemView {
                 };
 
                 const contentType = this.attachmentItem.raw.data.contentType;
-                let type: 'pdf' | 'epub' | 'snapshot' | 'paperclip';
+                let type: "pdf" | "epub" | "snapshot" | "paperclip";
                 switch (contentType) {
-                    case 'application/pdf':
-                        type = 'pdf';
+                    case "application/pdf":
+                        type = "pdf";
                         break;
-                    case 'application/epub+zip':
-                        type = 'epub';
+                    case "application/epub+zip":
+                        type = "epub";
                         break;
-                    case 'text/html':
-                        type = 'snapshot';
+                    case "text/html":
+                        type = "snapshot";
                         break;
                     default:
                         console.error(`Unknown content type: ${contentType}`);
                         throw new Error(`Unknown content type: ${contentType}`);
                 }
 
-                const arrayBuffer = await fileBlob.arrayBuffer()
+                const arrayBuffer = await fileBlob.arrayBuffer();
                 await this.bridge.initReader({
                     data: { buf: new Uint8Array(arrayBuffer), url: null }, // Pass buffer
                     type: type,
@@ -203,9 +212,8 @@ export class ZoteroReaderView extends ItemView {
                     ...opts,
                 });
 
-                console.log("INITED")
+                console.log("INITED");
             }
-
         } catch (e: any) {
             console.error("Error loading Zotero Reader view:", e);
             container.empty();
@@ -215,9 +223,7 @@ export class ZoteroReaderView extends ItemView {
             errorMessage
                 .createEl("div")
                 .setText("Failed to load Zotero Reader");
-            errorMessage
-                .createEl("div")
-                .setText("Error details: " + e.message);
+            errorMessage.createEl("div").setText("Error details: " + e.message);
         }
     }
 
@@ -225,7 +231,7 @@ export class ZoteroReaderView extends ItemView {
         return {
             libraryID: this.attachmentItem.libraryID,
             itemKey: this.attachmentItem.key,
-            readerOptions: this.readerOptions
+            readerOptions: this.readerOptions,
         };
     }
 

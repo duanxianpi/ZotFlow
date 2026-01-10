@@ -16,8 +16,8 @@ export function normalizeCollection(raw: ZoteroCollection, libraryID: number): I
         name: raw.data.name,
         parentCollection: raw.data.parentCollection || false,
         trashed: raw.data.deleted,
-        _syncStatus: 'synced' as const,
-        _syncedAt: new Date().toISOString(),
+        syncStatus: 'synced' as const,
+        syncedAt: new Date().toISOString(),
         raw: raw
     };
     return collection;
@@ -89,12 +89,12 @@ export function normalizeItem(raw: AnyZoteroItem, libraryID: number): AnyIDBZote
         dateAdded: raw.data.dateAdded,
         dateModified: raw.data.dateModified,
         version: raw.data.version,
-        _searchCreators: searchCreators,
-        _searchTags: searchTags,
-        _syncStatus: 'synced',
-        _syncedAt: new Date().toISOString(),
-        _lastAccessed: new Date().toISOString(),
-        _readingProgress: 0,
+        searchCreators: searchCreators,
+        searchTags: searchTags,
+        syncStatus: 'synced',
+        syncedAt: new Date().toISOString(),
+        lastAccessedAt: new Date().toISOString(),
+        readingProgress: 0,
 
         raw: raw
     } as AnyIDBZoteroItem;

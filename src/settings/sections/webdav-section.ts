@@ -1,0 +1,122 @@
+import { Setting, Notice, setIcon } from "obsidian";
+import MyPlugin from "../../main";
+import { WebDavClient } from "../../api/webdav-api";
+
+export class WebDavSection {
+    constructor(
+        private plugin: MyPlugin,
+        private refreshUI: () => void,
+    ) {}
+
+    render(containerEl: HTMLElement) {
+        new Setting(containerEl).setHeading().setName("WebDAV Configuration");
+        const webDavConfigContainer = containerEl.createDiv();
+
+        // Toggle
+        new Setting(webDavConfigContainer)
+            .setName("Enable WebDAV Sync")
+            .setDesc(
+                "Sync attachment files via a WebDAV server instead of Zotero Storage.",
+            )
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.useWebDav)
+                    .onChange(async (value) => {
+                        this.plugin.settings.useWebDav = value;
+                        this.refreshUI();
+                    }),
+            );
+
+        if (!this.plugin.settings.useWebDav) return;
+
+        const isVerified = !!this.plugin.settings.webDavUrl;
+        let tempUrl = this.plugin.settings.webDavUrl || "";
+        let tempUser = this.plugin.settings.webDavUser || "";
+        let tempPassword = this.plugin.settings.webDavPassword || "";
+
+        new Setting(webDavConfigContainer)
+            .setName("Server URL")
+            .setDesc("e.g., https://webdav.service.com/zotero/")
+            .addText((text) => {
+                text.setPlaceholder("https://...")
+                    .setValue(tempUrl)
+                    .onChange((v) => (tempUrl = v.trim()));
+                text.inputEl.style.width = "100%";
+                if (isVerified) text.setDisabled(true);
+            });
+
+        new Setting(webDavConfigContainer)
+            .setName("Username")
+            .addText((text) => {
+                text.setPlaceholder("username")
+                    .setValue(tempUser)
+                    .onChange((v) => (tempUser = v.trim()));
+                if (isVerified) text.setDisabled(true);
+            });
+
+        new Setting(webDavConfigContainer)
+            .setName("Password")
+            .addText((text) => {
+                text.setPlaceholder("password")
+                    .setValue(tempPassword)
+                    .onChange((v) => (tempPassword = v.trim()));
+                text.inputEl.type = "password";
+                if (isVerified) text.setDisabled(true);
+            });
+
+        const btnContainer = webDavConfigContainer.createDiv();
+        btnContainer.style.marginTop = "1rem";
+
+        if (isVerified) {
+            new Setting(btnContainer).addButton((button) =>
+                button
+                    .setButtonText("Disconnect")
+                    .setIcon("unlink")
+                    .setWarning()
+                    .onClick(async () => {
+                        this.plugin.settings.webDavUrl = "";
+                        this.plugin.settings.webDavUser = "";
+                        this.plugin.settings.webDavPassword = "";
+                        await this.plugin.saveSettings();
+                        new Notice("WebDAV disconnected.");
+                        this.refreshUI();
+                    }),
+            );
+        } else {
+            new Setting(btnContainer).addButton((button) =>
+                button
+                    .setButtonText("Verify & Connect")
+                    .setCta()
+                    .onClick(async () => {
+                        if (!tempUrl || !tempUser || !tempPassword) {
+                            new Notice("Please fill in all fields.");
+                            return;
+                        }
+                        button.setButtonText("Verifying...").setDisabled(true);
+
+                        try {
+                            await WebDavClient.verify(
+                                tempUrl,
+                                tempUser,
+                                tempPassword,
+                            );
+                            new Notice("WebDAV Connected!");
+
+                            this.plugin.settings.webDavUrl = tempUrl;
+                            this.plugin.settings.webDavUser = tempUser;
+                            this.plugin.settings.webDavPassword = tempPassword;
+
+                            await this.plugin.saveSettings();
+
+                            this.refreshUI();
+                        } catch (error: any) {
+                            new Notice(`Connection failed: ${error.message}`);
+                            button
+                                .setButtonText("Verify & Connect")
+                                .setDisabled(false);
+                        }
+                    }),
+            );
+        }
+    }
+}

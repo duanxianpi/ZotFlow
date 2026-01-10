@@ -1,31 +1,8 @@
-import api, { ApiChain } from 'zotero-api-client';
-
-export interface ZoteroKeyAccess {
-    user: {
-        library: boolean;
-        files: boolean;
-        notes: boolean;
-        write: boolean;
-    };
-    groups: {
-        [groupId: string]: {
-            library: boolean;
-            write: boolean;
-        };
-    };
-}
-
-export interface ZoteroKeyResponse {
-    key: string;
-    userID: number;
-    username: string;
-    displayName: string;
-    access: ZoteroKeyAccess;
-}
+import { ZoteroKey } from "types/zotero";
+import api, { ApiChain } from "zotero-api-client";
 
 export class ZoteroApiClient {
     private _client: ApiChain;
-
 
     constructor(apiKey: string) {
         // zotero-api-client handles Auth Header, Rate Limiting (Retry-After), and Retries automatically.
@@ -41,14 +18,14 @@ export class ZoteroApiClient {
      * Validate the API key and return key details.
      * This ensures the key is valid and retrieves the associated user ID and permissions.
      */
-    static async verifyKey(apiKey: string): Promise<ZoteroKeyResponse> {
+    static async verifyKey(apiKey: string): Promise<ZoteroKey> {
         if (!apiKey) {
             throw new Error("API Key is required");
         }
 
         try {
             const response = await api.default(apiKey).verifyKeyAccess().get();
-            return response.getData() as ZoteroKeyResponse;
+            return response.getData() as ZoteroKey;
         } catch (error) {
             console.error("Failed to verify Zotero API key:", error);
             throw new Error("Invalid API Key or Network Error");

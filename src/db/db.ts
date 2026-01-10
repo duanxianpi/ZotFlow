@@ -1,7 +1,9 @@
 import Dexie, { Table } from 'dexie';
-import { MutationTask, IDBZoteroFile, IDBZoteroCollection, IDBZoteroLibrary, AnyIDBZoteroItem } from 'types/db-schema';
+import { MutationTask, IDBZoteroFile, IDBZoteroCollection, IDBZoteroLibrary, AnyIDBZoteroItem, IDBZoteroKey, IDBZoteroGroup } from 'types/db-schema';
 
 export class ZotFlowDB extends Dexie {
+    keys!: Table<IDBZoteroKey, string>;
+    groups!: Table<IDBZoteroGroup, number>;
     items!: Table<AnyIDBZoteroItem, [number, string]>;
     collections!: Table<IDBZoteroCollection, [number, string]>;
     libraries!: Table<IDBZoteroLibrary, number>;
@@ -13,6 +15,12 @@ export class ZotFlowDB extends Dexie {
 
         // Schema Definition
         this.version(1).stores({
+            // Zotero Key
+            keys: '&key',
+
+            // Zotero Group
+            groups: '&id',
+
             // Zotero Libraries
             libraries: '&id',
 
@@ -22,7 +30,7 @@ export class ZotFlowDB extends Dexie {
                 trashed,
                 name,
                 parentCollection, 
-                _syncStatus,
+                syncStatus,
                 [libraryID+version]
             `,
 
@@ -33,11 +41,11 @@ export class ZotFlowDB extends Dexie {
                 parentItem, 
                 trashed,
                 *collections, 
-                *_searchCreators, 
-                *_searchTags, 
+                *searchCreators, 
+                *searchTags, 
                 dateModified, 
-                _syncStatus, 
-                _lastAccessed, 
+                syncStatus, 
+                lastAccessedAt, 
                 [libraryID+version]
             `,
 
