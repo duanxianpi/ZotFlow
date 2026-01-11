@@ -5,7 +5,7 @@ import { ColorScheme } from "types/zotero-reader";
 import ObsidianZotFlow from "../main";
 import { CreateReaderOptions } from "types/zotero-reader";
 import { db } from "db/db";
-import { IDBZoteroItem } from "types/db-schema";
+import { IDBZoteroItem, IDBZoteroKey } from "types/db-schema";
 import { AttachmentData, AnnotationData } from "types/zotero-item";
 import {
     getAnnotationJson,
@@ -24,6 +24,7 @@ interface ReaderViewState extends Record<string, unknown> {
 export class ZoteroReaderView extends ItemView {
     private attachmentItem: IDBZoteroItem<AttachmentData>;
     private readerOptions: Partial<CreateReaderOptions>;
+    private keyInfo: IDBZoteroKey;
 
     private bridge?: IframeReaderBridge;
     private colorSchemeObserver?: MutationObserver;
@@ -49,6 +50,17 @@ export class ZoteroReaderView extends ItemView {
         state: ReaderViewState,
         result: ViewStateResult,
     ): Promise<void> {
+        const _keyInfo = await db.keys.get(services.settings.zoteroApiKey);
+
+        if (!_keyInfo) {
+            console.error(
+                `[ZotFlow] Key ${services.settings.zoteroApiKey} doesn't exist`,
+            );
+            throw new Error(
+                `Key ${services.settings.zoteroApiKey} doesn't exist`,
+            );
+        }
+
         if (state.itemKey) {
             const _item = await db.items.get([state.libraryID, state.itemKey]);
             if (!_item || _item.itemType !== "attachment") {
@@ -60,6 +72,8 @@ export class ZoteroReaderView extends ItemView {
                 );
             }
             this.attachmentItem = _item as IDBZoteroItem<AttachmentData>;
+
+            this.keyInfo = _keyInfo;
             this.containerEl
                 .getElementsByClassName("view-header-title")[0]
                 ?.setText(this.attachmentItem.raw.data.filename);
@@ -197,13 +211,9 @@ export class ZoteroReaderView extends ItemView {
                         throw new Error(`Unknown content type: ${contentType}`);
                 }
 
-                const keyInfo = await db.keys.get(
-                    services.settings.zoteroApiKey,
-                );
-
                 const authorName =
                     this.attachmentItem.raw.library.type === "group"
-                        ? keyInfo?.username || ""
+                        ? this.keyInfo.username || ""
                         : "";
 
                 // Initialize Reader Logic
@@ -270,8 +280,11 @@ export class ZoteroReaderView extends ItemView {
 
                 // Delete existing external annotations for this item
                 await db.items
-                    .where("parentItem")
-                    .equals(this.attachmentItem.key)
+                    .where(["libraryID", "parentItem"])
+                    .equals([
+                        this.attachmentItem.libraryID,
+                        this.attachmentItem.key,
+                    ])
                     .filter(
                         (i) =>
                             (i as IDBZoteroItem<AnnotationData>).raw.data
@@ -324,21 +337,23 @@ export class ZoteroReaderView extends ItemView {
 
             const existing = await db.items.get([libraryID, key]);
 
-            if (existing) {
+            if (existing && !json.isExternal) {
                 // Determine new sync status
                 const newSyncStatus =
                     existing.syncStatus === "created" ? "created" : "updated";
 
-                await db.items.update([libraryID, key], {
-                    raw: {
-                        ...existing.raw,
-                        data: {
-                            ...existing.raw.data,
-                            ...annotationData,
-                        } as any,
-                    },
-                    dateModified: new Date().toISOString(),
-                    syncStatus: newSyncStatus,
+                await db.transaction("rw", db.items, async () => {
+                    await db.items.update([libraryID, key], {
+                        raw: {
+                            ...existing.raw,
+                            data: {
+                                ...existing.raw.data,
+                                ...annotationData,
+                            } as any,
+                        },
+                        dateModified: new Date().toISOString(),
+                        syncStatus: newSyncStatus,
+                    });
                 });
             } else {
                 const now = new Date().toISOString();
@@ -348,7 +363,7 @@ export class ZoteroReaderView extends ItemView {
                     key,
                     itemType: "annotation",
                     parentItem,
-                    trashed: false,
+                    trashed: 0,
                     title: "",
                     collections: [],
                     dateAdded: now,
@@ -356,7 +371,7 @@ export class ZoteroReaderView extends ItemView {
                     version: 0,
                     searchCreators: [],
                     searchTags: [],
-                    syncStatus: "created",
+                    syncStatus: json.isExternal ? "created" : "ignore",
                     raw: {
                         key,
                         version: 0,
@@ -364,7 +379,6 @@ export class ZoteroReaderView extends ItemView {
                         links: {},
                         meta: {
                             numChildren: 0,
-                            // createdByUser: ... // We leave this empty for local or fill with current user
                         },
                         data: {
                             ...annotationData,
@@ -380,7 +394,9 @@ export class ZoteroReaderView extends ItemView {
                         } as unknown as AnnotationData,
                     },
                 };
-                await db.items.put(newItem);
+                await db.transaction("rw", db.items, async () => {
+                    await db.items.put(newItem);
+                });
             }
         }
     }

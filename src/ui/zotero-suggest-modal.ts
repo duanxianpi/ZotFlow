@@ -1,9 +1,12 @@
 import { App, SuggestModal, setIcon, Notice } from "obsidian";
-import { db } from "../db/db";
+import { db, getCombinations } from "../db/db";
 import { AnyIDBZoteroItem } from "../types/db-schema";
 import { AttachmentSelectModal } from "./attachment-select-modal";
 import { getAttachmentTypeIcon, openAttachment } from "utils/attachment";
 import { services } from "services/serivces";
+import { AttachmentData } from "types/zotero-item";
+import { IDBZoteroItem } from "types/db-schema";
+import { Zotero_Item_Types } from "types/zotero-item-const";
 
 interface SearchHeader {
     isHeader: true;
@@ -34,7 +37,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
         // No input -> Show Recent Access
         if (!query) {
-            // Try to get recently accessed items (using _lastAccessed index)
+            // Try to get recently accessed items (using lastAccessedAt index)
             const recentItems = await db.items
                 .orderBy("lastAccessedAt")
                 .reverse() // Latest first
@@ -42,7 +45,8 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
                     (item) =>
                         libraryIDs.includes(item.libraryID) &&
                         !item.parentItem &&
-                        isValidTopLevel(item.itemType),
+                        isValidTopLevel(item.itemType) &&
+                        !item.trashed,
                 )
                 .limit(20)
                 .toArray();
@@ -63,7 +67,8 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
                     (item) =>
                         libraryIDs.includes(item.libraryID) &&
                         !item.parentItem &&
-                        isValidTopLevel(item.itemType),
+                        isValidTopLevel(item.itemType) &&
+                        !item.trashed,
                 )
                 .limit(20)
                 .toArray();
@@ -80,17 +85,15 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
         // With input -> Show Best Match
         const lowerQuery = query.toLowerCase();
-
+        const validTopLevelTypeList = Zotero_Item_Types.filter((type) =>
+            isValidTopLevel(type),
+        );
         // Use Dexie's Collection to filter (in memory, for multi-field fuzzy search)
         const searchResults = await db.items
+            .where(["libraryID", "itemType", "trashed"])
+            .anyOf(getCombinations([libraryIDs, validTopLevelTypeList, [0]]))
             .filter((item) => {
-                if (
-                    !libraryIDs.includes(item.libraryID) ||
-                    item.parentItem ||
-                    !isValidTopLevel(item.itemType)
-                )
-                    return false;
-
+                if (item.parentItem) return false;
                 const titleMatch = (item.title || "")
                     .toLowerCase()
                     .includes(lowerQuery);
@@ -208,13 +211,10 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         }
 
         // Fetch Children (Second Level Items)
-        const children = await db.items
-            .where("parentItem")
-            .equals(zItem.key)
-            .toArray();
-
-        // Filter out attachments (PDF, Snapshot, File...)
-        const attachments = children.filter((c) => c.itemType === "attachment");
+        const attachments = (await db.items
+            .where(["libraryID", "parentItem", "itemType", "trashed"])
+            .equals([zItem.libraryID, zItem.key, "attachment", 0])
+            .toArray()) as IDBZoteroItem<AttachmentData>[];
 
         if (attachments.length === 0) {
             new Notice(`No attachments found for item: ${item.title}`);

@@ -310,7 +310,9 @@ export class FileManager {
             }
 
             if (keysToDelete.length > 0) {
-                await db.files.bulkDelete(keysToDelete);
+                await db.transaction("rw", db.files, async () => {
+                    await db.files.bulkDelete(keysToDelete);
+                });
                 console.log(`[ZotFlow] Pruned ${keysToDelete.length} files.`);
             }
         } catch (e) {

@@ -30,7 +30,7 @@ export interface IDBZoteroCollection {
     version: number;
     name: string;
     parentCollection: false | string;
-    trashed: boolean; // Whether the collection is trashed
+    trashed: 0 | 1; // Whether the collection is trashed
 
     // Sync State
     syncStatus: "synced" | "created" | "updated" | "deleted";
@@ -49,7 +49,7 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     // Core Indexed Fields
     itemType: T["itemType"]; // 'journalArticle', 'attachment', 'annotation', etc.
     parentItem: string; // Parent Item Key
-    trashed: boolean; // Whether the item is trashed
+    trashed: 0 | 1; // Whether the item is trashed
 
     // Sorting & Versioning
     title?: string; // Title (normalized for sorting)
@@ -63,7 +63,7 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     searchTags: string[];
 
     // Sync State
-    syncStatus: "synced" | "created" | "updated" | "deleted";
+    syncStatus: "synced" | "created" | "updated" | "deleted" | "ignore";
     syncedAt?: string;
     lastAccessedAt?: string;
     readingProgress?: number;
@@ -90,16 +90,4 @@ export interface IDBZoteroFile {
     md5: string; // File MD5 (API returned), used to determine if re-download is needed
     lastAccessedAt: string;
     size: number;
-}
-
-export interface MutationTask {
-    id?: number; // Auto-increment ID
-    libraryID: number;
-    actionType: "create" | "update" | "delete";
-    dataType: "item" | "collection";
-    key: string; // Key to perform action on
-    payload: any; // JSON Body to send to API
-    createdAt: string;
-    retryCount: number;
-    error?: string; // Last failure reason
 }

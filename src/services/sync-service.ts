@@ -1,10 +1,11 @@
-import { db } from "../db/db";
+import { db, getCombinations } from "../db/db";
 import { ZoteroApiClient } from "../api/zotero-api";
 import { normalizeItem, normalizeCollection } from "../utils/normalize";
 import { Notice } from "obsidian";
 import { ApiChain } from "zotero-api-client";
 import { AnyZoteroItem } from "types/zotero";
 import { ZotFlowSettings } from "settings/settings";
+import { Zotero_Item_Types } from "types/zotero-item-const";
 
 const BULK_SIZE = 50; // Limit due to URL length
 
@@ -162,7 +163,15 @@ export class SyncService {
 
             if (deletedKeys.length > 0) {
                 await db.transaction("rw", db.collections, async () => {
-                    await db.collections.bulkDelete(deletedKeys);
+                    const childKeys = await db.collections
+                        .where(["libraryID", "parentCollection"])
+                        .anyOf(getCombinations([[libraryID], deletedKeys]))
+                        .primaryKeys();
+
+                    const allKeysToDelete = Array.from(
+                        new Set([...deletedKeys, ...childKeys]),
+                    );
+                    await db.collections.bulkDelete(allKeysToDelete);
                 });
                 console.log(
                     `[ZotFlow] Deleted ${deletedKeys.length} collections.`,
@@ -244,8 +253,20 @@ export class SyncService {
                 await db.transaction("rw", db.items, async () => {
                     // Cascade delete orphan nodes
                     const childKeys = await db.items
-                        .where("parentItem")
-                        .anyOf(deletedKeys)
+                        .where([
+                            "libraryID",
+                            "parentItem",
+                            "itemType",
+                            "trashed",
+                        ])
+                        .anyOf(
+                            getCombinations([
+                                [libraryID],
+                                deletedKeys,
+                                Zotero_Item_Types,
+                                [0, 1],
+                            ]),
+                        )
                         .primaryKeys();
 
                     const allKeysToDelete = Array.from(

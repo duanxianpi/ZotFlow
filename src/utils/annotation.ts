@@ -47,13 +47,8 @@ export async function getAnnotationJson(
 
     // Zotero Annotations
     const annotations = (await db.items
-        .where("parentItem")
-        .equals(item.key)
-        .and(
-            (item) =>
-                item.libraryID === item.libraryID &&
-                item.itemType === "annotation",
-        )
+        .where(["libraryID", "parentItem", "itemType", "trashed"])
+        .equals([item.libraryID, item.key, "annotation", 0])
         .toArray()) as IDBZoteroItem<AnnotationData>[];
 
     // External Annotations

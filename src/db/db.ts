@@ -1,5 +1,12 @@
-import Dexie, { Table } from 'dexie';
-import { MutationTask, IDBZoteroFile, IDBZoteroCollection, IDBZoteroLibrary, AnyIDBZoteroItem, IDBZoteroKey, IDBZoteroGroup } from 'types/db-schema';
+import Dexie, { Table } from "dexie";
+import {
+    IDBZoteroFile,
+    IDBZoteroCollection,
+    IDBZoteroLibrary,
+    AnyIDBZoteroItem,
+    IDBZoteroKey,
+    IDBZoteroGroup,
+} from "types/db-schema";
 
 export class ZotFlowDB extends Dexie {
     keys!: Table<IDBZoteroKey, string>;
@@ -8,54 +15,64 @@ export class ZotFlowDB extends Dexie {
     collections!: Table<IDBZoteroCollection, [number, string]>;
     libraries!: Table<IDBZoteroLibrary, number>;
     files!: Table<IDBZoteroFile, [number, string]>;
-    mutationQueue!: Table<MutationTask, number>;
 
     constructor() {
-        super('zotflow');
+        super("zotflow");
 
         // Schema Definition
         this.version(1).stores({
             // Zotero Key
-            keys: '&key',
+            keys: "&key",
 
             // Zotero Group
-            groups: '&id',
+            groups: "&id",
 
             // Zotero Libraries
-            libraries: '&id',
+            libraries: "&id",
 
             // Zotero Collections
             collections: `
                 &[libraryID+key], 
-                trashed,
-                name,
-                parentCollection, 
-                syncStatus,
-                [libraryID+version]
+                [libraryID+parentCollection],
+                [libraryID+syncStatus],
+                [libraryID+trashed]
             `,
 
             // Zotero Items
             items: `
                 &[libraryID+key], 
-                itemType, 
-                parentItem, 
-                trashed,
+                [libraryID+syncStatus],
+                [libraryID+itemType+trashed],
+                [libraryID+parentItem+itemType+trashed],
                 *collections, 
                 *searchCreators, 
                 *searchTags, 
-                dateModified, 
-                syncStatus, 
-                lastAccessedAt, 
-                [libraryID+version]
+                lastAccessedAt,
+                dateModified
             `,
 
             // Zotero Files
-            files: '&[libraryID+key], lastAccessedAt',
-
-            // Mutation Queue
-            mutationQueue: '++id, libraryID, key'
+            files: "&[libraryID+key], md5, lastAccessedAt",
         });
     }
+}
+
+/**
+ * Generate the Cartesian product of an array of arrays.
+ * @param {Array<Array<any>>} arrays - The input array of arrays, e.g. [[1, 2], ['a', 'b']]
+ * @returns {Array<Array<any>>} - All possible combinations
+ */
+export function getCombinations(arrays: any[][]) {
+    return arrays.reduce(
+        (acc, currList) => {
+            return acc.flatMap((prevCombination) => {
+                return currList.map((item) => {
+                    return [...prevCombination, item];
+                });
+            });
+        },
+        [[]],
+    );
 }
 
 export const db = new ZotFlowDB();
