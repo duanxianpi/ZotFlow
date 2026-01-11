@@ -16,16 +16,6 @@ import { services } from "services/serivces";
 export async function getAnnotationJson(
     item: IDBZoteroItem<AttachmentData>,
 ): Promise<AnnotationJSON[]> {
-    const annotations = (await db.items
-        .where("parentItem")
-        .equals(item.key)
-        .and(
-            (item) =>
-                item.libraryID === item.libraryID &&
-                item.itemType === "annotation",
-        )
-        .toArray()) as IDBZoteroItem<AnnotationData>[];
-
     // Get current user from settings/DB
     const apiKey = services.settings.zoteroApiKey;
     const currentUserKey = await db.keys.get(apiKey);
@@ -33,7 +23,7 @@ export async function getAnnotationJson(
         ? {
               id: currentUserKey.userID,
               username: currentUserKey.username,
-              name: currentUserKey.displayName,
+              displayName: currentUserKey.displayName,
           }
         : null;
 
@@ -54,32 +44,46 @@ export async function getAnnotationJson(
         });
     }
     */
+
+    // Zotero Annotations
+    const annotations = (await db.items
+        .where("parentItem")
+        .equals(item.key)
+        .and(
+            (item) =>
+                item.libraryID === item.libraryID &&
+                item.itemType === "annotation",
+        )
+        .toArray()) as IDBZoteroItem<AnnotationData>[];
+
+    // External Annotations
     const annotationJson: AnnotationJSON[] = [];
     for (const annotation of annotations) {
         const o: any = {};
         o.libraryID = annotation.libraryID;
         o.id = annotation.key;
         o.type = annotation.raw.data.annotationType;
-        o.isExternal = false; // Default to false
+        o.isExternal = annotation.raw.data.annotationIsExternal || false; // Default to false
 
         const isAuthor =
             !annotation.raw.meta.createdByUser?.id ||
             annotation.raw.meta.createdByUser?.id === currentUser?.id;
         const isReadOnly = false; // Defaulting to false
 
-        if (annotation.raw.meta.createdByUser) {
-            // Approximate author logic
+        if (annotation.raw.data.annotationAuthorName) {
+            o.authorName = annotation.raw.data.annotationAuthorName;
             if (isGroup) {
-                // Logic for group modifications
+                // Not sure what is lastModifiedByUser
             }
-        }
-
-        if (isGroup) {
-            if (item.raw.meta.createdByUser) {
-                o.authorName =
-                    item.raw.meta.createdByUser.name ||
-                    item.raw.meta.createdByUser.username;
-            }
+        } else if (
+            !o.isExternal &&
+            isGroup &&
+            annotation.raw.meta.createdByUser
+        ) {
+            o.authorName =
+                annotation.raw.meta.createdByUser.username ||
+                annotation.raw.meta.createdByUser.name;
+            o.isAuthorNameAuthoritative = true;
         }
 
         o.readOnly = isReadOnly || o.isExternal || !isAuthor;
@@ -132,11 +136,29 @@ export async function getAnnotationJson(
     return annotationJson;
 }
 
+export function handleExternalAnnotation(annotation: any): AnnotationJSON {
+    return {
+        id: annotation.key,
+        type: annotation.annotationType,
+        isExternal: true,
+        authorName: annotation.annotationAuthorName,
+        readOnly: true,
+        text: annotation.annotationText,
+        comment: annotation.annotationComment,
+        pageLabel: annotation.annotationPageLabel,
+        color: annotation.annotationColor,
+        sortIndex: annotation.annotationSortIndex,
+        position: JSON.parse(annotation.annotationPosition),
+        tags: annotation.tags,
+        dateModified: "",
+    };
+}
+
 /**
  * @param {Object} json reader compatible annotation data
  * @return {Object} Annotation item
  */
-export const annotationItemFromJSON = function (
+export function annotationItemFromJSON(
     json: AnnotationJSON,
 ): Partial<ZoteroItemDataTypeMap["annotation"]> {
     const item: any = {
@@ -159,4 +181,4 @@ export const annotationItemFromJSON = function (
     item.tags = (json.tags || []).map((t) => ({ tag: t.name }));
 
     return item;
-};
+}

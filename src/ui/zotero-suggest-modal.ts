@@ -149,7 +149,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         // Author • Year
         const metaEl = bottomRow.createDiv({ cls: "zotflow-meta" });
         const authors = this.formatCreators(zItem.searchCreators);
-        const year = this.extractYear(zItem.dateModified);
+        const year = this.extractYear((zItem.raw.data as any).date);
 
         let metaText = "";
         if (authors && year !== "n.d.") metaText = `${authors} • ${year}`;

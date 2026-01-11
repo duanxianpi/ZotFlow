@@ -19,9 +19,6 @@ import {
     VIEW_TYPE_ZOTERO_READER,
     ZoteroReaderView,
 } from "./ui/zotero-reader-view";
-import { getBlobUrls } from "bundle-assets/inline-assets";
-
-// Remember to rename these classes and interfaces!
 
 export default class ObsidianZotFlow extends Plugin {
     settings: ZotFlowSettings;

@@ -18,6 +18,7 @@ import type {
     CreateReaderOptions,
     ColorScheme,
     ChildEvents,
+    AnnotationJSON,
 } from "../types/zotero-reader";
 
 // import {
@@ -296,6 +297,12 @@ export class IframeReaderBridge {
     setColorScheme(colorScheme: ColorScheme) {
         return this.enqueueOrRun(async () => {
             await this.child!.setColorScheme(colorScheme);
+        });
+    }
+
+    addAnnotation(annotation: AnnotationJSON) {
+        return this.enqueueOrRun(async () => {
+            await this.child!.addAnnotation(annotation);
         });
     }
 

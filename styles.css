@@ -145,3 +145,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+.workspace-leaf-content[data-type="zotflow-zotero-reader-view"] .view-content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+}

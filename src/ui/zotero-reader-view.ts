@@ -7,7 +7,7 @@ import { CreateReaderOptions } from "types/zotero-reader";
 import { db } from "db/db";
 import { IDBZoteroItem } from "types/db-schema";
 import { AttachmentData } from "types/zotero-item";
-import { getAnnotationJson } from "utils/annotation";
+import { getAnnotationJson, handleExternalAnnotation } from "utils/annotation";
 
 export const VIEW_TYPE_ZOTERO_READER = "zotflow-zotero-reader-view";
 
@@ -34,7 +34,7 @@ export class ZoteroReaderView extends ItemView {
     }
 
     getDisplayText() {
-        return "Zotero Reader";
+        return this.attachmentItem?.raw.data.filename || "Zotero Reader";
     }
 
     getIcon() {
@@ -45,7 +45,7 @@ export class ZoteroReaderView extends ItemView {
         state: ReaderViewState,
         result: ViewStateResult,
     ): Promise<void> {
-        if (state.itemKey && state.libraryID) {
+        if (state.itemKey) {
             const _item = await db.items.get([state.libraryID, state.itemKey]);
             if (!_item || _item.itemType !== "attachment") {
                 console.error(
@@ -56,7 +56,10 @@ export class ZoteroReaderView extends ItemView {
                 );
             }
             this.attachmentItem = _item as IDBZoteroItem<AttachmentData>;
-            await this.loadDocument();
+            this.containerEl
+                .getElementsByClassName("view-header-title")[0]
+                ?.setText(this.attachmentItem.raw.data.filename);
+            this.loadDocument();
         }
 
         this.readerOptions = state.readerOptions;
@@ -71,7 +74,7 @@ export class ZoteroReaderView extends ItemView {
         loadingEl.setText(`Downloading/Loading ${this.attachmentItem.key}...`);
 
         try {
-            await this.renderReader();
+            this.renderReader();
         } catch (e) {
             console.error(e);
             new Notice("Error loading document");
@@ -151,13 +154,10 @@ export class ZoteroReaderView extends ItemView {
             }
 
             // Connect Bridge & Get File concurrently
-            const [_, fileBlob, annotationJson] = await Promise.all([
+            const [_, fileBlob] = await Promise.all([
                 this.bridge.connect(),
                 services.files.getFileBlob(this.attachmentItem),
-                getAnnotationJson(this.attachmentItem),
             ]);
-
-            console.log(annotationJson);
 
             if (!fileBlob) {
                 console.error(
@@ -166,8 +166,8 @@ export class ZoteroReaderView extends ItemView {
                 throw new Error("File not found or failed to download");
             }
 
-            // Prepare Data
-            const arrayBuffer = fileBlob;
+            // Get Annotations
+            const annotationJson = await getAnnotationJson(this.attachmentItem);
 
             // Initialize Reader if ready
             if (this.bridge.state === "ready") {
@@ -204,15 +204,39 @@ export class ZoteroReaderView extends ItemView {
                         throw new Error(`Unknown content type: ${contentType}`);
                 }
 
-                const arrayBuffer = await fileBlob.arrayBuffer();
-                await this.bridge.initReader({
-                    data: { buf: new Uint8Array(arrayBuffer), url: null }, // Pass buffer
-                    type: type,
-                    // title: ... // Optional title
-                    ...opts,
-                });
+                const keyInfo = await db.keys.get(
+                    services.settings.zoteroApiKey,
+                );
 
-                console.log("INITED");
+                const authorName =
+                    this.attachmentItem.raw.library.type === "group"
+                        ? keyInfo?.username || ""
+                        : "";
+
+                const [_, externalAnnotations] = await Promise.all([
+                    this.bridge.initReader({
+                        data: {
+                            buf: new Uint8Array(await fileBlob.arrayBuffer()),
+                            url: null,
+                        }, // Pass buffer
+                        type: type,
+                        authorName,
+                        // title: ... // Optional title
+                        ...opts,
+                    }),
+                    services.pdfWorker.import(
+                        await fileBlob.arrayBuffer(),
+                        true,
+                    ),
+                ]);
+
+                externalAnnotations
+                    .map(handleExternalAnnotation)
+                    .forEach((annotation) => {
+                        this.bridge!.addAnnotation(annotation);
+                    });
+
+                // After initReader is finished, try to parse the external annotation
             }
         } catch (e: any) {
             console.error("Error loading Zotero Reader view:", e);

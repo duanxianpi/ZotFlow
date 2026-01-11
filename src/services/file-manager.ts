@@ -65,7 +65,6 @@ export class FileManager {
                     db.files.update(cached, {
                         lastAccessedAt: new Date().toISOString(),
                     });
-                    console.log(cached.blob);
                     return cached.blob;
                 } else {
                     console.log(
@@ -77,8 +76,10 @@ export class FileManager {
         }
 
         // Start Download Task with Lock
+        new Notice(`Downloading ${itemKey}`);
         const task = this._downloadTask(item).finally(() => {
             this.downloadLocks.delete(item.key);
+            new Notice(`Finished downloading ${itemKey}`);
         });
 
         this.downloadLocks.set(item.key, task);

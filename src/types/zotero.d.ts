@@ -111,6 +111,8 @@ declare module "./zotero-item" {
     }
 
     interface AnnotationData {
+        annotationIsExternal?: boolean;
+        annotationAuthorName?: string;
         annotationType: string;
         annotationText: string;
         annotationComment: string;

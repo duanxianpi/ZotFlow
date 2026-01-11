@@ -1,9 +1,10 @@
 import { ZotFlowSettings } from "settings/settings";
-import { ZoteroApiClient } from 'api/zotero-api';
-import { SyncService } from './sync-service';
-import { FileManager } from './file-manager';
+import { ZoteroApiClient } from "api/zotero-api";
+import { SyncService } from "./sync-service";
+import { FileManager } from "./file-manager";
 import { ApiChain } from "zotero-api-client";
 import { WebDavClient } from "api/webdav-api";
+import { PdfWorkerService } from "./pdf-worker-service";
 
 class ServiceLocator {
     public api: ZoteroApiClient;
@@ -11,6 +12,7 @@ class ServiceLocator {
     public sync: SyncService;
     public files: FileManager;
     public webdav: WebDavClient;
+    public pdfWorker: PdfWorkerService;
 
     public settings: ZotFlowSettings;
 
@@ -20,25 +22,26 @@ class ServiceLocator {
         // Initialize API client
         this.api = new ZoteroApiClient(settings.zoteroApiKey);
 
-
         // Initialize WebDAV client
         this.webdav = new WebDavClient(
-            settings.webDavUrl || '',
-            settings.webDavUser || '',
-            settings.webDavPassword || ''
+            settings.webDavUrl || "",
+            settings.webDavUser || "",
+            settings.webDavPassword || "",
         );
 
         // Inject API client to services
         this.sync = new SyncService(this.api, this.settings);
         this.files = new FileManager(this.webdav, this.sync, this.settings);
+        this.pdfWorker = new PdfWorkerService();
+        this.pdfWorker._init();
 
         console.log("[ZotFlow] Services initialized.");
     }
 
     updateSettings(newSettings: ZotFlowSettings) {
-
         // If API Key changed, rebuild API client
-        const apiKeyChanged = this.settings.zoteroApiKey !== newSettings.zoteroApiKey;
+        const apiKeyChanged =
+            this.settings.zoteroApiKey !== newSettings.zoteroApiKey;
 
         if (apiKeyChanged) {
             console.log("[ZotFlow] API Key changed, refreshing client...");
@@ -47,9 +50,9 @@ class ServiceLocator {
 
         // Update WebDAV credentials
         this.webdav.updateCredentials(
-            newSettings.webDavUrl || '',
-            newSettings.webDavUser || '',
-            newSettings.webDavPassword || ''
+            newSettings.webDavUrl || "",
+            newSettings.webDavUser || "",
+            newSettings.webDavPassword || "",
         );
 
         // Update other settings
@@ -57,7 +60,6 @@ class ServiceLocator {
 
         this.settings = newSettings;
     }
-
 }
 
 // Export singleton
