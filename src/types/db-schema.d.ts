@@ -68,6 +68,9 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     lastAccessedAt?: string;
     readingProgress?: number;
 
+    // Annotation Extraction Tracking
+    annotationExtractionFileMD5?: string;
+
     // Raw Payload
     raw: ZoteroItem<T>;
 }

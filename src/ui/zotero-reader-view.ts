@@ -6,8 +6,12 @@ import ObsidianZotFlow from "../main";
 import { CreateReaderOptions } from "types/zotero-reader";
 import { db } from "db/db";
 import { IDBZoteroItem } from "types/db-schema";
-import { AttachmentData } from "types/zotero-item";
-import { getAnnotationJson, handleExternalAnnotation } from "utils/annotation";
+import { AttachmentData, AnnotationData } from "types/zotero-item";
+import {
+    getAnnotationJson,
+    handleExternalAnnotation,
+    annotationItemFromJSON,
+} from "utils/annotation";
 
 export const VIEW_TYPE_ZOTERO_READER = "zotflow-zotero-reader-view";
 
@@ -114,8 +118,7 @@ export class ZoteroReaderView extends ItemView {
                 });
 
                 this.bridge.onEventType("annotationsSaved", (evt) => {
-                    console.log("Annotations saved:", evt.annotations);
-                    // TODO: Here you might want to save annotations to DB using this.parentItemKey
+                    this.handleAnnotationsSaved(evt.annotations);
                 });
 
                 this.bridge.onEventType("annotationsDeleted", (evt) => {
@@ -171,20 +174,10 @@ export class ZoteroReaderView extends ItemView {
 
             // Initialize Reader if ready
             if (this.bridge.state === "ready") {
-                // // Get stored view states from frontmatter(Placeholder logic preserved)
-                // const primaryViewState = this.fileFrontmatter?.["primaryViewState"];
-                // const secondaryViewState = this.fileFrontmatter?.["secondaryViewState"];
-                // const extraOptions = this.fileFrontmatter?.["options"];
-
                 const opts = {
                     ...this.readerOptions,
                     colorScheme: this.colorScheme,
                     annotations: annotationJson,
-                    // primaryViewState,
-                    // secondaryViewState,
-                    // customThemes: this.plugin.settings.readerThemes, // Using settings
-                    // sidebarPosition: this.plugin.settings.sidebarPosition,
-                    // ...extraOptions,
                 };
 
                 const contentType = this.attachmentItem.raw.data.contentType;
@@ -213,30 +206,19 @@ export class ZoteroReaderView extends ItemView {
                         ? keyInfo?.username || ""
                         : "";
 
-                const [_, externalAnnotations] = await Promise.all([
-                    this.bridge.initReader({
-                        data: {
-                            buf: new Uint8Array(await fileBlob.arrayBuffer()),
-                            url: null,
-                        }, // Pass buffer
-                        type: type,
-                        authorName,
-                        // title: ... // Optional title
-                        ...opts,
-                    }),
-                    services.pdfWorker.import(
-                        await fileBlob.arrayBuffer(),
-                        true,
-                    ),
-                ]);
+                // Initialize Reader Logic
+                this.bridge.initReader({
+                    data: {
+                        buf: new Uint8Array(await fileBlob.arrayBuffer()),
+                        url: null,
+                    },
+                    type: type,
+                    authorName,
+                    ...opts,
+                });
 
-                externalAnnotations
-                    .map(handleExternalAnnotation)
-                    .forEach((annotation) => {
-                        this.bridge!.addAnnotation(annotation);
-                    });
-
-                // After initReader is finished, try to parse the external annotation
+                // Extract external annotations
+                this.extractExternalAnnotation(fileBlob);
             }
         } catch (e: any) {
             console.error("Error loading Zotero Reader view:", e);
@@ -265,6 +247,141 @@ export class ZoteroReaderView extends ItemView {
         }
         if (this.bridge) {
             await this.bridge.dispose();
+        }
+    }
+
+    private async extractExternalAnnotation(fileBlob: Blob) {
+        const currentMD5 = this.attachmentItem.raw.data.md5;
+        const lastExtractionMD5 =
+            this.attachmentItem.annotationExtractionFileMD5;
+        // Only extract for PDFs
+        const isPDF =
+            this.attachmentItem.raw.data.contentType === "application/pdf";
+
+        if (isPDF) {
+            if (currentMD5 && currentMD5 === lastExtractionMD5) {
+                console.log(
+                    "[ZotFlow] Skipping annotation extraction (MD5 match)",
+                );
+            } else {
+                console.log(
+                    "[ZotFlow] MD5 mismatch or missing. Extracting annotations...",
+                );
+
+                // Delete existing external annotations for this item
+                await db.items
+                    .where("parentItem")
+                    .equals(this.attachmentItem.key)
+                    .filter(
+                        (i) =>
+                            (i as IDBZoteroItem<AnnotationData>).raw.data
+                                .annotationIsExternal === true,
+                    )
+                    .delete();
+
+                const externalAnnotationsRaw = await services.pdfWorker.import(
+                    await fileBlob.arrayBuffer(),
+                    true,
+                );
+
+                const externalAnnotations = externalAnnotationsRaw.map(
+                    handleExternalAnnotation,
+                );
+
+                // Push to Reader
+                await Promise.all(
+                    externalAnnotations.map((annotation) => {
+                        this.bridge!.addAnnotation(annotation);
+                    }),
+                );
+
+                // Update Extraction MD5
+                if (currentMD5) {
+                    await db.items.update(
+                        [
+                            this.attachmentItem.libraryID,
+                            this.attachmentItem.key,
+                        ],
+                        {
+                            annotationExtractionFileMD5: currentMD5,
+                        },
+                    );
+                    this.attachmentItem.annotationExtractionFileMD5 =
+                        currentMD5;
+                }
+                console.log("[ZotFlow] Annotations extracted successfully");
+            }
+        }
+    }
+
+    private async handleAnnotationsSaved(annotations: any[]) {
+        const { libraryID, key: parentItem } = this.attachmentItem;
+        const library = this.attachmentItem.raw.library;
+
+        for (const json of annotations) {
+            const annotationData = annotationItemFromJSON(json);
+            const key = json.id;
+
+            const existing = await db.items.get([libraryID, key]);
+
+            if (existing) {
+                // Determine new sync status
+                const newSyncStatus =
+                    existing.syncStatus === "created" ? "created" : "updated";
+
+                await db.items.update([libraryID, key], {
+                    raw: {
+                        ...existing.raw,
+                        data: {
+                            ...existing.raw.data,
+                            ...annotationData,
+                        } as any,
+                    },
+                    dateModified: new Date().toISOString(),
+                    syncStatus: newSyncStatus,
+                });
+            } else {
+                const now = new Date().toISOString();
+                // Mock user for local creation if needed, or rely on what's in settings/library
+                const newItem: IDBZoteroItem<AnnotationData> = {
+                    libraryID,
+                    key,
+                    itemType: "annotation",
+                    parentItem,
+                    trashed: false,
+                    title: "",
+                    collections: [],
+                    dateAdded: now,
+                    dateModified: now,
+                    version: 0,
+                    searchCreators: [],
+                    searchTags: [],
+                    syncStatus: "created",
+                    raw: {
+                        key,
+                        version: 0,
+                        library,
+                        links: {},
+                        meta: {
+                            numChildren: 0,
+                            // createdByUser: ... // We leave this empty for local or fill with current user
+                        },
+                        data: {
+                            ...annotationData,
+                            key,
+                            itemType: "annotation",
+                            parentItem,
+                            relations: {},
+                            dateAdded: now,
+                            dateModified: now,
+                            tags: annotationData.tags || [],
+                            deleted: false,
+                            version: 0,
+                        } as unknown as AnnotationData,
+                    },
+                };
+                await db.items.put(newItem);
+            }
         }
     }
 }
