@@ -1,8 +1,8 @@
-import { App, SuggestModal, setIcon } from 'obsidian';
-import { IDBZoteroItem, AnyIDBZoteroItem } from '../types/db-schema';
-import { AttachmentData } from '../types/zotero-item';
-import { ZoteroSearchModal } from './zotero-suggest-modal';
-import { getAttachmentFileIcon, openAttachment } from 'utils/attachment';
+import { App, SuggestModal, setIcon } from "obsidian";
+import { IDBZoteroItem, AnyIDBZoteroItem } from "../../types/db-schema";
+import { AttachmentData } from "../../types/zotero-item";
+import { ZoteroSearchModal } from "./suggest";
+import { getAttachmentFileIcon, openAttachment } from "../../utils/attachment";
 
 interface ActionOption {
     label: string;
@@ -16,7 +16,12 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
     private didChoose: boolean = false;
     private parentModal: ZoteroSearchModal;
 
-    constructor(app: App, parentItem: AnyIDBZoteroItem, attachments: IDBZoteroItem<AttachmentData>[], parentModal: ZoteroSearchModal) {
+    constructor(
+        app: App,
+        parentItem: AnyIDBZoteroItem,
+        attachments: IDBZoteroItem<AttachmentData>[],
+        parentModal: ZoteroSearchModal,
+    ) {
         super(app);
         this.parentItem = parentItem;
         this.attachments = attachments;
@@ -47,21 +52,20 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
     getSuggestions(query: string): ActionOption[] {
         const options: ActionOption[] = [];
 
-        this.attachments.forEach(att => {
-
-            if (att.itemType !== 'attachment') return;
+        this.attachments.forEach((att) => {
+            if (att.itemType !== "attachment") return;
 
             const data = att.raw.data;
 
-            let desc = ""
+            let desc = "";
             switch (data.contentType) {
-                case 'application/pdf':
+                case "application/pdf":
                     desc = data.filename;
                     break;
-                case 'application/epub+zip':
+                case "application/epub+zip":
                     desc = data.filename;
                     break;
-                case 'text/html':
+                case "text/html":
                     desc = data.url || data.filename;
                     break;
                 default:
@@ -72,28 +76,41 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
             options.push({
                 label: data.title || data.filename || "Untitled Attachment",
                 description: desc,
-                item: att
+                item: att,
             });
         });
 
         if (!query) return options;
         const lowerQ = query.toLowerCase();
-        return options.filter(o => { return o.label.toLowerCase().includes(lowerQ) || o.description.toLowerCase().includes(lowerQ) });
+        return options.filter((o) => {
+            return (
+                o.label.toLowerCase().includes(lowerQ) ||
+                o.description.toLowerCase().includes(lowerQ)
+            );
+        });
     }
 
     renderSuggestion(option: ActionOption, el: HTMLElement) {
-        el.addClass('zotflow-attachment-option');
+        el.addClass("zotflow-attachment-option");
 
         // Icon
-        const iconEl = el.createDiv({ cls: 'zotflow-option-icon' });
-        const iconName = getAttachmentFileIcon(option.item.raw.data.contentType);
+        const iconEl = el.createDiv({ cls: "zotflow-option-icon" });
+        const iconName = getAttachmentFileIcon(
+            option.item.raw.data.contentType,
+        );
         setIcon(iconEl, iconName);
 
         // Text
-        const contentEl = el.createDiv({ cls: 'zotflow-option-content' });
-        contentEl.createDiv({ cls: 'zotflow-option-title', text: option.label });
+        const contentEl = el.createDiv({ cls: "zotflow-option-content" });
+        contentEl.createDiv({
+            cls: "zotflow-option-title",
+            text: option.label,
+        });
         if (option.description) {
-            contentEl.createDiv({ cls: 'zotflow-option-desc', text: option.description });
+            contentEl.createDiv({
+                cls: "zotflow-option-desc",
+                text: option.description,
+            });
         }
     }
 
@@ -103,7 +120,10 @@ export class AttachmentSelectModal extends SuggestModal<ActionOption> {
         super.selectSuggestion(option, evt);
     }
 
-    async onChooseSuggestion(option: ActionOption, evt: MouseEvent | KeyboardEvent) {
+    async onChooseSuggestion(
+        option: ActionOption,
+        evt: MouseEvent | KeyboardEvent,
+    ) {
         await openAttachment(option.item.libraryID, option.item.key, this.app);
     }
 }

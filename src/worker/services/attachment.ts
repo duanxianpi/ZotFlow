@@ -1,28 +1,25 @@
-import { Notice, requestUrl } from "obsidian";
+// Worker-side File Manager
 import { unzip, Unzipped } from "fflate";
-import { db } from "db/db";
-import { IDBZoteroFile, IDBZoteroItem } from "types/db-schema";
+import { db } from "../../db/db";
+import { IDBZoteroFile, IDBZoteroItem } from "../../types/db-schema";
 import SparkMD5 from "spark-md5";
-import { WebDavClient } from "api/webdav-api";
-import { ZotFlowSettings } from "settings/settings";
-import { SyncService } from "./sync-service";
-import { AttachmentData } from "types/zotero-item";
+import { WebDavService } from "./webdav";
+import { ZotFlowSettings } from "../../settings/types";
+import { AttachmentData } from "../../types/zotero-item";
+import { IParentProxy } from "bridge/parent-host";
 
-export class FileManager {
-    private webdav: WebDavClient;
-    private sync: SyncService;
-    private settings: ZotFlowSettings;
+/**
+ * Attachment management service for ZotFlow (Worker Side).
+ * Handles the attachment download process.
+ */
+export class AttachmentService {
     private downloadLocks: Map<string, Promise<Blob | null>> = new Map();
 
     constructor(
-        webdav: WebDavClient,
-        sync: SyncService,
-        settings: ZotFlowSettings,
-    ) {
-        this.webdav = webdav;
-        this.sync = sync;
-        this.settings = settings;
-    }
+        private webdav: WebDavService,
+        private settings: ZotFlowSettings,
+        private parentHost: IParentProxy,
+    ) {}
 
     public updateSettings(settings: ZotFlowSettings) {
         this.settings = settings;
@@ -49,7 +46,7 @@ export class FileManager {
         const item = await db.items.get([libraryID, itemKey]);
 
         if (!item || item.itemType !== "attachment") {
-            new Notice(`Item metadata not found for ${itemKey}`);
+            console.error(`Item metadata not found for ${itemKey}`);
             return null;
         }
 
@@ -76,10 +73,13 @@ export class FileManager {
         }
 
         // Start Download Task with Lock
-        new Notice(`Downloading ${itemKey}`);
+        this.parentHost.notify("info", `Downloading ${item.raw.data.filename}`);
         const task = this._downloadTask(item).finally(() => {
             this.downloadLocks.delete(item.key);
-            new Notice(`Finished downloading ${itemKey}`);
+            this.parentHost.notify(
+                "info",
+                `Downloaded ${item.raw.data.filename}`,
+            );
         });
 
         this.downloadLocks.set(item.key, task);
@@ -108,18 +108,18 @@ export class FileManager {
                     break;
                 case "imported_file":
                 case "imported_url":
-                    console.log(
-                        `[ZotFlow] Downloading from Zotero API for ${item.key}`,
-                    );
-                    buffer = await this.downloadFromZoteroAPI(item);
-
-                    if (!buffer && this.settings.useWebDav) {
+                    if (this.settings.useWebDav) {
                         console.log(
                             `[ZotFlow] Downloading from WebDAV for ${item.key}`,
                         );
                         buffer = await this.downloadFromWebDAV(item.key);
                     }
-
+                    if (!buffer) {
+                        console.log(
+                            `[ZotFlow] Downloading from Zotero API for ${item.key}`,
+                        );
+                        buffer = await this.downloadFromZoteroAPI(item);
+                    }
                     break;
                 default:
                     buffer = await this.downloadFromZoteroAPI(item);
@@ -127,7 +127,6 @@ export class FileManager {
             }
 
             if (!buffer) {
-                new Notice("Failed to download file.");
                 return null;
             }
 
@@ -143,8 +142,6 @@ export class FileManager {
                     console.warn(`[ZotFlow] ${msg}`);
 
                     // Smart Repair Strategy:
-                    // If downloaded from Zotero API, we trust the downloaded file is the latest.
-                    // At this point, update local record's MD5, instead of erroring out.
                     if (
                         linkMode === "imported_file" ||
                         !this.settings.useWebDav
@@ -153,14 +150,12 @@ export class FileManager {
                             "[ZotFlow] Trusting live download. Auto-updating metadata.",
                         );
                         finalMd5 = calculatedMd5; // Use actual calculated value
-                        // Optional: Notify Sync service to refresh Item Metadata
-                        // services.sync.refreshItem(itemKey);
                     } else {
                         // WebDAV might be old, or sync not completed
-                        new Notice(
+                        console.warn(
                             `⚠️ Integrity Warning: WebDAV file might be outdated.`,
                         );
-                        // Still allow through, to prevent user from being unable to read
+                        // Still allow through
                     }
                 } else {
                     console.log(`[ZotFlow] Integrity Verified: ${serverMd5}`);
@@ -232,7 +227,9 @@ export class FileManager {
                 );
             });
 
-            const targetFileName = Object.keys(unzipped).first();
+            console.log(unzipped);
+
+            const targetFileName = Object.keys(unzipped)[0];
 
             if (!targetFileName) {
                 throw new Error("Empty ZIP or only .prop found");
@@ -253,19 +250,22 @@ export class FileManager {
     ): Promise<ArrayBuffer | null> {
         const url = `https://api.zotero.org/${item.raw.library.type}s/${item.libraryID}/items/${item.key}/file/view`;
         try {
-            const response = await requestUrl({
-                url: url,
-                method: "GET",
-                headers: {
-                    "Zotero-API-Version": "3",
-                    "Zotero-API-Key": this.settings.zoteroApiKey,
+            const response = await this.parentHost.request(
+                {
+                    url: url,
+                    method: "GET",
+                    headers: {
+                        "Zotero-API-Version": "3",
+                        "Zotero-API-Key": this.settings.zoteroApiKey,
+                    },
                 },
-            });
+                "arrayBuffer",
+            );
 
             if (response.status !== 200)
                 throw new Error(`API Error ${response.status}`);
 
-            return response.arrayBuffer;
+            return response.arrayBuffer!;
         } catch (e) {
             console.error("[ZotFlow] API Download Error:", e);
             return null;

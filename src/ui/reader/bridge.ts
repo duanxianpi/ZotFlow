@@ -19,7 +19,7 @@ import type {
     ColorScheme,
     ChildEvents,
     AnnotationJSON,
-} from "../types/zotero-reader";
+} from "../../types/zotero-reader";
 
 // import {
 // 	createEmbeddableMarkdownEditor,
@@ -31,8 +31,8 @@ import { EditorView } from "@codemirror/view";
 import { Platform } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
 import { connect, WindowMessenger } from "penpal";
-import { ZotFlowSettings } from "settings/settings";
-import { getBlobUrls } from "bundle-assets/inline-assets";
+import { ZotFlowSettings } from "../../settings/types";
+import { getBlobUrls } from "../../bundle-assets/inline-assets";
 
 type BridgeState = "idle" | "connecting" | "ready" | "disposing" | "disposed";
 

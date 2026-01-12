@@ -1,13 +1,16 @@
-import { ZoteroKey } from "types/zotero";
+import { ZoteroKey } from "../../types/zotero";
 import api, { ApiChain } from "zotero-api-client";
 
-export class ZoteroApiClient {
+export class ZoteroAPIService {
     private _client: ApiChain;
 
-    constructor(apiKey: string) {
-        // zotero-api-client handles Auth Header, Rate Limiting (Retry-After), and Retries automatically.
-        this._client = api.default(apiKey);
-        this.updateCredentials(apiKey);
+    constructor(apiKey?: string) {
+        if (apiKey) {
+            this._client = api.default(apiKey);
+        } else {
+            // Placeholder, expected to be updated
+            this._client = api.default("");
+        }
     }
 
     updateCredentials(apiKey: string) {
@@ -18,7 +21,7 @@ export class ZoteroApiClient {
      * Validate the API key and return key details.
      * This ensures the key is valid and retrieves the associated user ID and permissions.
      */
-    static async verifyKey(apiKey: string): Promise<ZoteroKey> {
+    async verifyKey(apiKey: string): Promise<ZoteroKey> {
         if (!apiKey) {
             throw new Error("API Key is required");
         }
@@ -29,6 +32,19 @@ export class ZoteroApiClient {
         } catch (error) {
             console.error("Failed to verify Zotero API key:", error);
             throw new Error("Invalid API Key or Network Error");
+        }
+    }
+
+    async getGroups(userID: number) {
+        try {
+            const response = await this._client
+                .library("user", userID)
+                .groups()
+                .get();
+            return response.getData();
+        } catch (e) {
+            console.error("Failed to fetch groups", e);
+            throw e;
         }
     }
 

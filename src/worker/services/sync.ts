@@ -1,28 +1,25 @@
-import { db, getCombinations } from "../db/db";
-import { ZoteroApiClient } from "../api/zotero-api";
-import { normalizeItem, normalizeCollection } from "../utils/normalize";
-import { Notice } from "obsidian";
-import { ApiChain } from "zotero-api-client";
-import { AnyZoteroItem } from "types/zotero";
-import { ZotFlowSettings } from "settings/settings";
-import { Zotero_Item_Types } from "types/zotero-item-const";
+import { db, getCombinations } from "../../db/db";
+import { ZoteroAPIService } from "./zotero";
+import { normalizeItem, normalizeCollection } from "../../utils/normalize";
+import { AnyZoteroItem } from "../../types/zotero";
+import { ZotFlowSettings } from "../../settings/types";
+import { Zotero_Item_Types } from "../../types/zotero-item-const";
+import { IParentProxy } from "bridge/parent-host";
 
 const BULK_SIZE = 50; // Limit due to URL length
 
 /**
- * Sync service for ZotFlow.
+ * Sync service for ZotFlow (Worker Side).
  * Handles the entire sync process, including collections and items.
  */
 export class SyncService {
     private syncing = false;
-    private settings: ZotFlowSettings;
 
-    private api: ZoteroApiClient;
-
-    constructor(api: ZoteroApiClient, settings: ZotFlowSettings) {
-        this.api = api;
-        this.settings = settings;
-    }
+    constructor(
+        private api: ZoteroAPIService,
+        private settings: ZotFlowSettings,
+        private parentHost: IParentProxy,
+    ) {}
 
     public updateSettings(settings: ZotFlowSettings) {
         this.settings = settings;
@@ -30,25 +27,33 @@ export class SyncService {
 
     async startSync() {
         if (this.syncing) {
-            new Notice("ZotFlow: Sync is already running.");
+            this.parentHost.notify("info", "Sync is already running.");
             return;
         }
 
         if (!navigator.onLine) {
-            new Notice("ZotFlow: You are offline. Sync skipped.");
+            this.parentHost.notify("info", "You are offline. Sync skipped.");
             return;
         }
 
-        if (!this.settings.zoteroApiKey) {
-            new Notice("ZotFlow: Zotero API key is missing.");
+        const apiKey = this.settings.zoteroApiKey;
+        const librariesConfig = this.settings.librariesConfig;
+
+        if (!apiKey) {
+            this.parentHost.notify("error", "Zotero API key is missing.");
             return;
         }
+
+        this.api.updateCredentials(apiKey);
 
         // Get Key Info first
-        const keyInfo = await db.keys.get(this.settings.zoteroApiKey);
+        const keyInfo = await db.keys.get(apiKey);
 
         if (!keyInfo) {
-            new Notice("ZotFlow: Invalid Zotero API key.");
+            this.parentHost.notify(
+                "error",
+                "Invalid Zotero API key (not found in DB).",
+            );
             return;
         }
 
@@ -58,16 +63,14 @@ export class SyncService {
         // Always include personal library
         libraries.unshift(keyInfo.userID);
 
-        const librariesConfig = this.settings.librariesConfig;
         if (!librariesConfig) {
-            new Notice("ZotFlow: No libraries configured for sync.");
+            this.parentHost.notify("info", "No libraries configured for sync.");
             this.syncing = false;
             return;
         }
 
         this.syncing = true;
-
-        new Notice("ZotFlow: Started syncing...");
+        this.parentHost.notify("info", "Started syncing...");
         console.log(`[ZotFlow] Start syncing`);
 
         try {
@@ -86,11 +89,14 @@ export class SyncService {
                         await this.pullItems(lib.type, libKey);
                     } catch (error: any) {
                         console.error("[ZotFlow] Sync failed:", error);
-                        new Notice(`ZotFlow Sync Failed: ${error.message}`);
+                        this.parentHost.notify(
+                            "error",
+                            `Sync Failed for ${libKey}: ${error.message}`,
+                        );
                     }
                 }),
             );
-            new Notice("ZotFlow: Sync completed successfully!");
+            this.parentHost.notify("success", "Sync completed successfully!");
             console.log("[ZotFlow] Sync finished.");
         } finally {
             this.syncing = false;
@@ -153,6 +159,10 @@ export class SyncService {
                     });
                 }
             }
+            this.parentHost.notify(
+                "info",
+                `Updated ${keysToFetch.length} collections.`,
+            );
             console.log(`[ZotFlow] Updated ${keysToFetch.length} collections.`);
         }
 
@@ -215,6 +225,10 @@ export class SyncService {
 
         const keysToFetch = Object.keys(versionsMap);
         console.log(`[ZotFlow] Found ${keysToFetch.length} items to update.`);
+        this.parentHost.notify(
+            "info",
+            `Found ${keysToFetch.length} items to update.`,
+        );
 
         // Batch Fetch Data
         if (keysToFetch.length > 0) {
@@ -239,6 +253,10 @@ export class SyncService {
                     });
 
                     processedCount += items.length;
+                    this.parentHost.notify(
+                        "info",
+                        `Synced ${processedCount} / ${keysToFetch.length} items...`,
+                    );
                 }
             }
             console.log(`[ZotFlow] Synced ${processedCount} items.`);

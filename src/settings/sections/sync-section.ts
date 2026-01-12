@@ -1,11 +1,10 @@
 import { Setting, Notice, ButtonComponent, setIcon } from "obsidian";
-import MyPlugin from "../../main";
-import { db } from "../../db/db";
-import { ZoteroApiClient } from "../../api/zotero-api";
-import { ZoteroGroup } from "../../types/zotero";
-import { services } from "../../services/serivces";
-import { LibrarySyncMode } from "../settings";
+import MyPlugin from "main";
+import { db } from "db/db";
+import { ZoteroGroup } from "types/zotero";
+import { LibrarySyncMode } from "settings/types";
 import { IDBZoteroKey } from "types/db-schema";
+import { workerBridge } from "bridge";
 
 export class SyncSection {
     constructor(
@@ -316,16 +315,16 @@ export class SyncSection {
         btn.setDisabled(true);
 
         try {
-            const verifiedKeyInfo = await ZoteroApiClient.verifyKey(apiKey);
+            // Use Worker Bridge
+            const verifiedKeyInfo = await workerBridge.zotero.verifyKey(apiKey);
+
             if (!verifiedKeyInfo) throw new Error("Invalid API Key");
 
-            const groups: ZoteroGroup[] = (
-                await services.api.client
-                    .api(verifiedKeyInfo.key)
-                    .library("user", verifiedKeyInfo.userID)
-                    .groups()
-                    .get()
-            ).getData();
+            // Fetch Groups via Worker
+            const groups: ZoteroGroup[] = await workerBridge.zotero.getGroups(
+                verifiedKeyInfo.userID,
+            );
+
             await db.keys.put({
                 joinedGroups: groups.map((g) => g.id),
                 ...verifiedKeyInfo,

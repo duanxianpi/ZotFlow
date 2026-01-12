@@ -37,6 +37,7 @@
 		"webpack-cli": "^6.0.1"
 	},
 	"dependencies": {
+		"comlink": "^4.4.2",
 		"dexie": "^4.2.1",
 		"fflate": "^0.8.2",
 		"obsidian": "latest",

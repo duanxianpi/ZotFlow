@@ -76,7 +76,7 @@ export interface ZoteroItem<T extends ZoteroItemData> {
     key: string;
     version: number;
     library: {
-        type: string;
+        type: "user" | "group";
         id: number;
         name: string;
         links: { [key: string]: { href: string; type: string } };

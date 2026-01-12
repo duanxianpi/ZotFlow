@@ -7,7 +7,7 @@
  * - Extract PDF file text structure that can be fed into recognizer-server.
  */
 import { annotationItemFromJSON } from "utils/annotation";
-import { AnnotationData } from "../types/zotero-item";
+import { AnnotationData } from "types/zotero-item";
 import { getBlobUrls } from "bundle-assets/inline-assets";
 import { IDBZoteroItem } from "types/db-schema";
 
@@ -34,7 +34,7 @@ type QueueItem = [
     (reason?: any) => void,
 ];
 
-export class PdfWorkerService {
+export class PDFProcessWorker {
     config: PDFWorkerConfig;
     private _worker: Worker | null;
     private _lastPromiseID: number;

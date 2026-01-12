@@ -1,17 +1,13 @@
 import { ItemView, WorkspaceLeaf, Notice, ViewStateResult } from "obsidian";
-import { services } from "../services/serivces";
-import { IframeReaderBridge } from "./zotero-reader-bridge";
-import { ColorScheme } from "types/zotero-reader";
-import ObsidianZotFlow from "../main";
+import { workerBridge } from "bridge";
+import { IframeReaderBridge } from "./bridge";
+import { AnnotationJSON, ColorScheme } from "types/zotero-reader";
 import { CreateReaderOptions } from "types/zotero-reader";
 import { db } from "db/db";
 import { IDBZoteroItem, IDBZoteroKey } from "types/db-schema";
 import { AttachmentData, AnnotationData } from "types/zotero-item";
-import {
-    getAnnotationJson,
-    handleExternalAnnotation,
-    annotationItemFromJSON,
-} from "utils/annotation";
+import { ZotFlowSettings } from "settings/types";
+import { annotationItemFromJSON } from "utils/annotation";
 
 export const VIEW_TYPE_ZOTERO_READER = "zotflow-zotero-reader-view";
 
@@ -22,6 +18,7 @@ interface ReaderViewState extends Record<string, unknown> {
 }
 
 export class ZoteroReaderView extends ItemView {
+    private settings: ZotFlowSettings;
     private attachmentItem: IDBZoteroItem<AttachmentData>;
     private readerOptions: Partial<CreateReaderOptions>;
     private keyInfo: IDBZoteroKey;
@@ -30,8 +27,9 @@ export class ZoteroReaderView extends ItemView {
     private colorSchemeObserver?: MutationObserver;
     private colorScheme: ColorScheme = "light"; // Default to light
 
-    constructor(leaf: WorkspaceLeaf) {
+    constructor(leaf: WorkspaceLeaf, settings: ZotFlowSettings) {
         super(leaf);
+        this.settings = settings;
     }
 
     getViewType() {
@@ -50,15 +48,13 @@ export class ZoteroReaderView extends ItemView {
         state: ReaderViewState,
         result: ViewStateResult,
     ): Promise<void> {
-        const _keyInfo = await db.keys.get(services.settings.zoteroApiKey);
+        const _keyInfo = await db.keys.get(this.settings.zoteroApiKey);
 
         if (!_keyInfo) {
             console.error(
-                `[ZotFlow] Key ${services.settings.zoteroApiKey} doesn't exist`,
+                `[ZotFlow] Key ${this.settings.zoteroApiKey} doesn't exist`,
             );
-            throw new Error(
-                `Key ${services.settings.zoteroApiKey} doesn't exist`,
-            );
+            throw new Error(`Key ${this.settings.zoteroApiKey} doesn't exist`);
         }
 
         if (state.itemKey) {
@@ -109,10 +105,7 @@ export class ZoteroReaderView extends ItemView {
         try {
             // Create bridge once
             if (!this.bridge) {
-                this.bridge = new IframeReaderBridge(
-                    container,
-                    services.settings,
-                );
+                this.bridge = new IframeReaderBridge(container, this.settings);
 
                 // Register event listeners
                 this.bridge.onEventType("error", (evt) => {
@@ -173,7 +166,7 @@ export class ZoteroReaderView extends ItemView {
             // Connect Bridge & Get File concurrently
             const [_, fileBlob] = await Promise.all([
                 this.bridge.connect(),
-                services.files.getFileBlob(this.attachmentItem),
+                workerBridge.attachment.getFileBlob(this.attachmentItem),
             ]);
 
             if (!fileBlob) {
@@ -184,7 +177,9 @@ export class ZoteroReaderView extends ItemView {
             }
 
             // Get Annotations
-            const annotationJson = await getAnnotationJson(this.attachmentItem);
+            const annotationJson = await this.getAnnotationJson(
+                this.attachmentItem,
+            );
 
             // Initialize Reader if ready
             if (this.bridge.state === "ready") {
@@ -292,13 +287,14 @@ export class ZoteroReaderView extends ItemView {
                     )
                     .delete();
 
-                const externalAnnotationsRaw = await services.pdfWorker.import(
-                    await fileBlob.arrayBuffer(),
-                    true,
-                );
+                const externalAnnotationsRaw =
+                    await workerBridge.pdfProcessWorker.import(
+                        await fileBlob.arrayBuffer(),
+                        true,
+                    );
 
                 const externalAnnotations = externalAnnotationsRaw.map(
-                    handleExternalAnnotation,
+                    this.handleExternalAnnotation,
                 );
 
                 // Push to Reader
@@ -399,5 +395,150 @@ export class ZoteroReaderView extends ItemView {
                 });
             }
         }
+    }
+
+    /**
+     * Get all annotations for a given item from the local database.
+     *
+     * @param libraryID The ID of the Zotero library (user or group ID).
+     * @param itemKey The key of the parent item (e.g., journal article) to fetch annotations for.
+     * @returns A promise that resolves to an array of annotation items.
+     */
+    private async getAnnotationJson(
+        item: IDBZoteroItem<AttachmentData>,
+    ): Promise<AnnotationJSON[]> {
+        // Get current user from settings/DB
+        const apiKey = this.settings.zoteroApiKey;
+        const currentUserKey = await db.keys.get(apiKey);
+        const currentUser = currentUserKey
+            ? {
+                  id: currentUserKey.userID,
+                  username: currentUserKey.username,
+                  displayName: currentUserKey.displayName,
+              }
+            : null;
+
+        // Get Library Info
+        const library = await db.libraries.get(item.libraryID);
+        const isGroup = library?.type === "group";
+
+        // Get User info (for creator/modifier)
+        // lastModifiedByUser is not readily available in standard Zotero item API response
+        // We will assume it's createdByUser if not present.
+
+        // Tag Colors from Settings
+        const tagColors = new Map();
+        /*
+        if (client.settings.tagColors && client.settings.tagColors.value) {
+            client.settings.tagColors.value.forEach((tc: any) => {
+                tagColors.set(tc.name, { color: tc.color, position: 0 }); // Position logic might need refinement if present in settings
+            });
+        }
+        */
+
+        // Zotero Annotations
+        const annotations = (await db.items
+            .where(["libraryID", "parentItem", "itemType", "trashed"])
+            .equals([item.libraryID, item.key, "annotation", 0])
+            .toArray()) as IDBZoteroItem<AnnotationData>[];
+
+        // External Annotations
+        const annotationJson: AnnotationJSON[] = [];
+        for (const annotation of annotations) {
+            const o: any = {};
+            o.libraryID = annotation.libraryID;
+            o.id = annotation.key;
+            o.type = annotation.raw.data.annotationType;
+            o.isExternal = annotation.raw.data.annotationIsExternal || false; // Default to false
+
+            const isAuthor =
+                !annotation.raw.meta.createdByUser?.id ||
+                annotation.raw.meta.createdByUser?.id === currentUser?.id;
+            const isReadOnly = false; // Defaulting to false
+
+            if (annotation.raw.data.annotationAuthorName) {
+                o.authorName = annotation.raw.data.annotationAuthorName;
+                if (isGroup) {
+                    // Not sure what is lastModifiedByUser
+                }
+            } else if (
+                !o.isExternal &&
+                isGroup &&
+                annotation.raw.meta.createdByUser
+            ) {
+                o.authorName =
+                    annotation.raw.meta.createdByUser.username ||
+                    annotation.raw.meta.createdByUser.name;
+                o.isAuthorNameAuthoritative = true;
+            }
+
+            o.readOnly = isReadOnly || o.isExternal || !isAuthor;
+
+            if (o.type === "highlight" || o.type === "underline") {
+                o.text = annotation.raw.data.annotationText;
+            }
+
+            o.comment = annotation.raw.data.annotationComment;
+            o.pageLabel = annotation.raw.data.annotationPageLabel;
+            o.color = annotation.raw.data.annotationColor;
+            o.sortIndex = annotation.raw.data.annotationSortIndex;
+            o.position = JSON.parse(annotation.raw.data.annotationPosition);
+
+            // Add tags
+            const tags = annotation.raw.data.tags || [];
+
+            const processedTags = tags.map((t) => {
+                const obj: any = {
+                    name: t.tag,
+                };
+                /*
+                if (tagColors.has(t.tag)) {
+                    obj.color = tagColors.get(t.tag).color;
+                    obj.position = tagColors.get(t.tag).position;
+                }
+                */
+                return obj;
+            });
+
+            processedTags.sort((a, b) => {
+                if (!a.color && !b.color) {
+                    return a.name.localeCompare(b.name, {
+                        sensitivity: "accent",
+                    });
+                }
+                if (!a.color && !b.color) {
+                    return -1;
+                }
+                if (!a.color && b.color) {
+                    return 1;
+                }
+                return a.position - b.position;
+            });
+
+            processedTags.forEach((t) => delete t.position);
+            o.tags = processedTags;
+
+            o.dateModified = annotation.dateModified;
+            annotationJson.push(o);
+        }
+        return annotationJson;
+    }
+
+    private handleExternalAnnotation(annotation: any): AnnotationJSON {
+        return {
+            id: annotation.key,
+            type: annotation.annotationType,
+            isExternal: true,
+            authorName: annotation.annotationAuthorName,
+            readOnly: true,
+            text: annotation.annotationText,
+            comment: annotation.annotationComment,
+            pageLabel: annotation.annotationPageLabel,
+            color: annotation.annotationColor,
+            sortIndex: annotation.annotationSortIndex,
+            position: JSON.parse(annotation.annotationPosition),
+            tags: annotation.tags,
+            dateModified: "",
+        };
     }
 }

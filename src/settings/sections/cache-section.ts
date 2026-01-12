@@ -1,7 +1,7 @@
 import { Setting, Notice } from "obsidian";
 import MyPlugin from "../../main";
 import { db } from "../../db/db";
-import { DEFAULT_SETTINGS } from "../settings";
+import { DEFAULT_SETTINGS } from "settings/types";
 
 export class CacheSection {
     constructor(

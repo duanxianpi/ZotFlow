@@ -1,6 +1,6 @@
 import { Setting, Notice, setIcon } from "obsidian";
-import MyPlugin from "../../main";
-import { WebDavClient } from "../../api/webdav-api";
+import MyPlugin from "main";
+import { workerBridge } from "bridge";
 
 export class WebDavSection {
     constructor(
@@ -23,6 +23,12 @@ export class WebDavSection {
                     .setValue(this.plugin.settings.useWebDav)
                     .onChange(async (value) => {
                         this.plugin.settings.useWebDav = value;
+                        if (!value) {
+                            this.plugin.settings.webDavUrl = "";
+                            this.plugin.settings.webDavUser = "";
+                            this.plugin.settings.webDavPassword = "";
+                            await this.plugin.saveSettings();
+                        }
                         this.refreshUI();
                     }),
             );
@@ -95,7 +101,7 @@ export class WebDavSection {
                         button.setButtonText("Verifying...").setDisabled(true);
 
                         try {
-                            await WebDavClient.verify(
+                            await workerBridge.webdav.verify(
                                 tempUrl,
                                 tempUser,
                                 tempPassword,

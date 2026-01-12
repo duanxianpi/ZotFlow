@@ -1,38 +1,9 @@
-export type LibrarySyncMode = "bidirectional" | "readonly" | "ignored";
-
-export interface LibraryConfig {
-    mode: LibrarySyncMode;
-}
-
-export interface ZotFlowSettings {
-    zoteroApiKey: string;
-    librariesConfig: { [libraryID: number]: LibraryConfig };
-    useWebDav: boolean;
-    webDavUrl?: string;
-    webDavUser?: string;
-    webDavPassword?: string;
-    useCache: boolean;
-    maxCacheSizeMB: number;
-}
-
-export const DEFAULT_SETTINGS: ZotFlowSettings = {
-    zoteroApiKey: "",
-    librariesConfig: {},
-    useWebDav: true,
-    webDavUrl: "",
-    webDavUser: "",
-    webDavPassword: "",
-    useCache: true,
-    maxCacheSizeMB: 500,
-};
-
 import { App, PluginSettingTab, setIcon } from "obsidian";
 import MyPlugin from "../main";
 import { SyncSection } from "./sections/sync-section";
 import { WebDavSection } from "./sections/webdav-section";
 import { CacheSection } from "./sections/cache-section";
-
-type TabSection = "sync" | "webdav" | "cache";
+import { TabSection } from "./types";
 
 export class ZotFlowSettingTab extends PluginSettingTab {
     plugin: MyPlugin;

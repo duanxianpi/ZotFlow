@@ -1,5 +1,5 @@
 import { App } from "obsidian";
-import { VIEW_TYPE_ZOTERO_READER } from "../ui/zotero-reader-view";
+import { ZoteroReaderView, VIEW_TYPE_ZOTERO_READER } from "../ui/reader/view";
 
 /**
  * Open an attachment in the default application.

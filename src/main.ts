@@ -8,17 +8,13 @@ import {
     Notice,
     Plugin,
 } from "obsidian";
-import {
-    DEFAULT_SETTINGS,
-    ZotFlowSettings,
-    ZotFlowSettingTab,
-} from "./settings/settings";
-import { ZoteroSearchModal } from "./ui/zotero-suggest-modal";
-import { services } from "./services/serivces";
-import {
-    VIEW_TYPE_ZOTERO_READER,
-    ZoteroReaderView,
-} from "./ui/zotero-reader-view";
+import { ZotFlowSettingTab } from "./settings/settings";
+import { DEFAULT_SETTINGS, ZotFlowSettings } from "./settings/types";
+import { ZoteroSearchModal } from "./ui/modals/suggest";
+import { workerBridge } from "./bridge";
+import { VIEW_TYPE_ZOTERO_READER, ZoteroReaderView } from "./ui/reader/view";
+
+// import { workerBridge } from "./api/client"; // Included in client
 
 export default class ObsidianZotFlow extends Plugin {
     settings: ZotFlowSettings;
@@ -26,7 +22,7 @@ export default class ObsidianZotFlow extends Plugin {
     async onload() {
         await this.loadSettings();
 
-        services.initialize(this.settings);
+        await workerBridge.initialize(this.settings);
 
         // Ensure MathJax is loaded
         MarkdownRenderer.render(
@@ -39,14 +35,14 @@ export default class ObsidianZotFlow extends Plugin {
 
         this.registerView(
             VIEW_TYPE_ZOTERO_READER,
-            (leaf) => new ZoteroReaderView(leaf),
+            (leaf) => new ZoteroReaderView(leaf, this.settings),
         );
 
         this.addRibbonIcon(
             "library",
             "ZotFlow: Open Library",
             (evt: MouseEvent) => {
-                new ZoteroSearchModal(this.app).open();
+                new ZoteroSearchModal(this.app, this.settings).open();
             },
         );
 
@@ -54,7 +50,7 @@ export default class ObsidianZotFlow extends Plugin {
             "sync",
             "ZotFlow: Sync Library",
             (evt: MouseEvent) => {
-                services.sync.startSync();
+                workerBridge.sync.startSync();
             },
         );
 
@@ -123,7 +119,7 @@ export default class ObsidianZotFlow extends Plugin {
 
     async saveSettings() {
         await this.saveData(this.settings);
-        services.updateSettings(this.settings);
+        workerBridge.updateSettings(this.settings);
     }
 }
 

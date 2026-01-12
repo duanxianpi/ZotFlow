@@ -1,12 +1,12 @@
 import { App, SuggestModal, setIcon, Notice } from "obsidian";
-import { db, getCombinations } from "../db/db";
-import { AnyIDBZoteroItem } from "../types/db-schema";
-import { AttachmentSelectModal } from "./attachment-select-modal";
+import { db, getCombinations } from "db/db";
+import { AnyIDBZoteroItem } from "types/db-schema";
+import { AttachmentSelectModal } from "./attachment-select";
 import { getAttachmentTypeIcon, openAttachment } from "utils/attachment";
-import { services } from "services/serivces";
 import { AttachmentData } from "types/zotero-item";
 import { IDBZoteroItem } from "types/db-schema";
 import { Zotero_Item_Types } from "types/zotero-item-const";
+import { ZotFlowSettings } from "settings/types";
 
 interface SearchHeader {
     isHeader: true;
@@ -15,8 +15,11 @@ interface SearchHeader {
 type SuggestionItem = AnyIDBZoteroItem | SearchHeader;
 
 export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
-    constructor(app: App) {
+    private settings: ZotFlowSettings;
+
+    constructor(app: App, settings: ZotFlowSettings) {
         super(app);
+        this.settings = settings;
         this.setPlaceholder("Search Zotero Library...");
         this.modalEl.addClass("zotflow-search-modal");
         this.limit = 20; // Limit for suggestions
@@ -26,7 +29,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
     async getSuggestions(query: string): Promise<SuggestionItem[]> {
         const isValidTopLevel = (type: string) =>
             !["attachment", "note", "annotation"].includes(type);
-        const keyInfo = await db.keys.get(services.settings.zoteroApiKey);
+        const keyInfo = await db.keys.get(this.settings.zoteroApiKey);
 
         if (!keyInfo) {
             new Notice("ZotFlow: Invalid Zotero API key.");
