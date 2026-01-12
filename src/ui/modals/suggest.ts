@@ -48,8 +48,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
                     (item) =>
                         libraryIDs.includes(item.libraryID) &&
                         !item.parentItem &&
-                        isValidTopLevel(item.itemType) &&
-                        !item.trashed,
+                        isValidTopLevel(item.itemType),
                 )
                 .limit(20)
                 .toArray();
@@ -70,8 +69,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
                     (item) =>
                         libraryIDs.includes(item.libraryID) &&
                         !item.parentItem &&
-                        isValidTopLevel(item.itemType) &&
-                        !item.trashed,
+                        isValidTopLevel(item.itemType),
                 )
                 .limit(20)
                 .toArray();
@@ -93,8 +91,8 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         );
         // Use Dexie's Collection to filter (in memory, for multi-field fuzzy search)
         const searchResults = await db.items
-            .where(["libraryID", "itemType", "trashed"])
-            .anyOf(getCombinations([libraryIDs, validTopLevelTypeList, [0]]))
+            .where(["libraryID", "itemType"])
+            .anyOf(getCombinations([libraryIDs, validTopLevelTypeList]))
             .filter((item) => {
                 if (item.parentItem) return false;
                 const titleMatch = (item.title || "")
@@ -215,8 +213,8 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
         // Fetch Children (Second Level Items)
         const attachments = (await db.items
-            .where(["libraryID", "parentItem", "itemType", "trashed"])
-            .equals([zItem.libraryID, zItem.key, "attachment", 0])
+            .where(["libraryID", "parentItem", "itemType"])
+            .equals([zItem.libraryID, zItem.key, "attachment"])
             .toArray()) as IDBZoteroItem<AttachmentData>[];
 
         if (attachments.length === 0) {

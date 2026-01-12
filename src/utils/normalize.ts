@@ -99,7 +99,6 @@ export function normalizeItem(
         parentItem: raw.data.parentItem,
         collections: raw.data.collections,
         title: title,
-        trashed: raw.data.deleted ? 1 : 0,
         dateAdded: raw.data.dateAdded,
         dateModified: raw.data.dateModified,
         version: raw.data.version,

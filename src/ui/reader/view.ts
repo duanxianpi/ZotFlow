@@ -359,7 +359,6 @@ export class ZoteroReaderView extends ItemView {
                     key,
                     itemType: "annotation",
                     parentItem,
-                    trashed: 0,
                     title: "",
                     collections: [],
                     dateAdded: now,
@@ -438,8 +437,8 @@ export class ZoteroReaderView extends ItemView {
 
         // Zotero Annotations
         const annotations = (await db.items
-            .where(["libraryID", "parentItem", "itemType", "trashed"])
-            .equals([item.libraryID, item.key, "annotation", 0])
+            .where(["libraryID", "parentItem", "itemType"])
+            .equals([item.libraryID, item.key, "annotation"])
             .toArray()) as IDBZoteroItem<AnnotationData>[];
 
         // External Annotations

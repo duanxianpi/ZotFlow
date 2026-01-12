@@ -1,9 +1,9 @@
-import { db, getCombinations } from "../../db/db";
+import { db, getCombinations } from "db/db";
 import { ZoteroAPIService } from "./zotero";
-import { normalizeItem, normalizeCollection } from "../../utils/normalize";
-import { AnyZoteroItem } from "../../types/zotero";
-import { ZotFlowSettings } from "../../settings/types";
-import { Zotero_Item_Types } from "../../types/zotero-item-const";
+import { normalizeItem, normalizeCollection } from "utils/normalize";
+import { AnyZoteroItem } from "types/zotero";
+import { ZotFlowSettings } from "settings/types";
+import { Zotero_Item_Types } from "types/zotero-item-const";
 import { IParentProxy } from "bridge/parent-host";
 
 const BULK_SIZE = 50; // Limit due to URL length
@@ -16,7 +16,7 @@ export class SyncService {
     private syncing = false;
 
     constructor(
-        private api: ZoteroAPIService,
+        private zotero: ZoteroAPIService,
         private settings: ZotFlowSettings,
         private parentHost: IParentProxy,
     ) {}
@@ -44,7 +44,7 @@ export class SyncService {
             return;
         }
 
-        this.api.updateCredentials(apiKey);
+        this.zotero.updateCredentials(apiKey);
 
         // Get Key Info first
         const keyInfo = await db.keys.get(apiKey);
@@ -110,8 +110,8 @@ export class SyncService {
         libraryType: "user" | "group",
         libraryID: number,
     ) {
-        if (!this.api) return;
-        const libHandle = this.api.client.library(libraryType, libraryID);
+        if (!this.zotero) return;
+        const libHandle = this.zotero.client.library(libraryType, libraryID);
 
         // Get Local Version
         const libState = await db.libraries.get(libraryID);
@@ -199,8 +199,8 @@ export class SyncService {
     // Item Pull
     // ========================================================================
     private async pullItems(libraryType: "user" | "group", libraryID: number) {
-        if (!this.api) return;
-        const libHandle = this.api.client.library(libraryType, libraryID);
+        if (!this.zotero) return;
+        const libHandle = this.zotero.client.library(libraryType, libraryID);
 
         const libState = await db.libraries.get(libraryID);
         const localVersion = libState?.itemVersion || 0;
@@ -211,6 +211,7 @@ export class SyncService {
         const response = await libHandle.items().get({
             format: "versions",
             since: localVersion,
+            includeTrashed: false,
         });
 
         const versionsMap = (await (
@@ -271,18 +272,12 @@ export class SyncService {
                 await db.transaction("rw", db.items, async () => {
                     // Cascade delete orphan nodes
                     const childKeys = await db.items
-                        .where([
-                            "libraryID",
-                            "parentItem",
-                            "itemType",
-                            "trashed",
-                        ])
+                        .where(["libraryID", "parentItem", "itemType"])
                         .anyOf(
                             getCombinations([
                                 [libraryID],
                                 deletedKeys,
                                 Zotero_Item_Types,
-                                [0, 1],
                             ]),
                         )
                         .primaryKeys();

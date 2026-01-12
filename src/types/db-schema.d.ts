@@ -49,7 +49,6 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     // Core Indexed Fields
     itemType: T["itemType"]; // 'journalArticle', 'attachment', 'annotation', etc.
     parentItem: string; // Parent Item Key
-    trashed: 0 | 1; // Whether the item is trashed
 
     // Sorting & Versioning
     title?: string; // Title (normalized for sorting)
