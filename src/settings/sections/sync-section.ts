@@ -1,4 +1,10 @@
-import { Setting, Notice, ButtonComponent, setIcon } from "obsidian";
+import {
+    Setting,
+    Notice,
+    ButtonComponent,
+    setIcon,
+    SettingGroup,
+} from "obsidian";
 import MyPlugin from "main";
 import { db } from "db/db";
 import { ZoteroGroup } from "types/zotero";
@@ -13,8 +19,8 @@ export class SyncSection {
     ) {}
 
     async render(containerEl: HTMLElement) {
-        new Setting(containerEl).setHeading().setName("Zotero API Key");
-        const keySettingContainer = containerEl.createDiv();
+        const settingGroup = new SettingGroup(containerEl);
+        settingGroup.setHeading("Synchronization");
 
         // Retrieve cached key info
         const keyInfo = await db.keys.get(this.plugin.settings.zoteroApiKey);
@@ -22,7 +28,6 @@ export class SyncSection {
         // Description
         const apiDescContainer = new DocumentFragment();
         const descDiv = apiDescContainer.createDiv();
-
         if (keyInfo) {
             descDiv.createSpan({
                 text: `Connected as ${keyInfo.username} (User ID: ${keyInfo.userID})`,
@@ -38,62 +43,64 @@ export class SyncSection {
             descDiv.createSpan({ text: "." });
         }
         // API Key Input
-        const apiKeySetting = new Setting(keySettingContainer)
-            .setName("API Key")
-            .setDesc(apiDescContainer)
-            .addText((text) => {
-                text.setPlaceholder("Enter API Key")
-                    .setValue(this.plugin.settings.zoteroApiKey)
-                    .onChange(async (value) => {
-                        this.plugin.settings.zoteroApiKey = value.trim();
-                    });
+        settingGroup.addSetting(async (setting) => {
+            setting
+                .setName("API Key")
+                .setDesc(apiDescContainer)
+                .addText((text) => {
+                    text.setPlaceholder("Enter API Key")
+                        .setValue(this.plugin.settings.zoteroApiKey)
+                        .onChange(async (value) => {
+                            this.plugin.settings.zoteroApiKey = value.trim();
+                        });
 
-                if (keyInfo) {
-                    text.setDisabled(true);
-                    text.inputEl.type = "password";
-                } else {
-                    text.inputEl.type = "text";
-                }
-                text.inputEl.style.width = "200px";
-            });
-
-        // Verify Button
-        apiKeySetting.addButton(
-            (button) =>
-                (button
-                    .setButtonText(keyInfo ? "Verified" : "Verify Key")
-                    .setCta()
-                    .setDisabled(!!keyInfo)
-                    .onClick(() =>
-                        this.handleVerifyOrRefresh(button, "verify"),
-                    ).buttonEl.style.width = "100px"),
-        );
-
-        // Clear Button
-        apiKeySetting.addExtraButton((btn) => {
-            btn.setIcon("trash")
-                .setTooltip("Disconnect & Clear Key")
-                .onClick(async () => {
-                    const oldKey = this.plugin.settings.zoteroApiKey;
-                    this.plugin.settings.zoteroApiKey = "";
-                    this.plugin.settings.librariesConfig = {};
-                    if (oldKey) await db.keys.delete(oldKey);
-
-                    await this.plugin.saveSettings();
-
-                    new Notice("Disconnected.");
-                    this.refreshUI();
+                    if (keyInfo) {
+                        text.setDisabled(true);
+                        text.inputEl.type = "password";
+                    } else {
+                        text.inputEl.type = "text";
+                    }
+                    text.inputEl.style.width = "200px";
                 });
-            btn.extraSettingsEl.style.color = "var(--text-error)";
+
+            // Verify Button
+            setting.addButton(
+                (button) =>
+                    (button
+                        .setButtonText(keyInfo ? "Verified" : "Verify Key")
+                        .setCta()
+                        .setDisabled(!!keyInfo)
+                        .onClick(() =>
+                            this.handleVerifyOrRefresh(button, "verify"),
+                        ).buttonEl.style.width = "100px"),
+            );
+
+            // Clear Button
+            setting.addExtraButton((btn) => {
+                btn.setIcon("trash")
+                    .setTooltip("Disconnect & Clear Key")
+                    .onClick(async () => {
+                        const oldKey = this.plugin.settings.zoteroApiKey;
+                        this.plugin.settings.zoteroApiKey = "";
+                        this.plugin.settings.librariesConfig = {};
+                        if (oldKey) await db.keys.delete(oldKey);
+
+                        await this.plugin.saveSettings();
+
+                        new Notice("Disconnected.");
+                        this.refreshUI();
+                    });
+                btn.extraSettingsEl.style.color = "var(--text-error)";
+            });
         });
 
         // Libraries Table
         if (keyInfo) {
-            new Setting(containerEl)
-                .setHeading()
-                .setName("Library Synchronization");
-            const librariesTableContainer = containerEl.createDiv();
-            await this.renderLibrariesTable(librariesTableContainer);
+            settingGroup.addSetting(async (setting) => {
+                setting.setName("Library Synchronization");
+                setting.setDesc("Manage the sync settings for each library.");
+                await this.renderLibrariesTable(setting.infoEl);
+            });
         }
     }
 
@@ -135,6 +142,7 @@ export class SyncSection {
             "1px solid var(--background-modifier-border)";
         tableWrapper.style.borderRadius = "6px";
         tableWrapper.style.overflow = "hidden";
+        tableWrapper.style.marginTop = "0.5rem";
 
         const table = tableWrapper.createEl("table");
         table.style.width = "100%";
@@ -224,7 +232,7 @@ export class SyncSection {
 
         // Refresh Button
         const btnContainer = containerEl.createDiv();
-        btnContainer.style.marginTop = "1rem";
+        btnContainer.style.marginTop = "0.5rem";
         new Setting(btnContainer).addButton(
             (btn) =>
                 (btn

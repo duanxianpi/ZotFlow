@@ -8,6 +8,7 @@ import { IDBZoteroItem, IDBZoteroKey } from "types/db-schema";
 import { AttachmentData, AnnotationData } from "types/zotero-item";
 import { ZotFlowSettings } from "settings/types";
 import { annotationItemFromJSON } from "utils/annotation";
+import { toZoteroDate } from "utils/normalize";
 
 export const VIEW_TYPE_ZOTERO_READER = "zotflow-zotero-reader-view";
 
@@ -129,7 +130,7 @@ export class ZoteroReaderView extends ItemView {
                 });
 
                 this.bridge.onEventType("annotationsDeleted", (evt) => {
-                    console.log("Annotations deleted:", evt.ids);
+                    this.handleAnnotationsDeleted(evt.ids);
                 });
 
                 this.bridge.onEventType("viewStateChanged", (evt) => {
@@ -347,12 +348,12 @@ export class ZoteroReaderView extends ItemView {
                                 ...annotationData,
                             } as any,
                         },
-                        dateModified: new Date().toISOString(),
+                        dateModified: toZoteroDate(new Date().toISOString()),
                         syncStatus: newSyncStatus,
                     });
                 });
             } else {
-                const now = new Date().toISOString();
+                const now = new Date().toISOString().split(".")[0] + "Z";
                 // Mock user for local creation if needed, or rely on what's in settings/library
                 const newItem: IDBZoteroItem<AnnotationData> = {
                     libraryID,
@@ -364,9 +365,10 @@ export class ZoteroReaderView extends ItemView {
                     dateAdded: now,
                     dateModified: now,
                     version: 0,
+                    trashed: 0,
                     searchCreators: [],
                     searchTags: [],
-                    syncStatus: json.isExternal ? "created" : "ignore",
+                    syncStatus: !json.isExternal ? "created" : "ignore",
                     raw: {
                         key,
                         version: 0,
@@ -394,6 +396,33 @@ export class ZoteroReaderView extends ItemView {
                 });
             }
         }
+    }
+
+    private async handleAnnotationsDeleted(ids: string[]) {
+        console.log("[ZotFlow] Handling deleted annotations:", ids);
+        const { libraryID } = this.attachmentItem;
+
+        await db.transaction("rw", db.items, async () => {
+            for (const key of ids) {
+                const existing = await db.items.get([libraryID, key]);
+
+                if (existing) {
+                    // Synced/Other: Mark Deleted
+                    await db.items.update([libraryID, key], {
+                        syncStatus: "deleted",
+                        dateModified:
+                            new Date().toISOString().split(".")[0] + "Z",
+                        raw: {
+                            ...existing.raw,
+                            data: {
+                                ...existing.raw.data,
+                                deleted: true,
+                            } as any,
+                        },
+                    });
+                }
+            }
+        });
     }
 
     /**

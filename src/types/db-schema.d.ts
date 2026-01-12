@@ -33,11 +33,13 @@ export interface IDBZoteroCollection {
     trashed: 0 | 1; // Whether the collection is trashed
 
     // Sync State
-    syncStatus: "synced" | "created" | "updated" | "deleted";
+    syncStatus: "synced" | "created" | "updated" | "deleted" | "conflict";
     syncedAt?: string;
+    syncError?: string;
 
     // Raw Payload
     raw: ZoteroCollection;
+    serverCopyRaw?: ZoteroCollection;
 }
 
 // Zotero Item
@@ -49,6 +51,7 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     // Core Indexed Fields
     itemType: T["itemType"]; // 'journalArticle', 'attachment', 'annotation', etc.
     parentItem: string; // Parent Item Key
+    trashed: 0 | 1; // Whether the item is trashed
 
     // Sorting & Versioning
     title?: string; // Title (normalized for sorting)
@@ -62,7 +65,14 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     searchTags: string[];
 
     // Sync State
-    syncStatus: "synced" | "created" | "updated" | "deleted" | "ignore";
+    syncStatus:
+        | "synced"
+        | "created"
+        | "updated"
+        | "deleted"
+        | "ignore"
+        | "conflict";
+    syncError?: string;
     syncedAt?: string;
     lastAccessedAt?: string;
     readingProgress?: number;
@@ -72,6 +82,7 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
 
     // Raw Payload
     raw: ZoteroItem<T>;
+    serverCopyRaw?: ZoteroItem<T>;
 }
 
 export type IDBZoteroItem<T extends ZoteroItemData> = _IDBZoteroItem<T>;

@@ -18,7 +18,6 @@ export function annotationItemFromJSON(
     if (json.type === "highlight" || json.type === "underline") {
         item.annotationText = json.text;
     }
-    item.annotationIsExternal = !!json.isExternal;
     item.annotationComment = json.comment;
     item.annotationColor = json.color;
     item.annotationPageLabel = json.pageLabel;

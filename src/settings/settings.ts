@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, setIcon } from "obsidian";
+import { App, PluginSettingTab, setIcon, SettingGroup } from "obsidian";
 import MyPlugin from "../main";
 import { SyncSection } from "./sections/sync-section";
 import { WebDavSection } from "./sections/webdav-section";
@@ -18,7 +18,8 @@ export class ZotFlowSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        // containerEl.createEl("h2", { text: "Obsidian ZotFlow" });
+        // const title = containerEl.createEl( { text: "Obsidian ZotFlow" });
+        // title.style.paddingInline = "0px";
 
         // Horizontal Navigation Tabs
         this.renderNav(containerEl);
@@ -51,15 +52,15 @@ export class ZotFlowSettingTab extends PluginSettingTab {
         navContainer.style.display = "flex";
         // navContainer.style.gap = "8px"; // Spacing between pills
         navContainer.style.marginTop = "0.5rem";
-        navContainer.style.marginBottom = "0.75rem";
+        navContainer.style.marginBottom = "1rem";
         // navContainer.style.paddingBottom = "0.75rem";
         navContainer.style.borderBottom =
             "1px solid var(--background-modifier-border)";
 
         const tabs: { id: TabSection; label: string; icon: string }[] = [
             { id: "sync", label: "Sync", icon: "user" },
-            { id: "webdav", label: "WebDAV", icon: "cloud" },
             { id: "cache", label: "Cache", icon: "database" },
+            { id: "webdav", label: "WebDAV", icon: "cloud" },
         ];
 
         tabs.forEach((tab) => {

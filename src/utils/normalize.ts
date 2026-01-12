@@ -11,7 +11,6 @@ export function normalizeCollection(
     raw: ZoteroCollection,
     libraryID: number,
 ): IDBZoteroCollection {
-    console.log(raw);
     const collection: IDBZoteroCollection = {
         key: raw.key,
         libraryID: libraryID,
@@ -19,7 +18,7 @@ export function normalizeCollection(
         name: raw.data.name,
         parentCollection: raw.data.parentCollection || false,
         trashed: raw.data.deleted ? 1 : 0,
-        syncStatus: "synced" as const,
+        syncStatus: "synced",
         syncedAt: new Date().toISOString(),
         raw: raw,
     };
@@ -99,6 +98,7 @@ export function normalizeItem(
         parentItem: raw.data.parentItem,
         collections: raw.data.collections,
         title: title,
+        trashed: raw.data.deleted ? 1 : 0,
         dateAdded: raw.data.dateAdded,
         dateModified: raw.data.dateModified,
         version: raw.data.version,
@@ -112,4 +112,9 @@ export function normalizeItem(
     } as AnyIDBZoteroItem;
 
     return item;
+}
+
+export function toZoteroDate(dateInput?: string | Date): string {
+    const date = dateInput ? new Date(dateInput) : new Date();
+    return date.toISOString().split(".")[0] + "Z";
 }

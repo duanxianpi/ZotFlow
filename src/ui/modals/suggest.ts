@@ -36,7 +36,15 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
             return [];
         }
 
-        const libraryIDs = keyInfo.joinedGroups.concat([keyInfo.userID]);
+        const filteredLibraryIDs = keyInfo.joinedGroups
+            .concat([keyInfo.userID])
+            .filter((id) => {
+                const mode = this.settings.librariesConfig[id]?.mode;
+                if (mode && mode !== "ignored") {
+                    return true;
+                }
+                return false;
+            });
 
         // No input -> Show Recent Access
         if (!query) {
@@ -46,9 +54,10 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
                 .reverse() // Latest first
                 .filter(
                     (item) =>
-                        libraryIDs.includes(item.libraryID) &&
+                        filteredLibraryIDs.includes(item.libraryID) &&
                         !item.parentItem &&
-                        isValidTopLevel(item.itemType),
+                        isValidTopLevel(item.itemType) &&
+                        !item.trashed,
                 )
                 .limit(20)
                 .toArray();
@@ -67,9 +76,10 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
                 .reverse()
                 .filter(
                     (item) =>
-                        libraryIDs.includes(item.libraryID) &&
+                        filteredLibraryIDs.includes(item.libraryID) &&
                         !item.parentItem &&
-                        isValidTopLevel(item.itemType),
+                        isValidTopLevel(item.itemType) &&
+                        !item.trashed,
                 )
                 .limit(20)
                 .toArray();
@@ -91,8 +101,14 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         );
         // Use Dexie's Collection to filter (in memory, for multi-field fuzzy search)
         const searchResults = await db.items
-            .where(["libraryID", "itemType"])
-            .anyOf(getCombinations([libraryIDs, validTopLevelTypeList]))
+            .where(["libraryID", "itemType", "trashed"])
+            .anyOf(
+                getCombinations([
+                    filteredLibraryIDs,
+                    validTopLevelTypeList,
+                    [0],
+                ]),
+            )
             .filter((item) => {
                 if (item.parentItem) return false;
                 const titleMatch = (item.title || "")
@@ -213,8 +229,8 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
         // Fetch Children (Second Level Items)
         const attachments = (await db.items
-            .where(["libraryID", "parentItem", "itemType"])
-            .equals([zItem.libraryID, zItem.key, "attachment"])
+            .where(["libraryID", "parentItem", "itemType", "trashed"])
+            .equals([zItem.libraryID, zItem.key, "attachment", 0])
             .toArray()) as IDBZoteroItem<AttachmentData>[];
 
         if (attachments.length === 0) {

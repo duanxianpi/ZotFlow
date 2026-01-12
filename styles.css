@@ -152,3 +152,7 @@
     overflow: hidden;
     padding: 0;
 }
+
+.zotflow-settings-content .setting-group .setting-item-heading {
+    padding-inline: 0;
+}

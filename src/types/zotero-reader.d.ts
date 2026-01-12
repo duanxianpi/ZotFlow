@@ -1,5 +1,5 @@
 // import { EmbeddableMarkdownEditor, MarkdownEditorProps } from "src/editor/markdown-editor";
-import { ZotFlowSettings } from "settings/settings";
+import { ZotFlowSettings } from "settings/types";
 
 export type ColorScheme = "light" | "dark";
 
