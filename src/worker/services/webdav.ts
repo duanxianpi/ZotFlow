@@ -39,19 +39,16 @@ export class WebDavService {
 
         try {
             const req = {
-                url: fullUrl,
                 method: "GET",
                 headers: {
                     Authorization: `Basic ${credentials}`,
                 },
             };
 
-            console.log(req);
-
-            const response = await this.parentHost.request(req, "arrayBuffer");
+            const response = await fetch(fullUrl, req);
 
             if (response.status >= 200 && response.status < 300) {
-                return response.arrayBuffer!;
+                return response.arrayBuffer();
             } else {
                 throw new Error(
                     `WebDAV download failed with status: ${response.status}`,
@@ -73,7 +70,6 @@ export class WebDavService {
 
         try {
             const req = {
-                url: url,
                 method: "PROPFIND",
                 headers: {
                     Authorization: `Basic ${credentials}`,
@@ -82,7 +78,7 @@ export class WebDavService {
                 throw: false, // We want to handle status codes manually
             };
 
-            const response = await this.parentHost.request(req, "text");
+            const response = await fetch(url, req);
 
             if (response.status >= 200 && response.status < 300) {
                 return true;

@@ -17,7 +17,7 @@ export class ZotFlowDB extends Dexie {
     files!: Table<IDBZoteroFile, [number, string]>;
 
     constructor() {
-        super("zotflow");
+        super("zotflow-dev");
 
         // Schema Definition
         this.version(1).stores({

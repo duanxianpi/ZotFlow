@@ -44,8 +44,6 @@ export class SyncService {
             return;
         }
 
-        this.zotero.updateCredentials(apiKey);
-
         const keyInfo = await db.keys.get(apiKey);
 
         if (!keyInfo) {
@@ -66,37 +64,40 @@ export class SyncService {
         }
 
         this.syncing = true;
-        this.parentHost.notify("info", "Started syncing...");
+        this.parentHost.updateProgress("Started syncing...");
         console.log(`[ZotFlow] Start syncing`);
 
         try {
-            await Promise.all(
-                libraries.map(async (libKey) => {
-                    const libConfig = librariesConfig[libKey];
-                    const lib = await db.libraries.get(libKey);
-                    if (!lib || !libConfig || libConfig.mode === "ignored")
-                        return;
+            for (const libKey of libraries) {
+                const libConfig = librariesConfig[libKey];
+                const lib = await db.libraries.get(libKey);
+                if (!lib || !libConfig || libConfig.mode === "ignored")
+                    continue;
 
-                    try {
-                        await this.pullCollections(lib.type, libKey);
-                        await this.pullItems(lib.type, libKey);
+                // this.parentHost.updateProgress(`Syncing Library ${libKey}...`);
 
-                        if (libConfig.mode === "bidirectional") {
-                            await this.pushDirtyItems(lib.type, libKey);
-                        }
-                    } catch (error: any) {
-                        console.error("[ZotFlow] Sync failed:", error);
-                        this.parentHost.notify(
-                            "error",
-                            `Sync Failed for ${libKey}: ${error.message}`,
-                        );
+                try {
+                    await this.pullCollections(lib.type, libKey);
+                    await this.pullItems(lib.type, libKey);
+
+                    if (libConfig.mode === "bidirectional") {
+                        await this.pushDirtyItems(lib.type, libKey);
                     }
-                }),
-            );
+                } catch (error: any) {
+                    this.parentHost.notify(
+                        "error",
+                        `Sync Failed for ${libKey}: ${error.message}`,
+                    );
+                    throw error;
+                }
+            }
             this.parentHost.notify("success", "Sync completed successfully!");
-            console.log("[ZotFlow] Sync finished.");
+        } catch (error: any) {
+            console.error("[ZotFlow] Sync failed:", error);
+            this.parentHost.notify("error", `Sync Failed: ${error.message}`);
         } finally {
             this.syncing = false;
+            console.log("[ZotFlow] Sync finished.");
         }
     }
 
@@ -124,7 +125,6 @@ export class SyncService {
 
         const versionsMap = await response.raw.json();
         const serverHeaderVersion = response.getVersion() || 0;
-        console.log(versionsMap, serverHeaderVersion);
 
         // Early Return
         if (serverHeaderVersion <= localVersion) {
@@ -137,13 +137,11 @@ export class SyncService {
         if (keysToFetch.length > 0) {
             const slices = this.chunkArray(keysToFetch, PULL_BULK_SIZE);
             let processedCount = 0;
-            console.log(slices);
             for (const slice of slices) {
                 const batchRes = await libHandle.collections().get({
                     collectionKey: slice.join(","),
                 });
                 const newCollections = batchRes.raw;
-                console.log(newCollections);
                 if (newCollections.length > 0) {
                     // Check one by one
                     await db.transaction("rw", db.collections, async () => {
@@ -188,7 +186,6 @@ export class SyncService {
                                     remoteRaw,
                                     libraryID,
                                 );
-                                console.log(cleanCol);
                                 cleanCol.syncStatus = "synced";
                                 await db.collections.put(cleanCol);
                             },
@@ -199,9 +196,8 @@ export class SyncService {
                 }
 
                 processedCount += newCollections.length;
-                this.parentHost.notify(
-                    "info",
-                    `Updated ${processedCount} collections...`,
+                console.log(
+                    `[ZotFlow] Updated ${processedCount} collections in Library ${libraryID}...`,
                 );
             }
 
@@ -338,10 +334,10 @@ export class SyncService {
 
         const keysToFetch = Object.keys(versionsMap);
         console.log(`[ZotFlow] Found ${keysToFetch.length} items to update.`);
-        this.parentHost.notify(
-            "info",
-            `Found ${keysToFetch.length} items to update.`,
-        );
+        // this.parentHost.notify(
+        //     "info",
+        //     `Found ${keysToFetch.length} items to update.`,
+        // );
 
         // Batch Fetch Data & Upsert
         if (keysToFetch.length > 0) {
@@ -394,9 +390,8 @@ export class SyncService {
 
                 await collectionUpdate;
                 processedCount += newItems.length;
-                this.parentHost.notify(
-                    "info",
-                    `Synced ${processedCount} / ${keysToFetch.length} items...`,
+                this.parentHost.updateProgress(
+                    `Syncing Library ${libraryID}: Synced ${processedCount} / ${keysToFetch.length} items...`,
                 );
             }
             console.log(`[ZotFlow] Synced ${processedCount} items.`);

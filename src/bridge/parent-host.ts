@@ -13,20 +13,24 @@ export interface IRequestResponse {
 
 export interface IUIResponder {
     notify(type: NotificationType, message: string): void;
+    updateProgress(message: string): void;
     updateStatusBar(text: string): void;
 }
 
 export interface INetworkFetcher {
-    request(
-        request: RequestUrlParam | string,
-        returnType: "arrayBuffer" | "json" | "text",
-    ): Promise<IRequestResponse>;
+    request(request: RequestUrlParam): Promise<IRequestResponse>;
 }
 
 export interface IParentProxy extends IUIResponder, INetworkFetcher {}
 
 export class ParentHost implements IParentProxy {
+    private progressNotice: Notice | null = null;
+
     public notify(type: NotificationType, message: string) {
+        if (this.progressNotice) {
+            this.progressNotice.hide();
+            this.progressNotice = null;
+        }
         new Notice(`ZotFlow: ${message}`);
 
         if (type === "error") {
@@ -34,23 +38,33 @@ export class ParentHost implements IParentProxy {
         }
     }
 
+    public updateProgress(message: string) {
+        if (this.progressNotice && this.progressNotice.messageEl.isConnected) {
+            this.progressNotice.setMessage(`ZotFlow: ${message}`);
+        } else {
+            this.progressNotice = new Notice(`ZotFlow: ${message}`, 0);
+        }
+    }
+
     public updateStatusBar(text: string) {}
 
-    public async request(
-        request: RequestUrlParam | string,
-        returnType: "arrayBuffer" | "json" | "text",
-    ): Promise<IRequestResponse> {
+    public async request(request: RequestUrlParam): Promise<IRequestResponse> {
         try {
+            const req = {
+                url: request.url,
+                method: request.method,
+                headers: request.headers,
+                body: request.body,
+                contentType: request.contentType,
+            };
+            console.log(req);
             const response = await requestUrl(request);
             const buffer = response.arrayBuffer;
             return Comlink.transfer(
                 {
                     status: response.status,
                     headers: response.headers,
-                    arrayBuffer:
-                        returnType === "arrayBuffer" ? buffer : undefined,
-                    json: returnType === "json" ? response.json : undefined,
-                    text: returnType === "text" ? response.text : undefined,
+                    arrayBuffer: buffer,
                 },
                 [buffer],
             );

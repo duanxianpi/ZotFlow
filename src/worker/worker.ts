@@ -27,9 +27,31 @@ let _sync: SyncService | undefined;
 
 const exposedApi: WorkerAPI = {
     init: (settings: ZotFlowSettings, parentHost: IParentProxy) => {
+        // Patch global fetch
+        (globalThis as any).fetch = async (url: string, init?: RequestInit) => {
+            const response = await parentHost.request({
+                url: url,
+                method: init?.method || "GET",
+                headers: init?.headers as Record<string, string>,
+                body: init?.body as string | ArrayBuffer,
+                throw: false,
+                contentType: "application/json",
+            });
+            // Convert Obsidian response to standard Response object
+            return new Response(response.arrayBuffer, {
+                status: response.status,
+                headers: new Headers(response.headers),
+            });
+        };
+
         _zotero = new ZoteroAPIService(settings.zoteroApiKey);
         _webdav = new WebDavService(settings, parentHost);
-        _attachment = new AttachmentService(_webdav, settings, parentHost);
+        _attachment = new AttachmentService(
+            _webdav,
+            settings,
+            _zotero,
+            parentHost,
+        );
         _sync = new SyncService(_zotero, settings, parentHost);
         console.log("[ZotFlow Worker] Services initialized.");
     },

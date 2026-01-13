@@ -28,7 +28,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
     // Get suggestions based on query
     async getSuggestions(query: string): Promise<SuggestionItem[]> {
         const isValidTopLevel = (type: string) =>
-            !["attachment", "note", "annotation"].includes(type);
+            !["note", "annotation"].includes(type);
         const keyInfo = await db.keys.get(this.settings.zoteroApiKey);
 
         if (!keyInfo) {
@@ -224,6 +224,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
         // If this item is an attachment (despite being filtered out), open it directly
         if (zItem.itemType === "attachment") {
             openAttachment(zItem.libraryID, zItem.key, this.app);
+            this.close();
             return;
         }
 

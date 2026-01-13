@@ -28,8 +28,8 @@ export class WebDavSection {
                                 this.plugin.settings.webDavUrl = "";
                                 this.plugin.settings.webDavUser = "";
                                 this.plugin.settings.webDavPassword = "";
-                                await this.plugin.saveSettings();
                             }
+                            await this.plugin.saveSettings();
                             this.refreshUI();
                         }),
                 );

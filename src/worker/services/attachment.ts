@@ -7,6 +7,7 @@ import { WebDavService } from "./webdav";
 import { ZotFlowSettings } from "../../settings/types";
 import { AttachmentData } from "../../types/zotero-item";
 import { IParentProxy } from "bridge/parent-host";
+import { ZoteroAPIService } from "./zotero";
 
 /**
  * Attachment management service for ZotFlow (Worker Side).
@@ -18,6 +19,7 @@ export class AttachmentService {
     constructor(
         private webdav: WebDavService,
         private settings: ZotFlowSettings,
+        private zotero: ZoteroAPIService,
         private parentHost: IParentProxy,
     ) {}
 
@@ -248,24 +250,20 @@ export class AttachmentService {
     private async downloadFromZoteroAPI(
         item: IDBZoteroItem<AttachmentData>,
     ): Promise<ArrayBuffer | null> {
-        const url = `https://api.zotero.org/${item.raw.library.type}s/${item.libraryID}/items/${item.key}/file/view`;
         try {
-            const response = await this.parentHost.request(
-                {
-                    url: url,
-                    method: "GET",
-                    headers: {
-                        "Zotero-API-Version": "3",
-                        "Zotero-API-Key": this.settings.zoteroApiKey,
-                    },
-                },
-                "arrayBuffer",
-            );
+            const response = await this.zotero.client
+                .library(item.raw.library.type, item.libraryID)
+                .items(item.key)
+                .attachment()
+                .get();
 
-            if (response.status !== 200)
-                throw new Error(`API Error ${response.status}`);
+            const buffer = response.getData();
+            console.log(buffer);
 
-            return response.arrayBuffer!;
+            if (response.response.status !== 200)
+                throw new Error(`API Error ${response.response.status}`);
+
+            return buffer;
         } catch (e) {
             console.error("[ZotFlow] API Download Error:", e);
             return null;

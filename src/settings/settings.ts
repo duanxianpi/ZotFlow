@@ -15,6 +15,8 @@ export class ZotFlowSettingTab extends PluginSettingTab {
     }
 
     async display(): Promise<void> {
+        await this.plugin.loadSettings();
+
         const { containerEl } = this;
         containerEl.empty();
 
@@ -59,8 +61,8 @@ export class ZotFlowSettingTab extends PluginSettingTab {
 
         const tabs: { id: TabSection; label: string; icon: string }[] = [
             { id: "sync", label: "Sync", icon: "user" },
-            { id: "cache", label: "Cache", icon: "database" },
             { id: "webdav", label: "WebDAV", icon: "cloud" },
+            { id: "cache", label: "Cache", icon: "database" },
         ];
 
         tabs.forEach((tab) => {
