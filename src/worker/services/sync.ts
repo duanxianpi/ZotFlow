@@ -607,26 +607,33 @@ export class SyncService {
                     const validUpdates: any[] = [];
                     const idsToDelete: string[] = [];
 
+                    // Process each item in the chunk
                     chunk.forEach((item, index) => {
                         const indexStr = String(index);
                         const itemKey = item.key;
                         let serverResponseItem = null;
                         let failData = null;
 
+                        // Handle created items
                         if (item.syncStatus === "created") {
+                            // If successful, update item with server response
                             if (successful[indexStr])
                                 serverResponseItem = successful[indexStr];
+                            // If failed, update item with failure data
                             else if (failed[indexStr])
                                 failData = failed[indexStr];
                         } else {
+                            // Handle updated items
                             if (successful[itemKey])
                                 serverResponseItem = successful[itemKey];
+                            // If unchanged, update item with unchanged data
                             else if (unchanged[itemKey])
                                 serverResponseItem = {
                                     key: itemKey,
                                     version: item.version,
                                     isUnchanged: true,
                                 };
+                            // If failed, update item with failure data
                             else if (failed[itemKey])
                                 failData = failed[itemKey];
                         }
@@ -641,13 +648,15 @@ export class SyncService {
                             };
 
                             if (serverResponseItem.data) {
-                                newItem.raw = serverResponseItem.data;
+                                newItem.raw = serverResponseItem;
+                                // If successful, update item with server response
                                 if (item.syncStatus === "created") {
                                     newItem.key = serverResponseItem.key;
                                     newItem.raw.key = serverResponseItem.key;
                                     idsToDelete.push(item.key);
                                 }
                             } else if (!serverResponseItem.isUnchanged) {
+                                // If unchanged, update item with unchanged data
                                 if (item.syncStatus === "created") {
                                     newItem.key = serverResponseItem.key;
                                     idsToDelete.push(item.key);
@@ -655,6 +664,7 @@ export class SyncService {
                             }
                             validUpdates.push(newItem);
                         } else if (failData) {
+                            // If failed, update item with failure data
                             console.warn(
                                 `[ZotFlow] Item failed ${item.key}:`,
                                 failData,

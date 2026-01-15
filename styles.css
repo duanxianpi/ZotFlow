@@ -156,3 +156,11 @@
 .zotflow-settings-content .setting-group .setting-item-heading {
     padding-inline: 0;
 }
+
+.cm-zotflow-container-anno.cm-zotflow-line-top ~ :has(~ .cm-zotflow-container-anno.cm-zotflow-line-bottom) {
+    margin-inline: 15px !important;
+}
+
+.cm-zotflow-line-bottom::before {
+    border-inline-start-color: transparent !important;
+}

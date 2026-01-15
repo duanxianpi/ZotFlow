@@ -470,6 +470,8 @@ export class ZoteroReaderView extends ItemView {
             .equals([item.libraryID, item.key, "annotation"])
             .toArray()) as IDBZoteroItem<AnnotationData>[];
 
+        console.log("Annotations:", annotations);
+
         // External Annotations
         const annotationJson: AnnotationJSON[] = [];
         for (const annotation of annotations) {

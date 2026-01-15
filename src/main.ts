@@ -13,6 +13,7 @@ import { DEFAULT_SETTINGS, ZotFlowSettings } from "./settings/types";
 import { ZoteroSearchModal } from "./ui/modals/suggest";
 import { workerBridge } from "./bridge";
 import { VIEW_TYPE_ZOTERO_READER, ZoteroReaderView } from "./ui/reader/view";
+import { ZoteroBlockExtension } from "./ui/zotflow-comment-extension";
 
 // import { workerBridge } from "./api/client"; // Included in client
 
@@ -23,6 +24,8 @@ export default class ObsidianZotFlow extends Plugin {
         await this.loadSettings();
 
         await workerBridge.initialize(this.settings);
+
+        this.registerEditorExtension(ZoteroBlockExtension());
 
         // Ensure MathJax is loaded
         MarkdownRenderer.render(

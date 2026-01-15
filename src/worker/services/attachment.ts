@@ -257,11 +257,52 @@ export class AttachmentService {
                 .attachment()
                 .get();
 
-            const buffer = response.getData();
-            console.log(buffer);
-
             if (response.response.status !== 200)
                 throw new Error(`API Error ${response.response.status}`);
+
+            const buffer = response.getData();
+            // If the response is a zip file, unzip it
+            if (
+                !buffer ||
+                buffer.length < 4 ||
+                buffer[0] !== 0x50 ||
+                buffer[1] !== 0x4b ||
+                buffer[2] !== 0x03 ||
+                buffer[3] !== 0x04
+            ) {
+                const uint8Input = new Uint8Array(buffer);
+
+                const unzipped = await new Promise<Unzipped>(
+                    (resolve, reject) => {
+                        unzip(
+                            uint8Input,
+                            {
+                                filter: (file) => {
+                                    return (
+                                        !file.name.endsWith("/") &&
+                                        !file.name.startsWith(".") &&
+                                        !file.name.endsWith(".prop")
+                                    );
+                                },
+                            },
+                            (err, data) => {
+                                if (err) reject(err);
+                                else resolve(data);
+                            },
+                        );
+                    },
+                );
+
+                console.log(unzipped);
+
+                const targetFileName = Object.keys(unzipped)[0];
+
+                if (!targetFileName) {
+                    throw new Error("Empty ZIP");
+                }
+
+                return unzipped[targetFileName]!.buffer as ArrayBuffer;
+            }
 
             return buffer;
         } catch (e) {

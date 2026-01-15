@@ -163,7 +163,8 @@ export class IframeReaderBridge {
         });
 
         // Create iframe
-        this.iframe = document.createElement("iframe");
+        const doc = this.container.ownerDocument; // Get the document of the container
+        this.iframe = doc.createElement("iframe");
         this.iframe.id = "zotero-reader-iframe";
         this.iframe.style.cssText = "width:100%;height:100%;border:none;";
         const src = getBlobUrls()["reader.html"]!;

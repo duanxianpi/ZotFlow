@@ -57,7 +57,6 @@ export class ParentHost implements IParentProxy {
                 body: request.body,
                 contentType: request.contentType,
             };
-            console.log(req);
             const response = await requestUrl(request);
             const buffer = response.arrayBuffer;
             return Comlink.transfer(
