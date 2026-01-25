@@ -20,7 +20,7 @@ export interface IDBZoteroLibrary extends ZoteroLibrary {
     collectionVersion?: number; // For collection sync, indicates the global version of the library
     itemVersion?: number; // For item sync, indicates the global version of the library
 
-    syncedAt?: string; // ISO String of last successful sync
+    syncedAt: string; // ISO String of last successful sync
 }
 
 // Zotero Collection
@@ -29,13 +29,13 @@ export interface IDBZoteroCollection {
     key: string;
     version: number;
     name: string;
-    parentCollection: false | string;
+    parentCollection: string;
     trashed: 0 | 1; // Whether the collection is trashed
 
     // Sync State
     syncStatus: "synced" | "created" | "updated" | "deleted" | "conflict";
-    syncedAt?: string;
-    syncError?: string;
+    syncedAt: string;
+    syncError: string;
 
     // Raw Payload
     raw: ZoteroCollection;
@@ -54,8 +54,8 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     trashed: 0 | 1; // Whether the item is trashed
 
     // Sorting & Versioning
-    title?: string; // Title (normalized for sorting)
-    collections?: string[]; // Collection Key Array
+    title: string; // Title (normalized for sorting)
+    collections: string[]; // Collection Key Array
     dateAdded: string; // ISO String
     dateModified: string; // ISO String (Zotero Cloud's last modified time)
     version: number; // Zotero Cloud Version (for optimistic locking)
@@ -72,13 +72,17 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
         | "deleted"
         | "ignore"
         | "conflict";
-    syncError?: string;
-    syncedAt?: string;
-    lastAccessedAt?: string;
-    readingProgress?: number;
+    syncError: string;
+    syncedAt: string;
 
     // Annotation Extraction Tracking
     annotationExtractionFileMD5?: string;
+
+    // Citation Key
+    citationKey?: string;
+
+    // lastAccessedAt
+    lastAccessedAt?: string;
 
     // Raw Payload
     raw: ZoteroItem<T>;

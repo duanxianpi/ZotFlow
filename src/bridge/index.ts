@@ -1,57 +1,85 @@
 import * as Comlink from "comlink";
 // @ts-ignore
 import workerCode from "virtual:worker";
-import type { WorkerAPI } from "worker/worker";
-import { PDFProcessWorker } from "./pdf-processor";
-import { ZotFlowSettings } from "settings/types";
 import { ParentHost } from "./parent-host";
-import { AttachmentService } from "worker/services/attachment";
-import { SyncService } from "worker/services/sync";
-import { ZoteroAPIService } from "worker/services/zotero";
-import { WebDavService } from "worker/services/webdav";
+import { PDFProcessWorker } from "./pdf-processor";
+
+import type { WorkerAPI } from "worker/worker";
+import type { ZotFlowSettings } from "settings/types";
+import type { AttachmentService } from "worker/services/attachment";
+import type { SyncService } from "worker/services/sync";
+import type { ZoteroAPIService } from "worker/services/zotero";
+import type { WebDavService } from "worker/services/webdav";
+import type { TreeViewService } from "worker/services/tree-view";
 
 export class WorkerBridge {
-    private worker: Worker;
-    public pdfProcessWorker: PDFProcessWorker;
+    private _worker: Worker;
+    private _pdfProcessWorker: PDFProcessWorker;
 
-    public api: Comlink.Remote<WorkerAPI>;
+    private _api: Comlink.Remote<WorkerAPI>;
 
-    public attachment: AttachmentService;
-    public sync: SyncService;
-    public zotero: ZoteroAPIService;
-    public webdav: WebDavService;
+    private _attachment: AttachmentService;
+    private _sync: SyncService;
+    private _zotero: ZoteroAPIService;
+    private _webdav: WebDavService;
+    private _treeView: TreeViewService;
 
     constructor() {
         // Create a blob from the inlined worker code
         const blob = new Blob([workerCode], { type: "application/javascript" });
         const url = URL.createObjectURL(blob);
 
-        this.worker = new Worker(url);
-        this.api = Comlink.wrap<WorkerAPI>(this.worker);
+        this._worker = new Worker(url);
+        this._api = Comlink.wrap<WorkerAPI>(this._worker);
     }
 
     async initialize(settings: ZotFlowSettings) {
         // Worker settings update / initialization
-        this.api.init(settings, Comlink.proxy(new ParentHost()));
+        this._api.init(settings, Comlink.proxy(new ParentHost()));
 
-        this.attachment = await this.api.attachment;
-        this.sync = await this.api.sync;
-        this.zotero = await this.api.zotero;
-        this.webdav = await this.api.webdav;
+        this._attachment = await this._api.attachment;
+        this._sync = await this._api.sync;
+        this._zotero = await this._api.zotero;
+        this._webdav = await this._api.webdav;
+        this._treeView = await this._api.treeView;
 
         // Init pdf worker
-        this.pdfProcessWorker = new PDFProcessWorker();
-        this.pdfProcessWorker._init();
+        this._pdfProcessWorker = new PDFProcessWorker();
+        this._pdfProcessWorker._init();
 
         console.log("[ZotFlow] Client services initialized.");
     }
 
+    get attachment() {
+        return this._attachment;
+    }
+
+    get sync() {
+        return this._sync;
+    }
+
+    get zotero() {
+        return this._zotero;
+    }
+
+    get webdav() {
+        return this._webdav;
+    }
+
+    get treeView() {
+        return this._treeView;
+    }
+
+    get pdfProcessWorker() {
+        return this._pdfProcessWorker;
+    }
+
     updateSettings(newSettings: ZotFlowSettings) {
-        this.api.updateSettings(newSettings);
+        this._api.updateSettings(newSettings);
     }
 
     terminate() {
-        this.worker.terminate();
+        this._worker.terminate();
     }
 }
 

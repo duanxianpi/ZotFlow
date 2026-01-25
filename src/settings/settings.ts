@@ -1,15 +1,17 @@
 import { App, PluginSettingTab, setIcon, SettingGroup } from "obsidian";
-import MyPlugin from "../main";
 import { SyncSection } from "./sections/sync-section";
 import { WebDavSection } from "./sections/webdav-section";
 import { CacheSection } from "./sections/cache-section";
-import { TabSection } from "./types";
+import { GeneralSection } from "./sections/general-section";
+
+import type ZotFlow from "main";
+import type { TabSection } from "./types";
 
 export class ZotFlowSettingTab extends PluginSettingTab {
-    plugin: MyPlugin;
-    activeTab: TabSection = "sync";
+    plugin: ZotFlow;
+    activeTab: TabSection = "general";
 
-    constructor(app: App, plugin: MyPlugin) {
+    constructor(app: App, plugin: ZotFlow) {
         super(app, plugin);
         this.plugin = plugin;
     }
@@ -46,6 +48,13 @@ export class ZotFlowSettingTab extends PluginSettingTab {
                 const cacheSection = new CacheSection(this.plugin, refreshUI);
                 await cacheSection.render(contentContainer);
                 break;
+            case "general":
+                const generalSection = new GeneralSection(
+                    this.plugin,
+                    refreshUI,
+                );
+                generalSection.render(contentContainer);
+                break;
         }
     }
 
@@ -60,6 +69,7 @@ export class ZotFlowSettingTab extends PluginSettingTab {
             "1px solid var(--background-modifier-border)";
 
         const tabs: { id: TabSection; label: string; icon: string }[] = [
+            { id: "general", label: "General", icon: "settings" },
             { id: "sync", label: "Sync", icon: "user" },
             { id: "webdav", label: "WebDAV", icon: "cloud" },
             { id: "cache", label: "Cache", icon: "database" },

@@ -1,5 +1,5 @@
 export type LibrarySyncMode = "bidirectional" | "readonly" | "ignored";
-export type TabSection = "sync" | "webdav" | "cache";
+export type TabSection = "sync" | "webdav" | "cache" | "general";
 
 export interface LibraryConfig {
     mode: LibrarySyncMode;
@@ -16,6 +16,8 @@ export interface ZotFlowSettings {
     webDavPassword?: string;
     useCache: boolean;
     maxCacheSizeMB: number;
+    sourceNoteTemplatePath: string;
+    sourceNoteFolder: string;
 }
 
 export const DEFAULT_SETTINGS: ZotFlowSettings = {
@@ -26,4 +28,6 @@ export const DEFAULT_SETTINGS: ZotFlowSettings = {
     useWebDav: false,
     useCache: true,
     maxCacheSizeMB: 500,
+    sourceNoteTemplatePath: "",
+    sourceNoteFolder: "",
 };

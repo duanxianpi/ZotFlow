@@ -1,5 +1,5 @@
-import { ZoteroItemDataTypeMap } from "../types/zotero-item";
-import { AnnotationJSON } from "../types/zotero-reader";
+import type { ZoteroItemDataTypeMap } from "types/zotero-item";
+import type { AnnotationJSON } from "types/zotero-reader";
 
 /**
  * @param {Object} json reader compatible annotation data

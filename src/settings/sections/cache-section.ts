@@ -1,11 +1,13 @@
 import { Setting, Notice, SettingGroup } from "obsidian";
-import MyPlugin from "../../main";
-import { db } from "../../db/db";
+
+import { db } from "db/db";
 import { DEFAULT_SETTINGS } from "settings/types";
+
+import type ZotFlow from "main";
 
 export class CacheSection {
     constructor(
-        private plugin: MyPlugin,
+        private plugin: ZotFlow,
         private refreshUI: () => void,
     ) {}
 

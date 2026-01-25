@@ -1,32 +1,9 @@
-import { App } from "obsidian";
-import { ZoteroReaderView, VIEW_TYPE_ZOTERO_READER } from "../ui/reader/view";
-
-/**
- * Open an attachment in the default application.
- * @param item The attachment item to open.
- * @param fallback Optional fallback function to execute if the attachment type is not supported.
- */
-export async function openAttachment(libraryID: number, key: string, app: App) {
-    const leaf = app.workspace.getLeaf("tab");
-
-    await leaf.setViewState({
-        type: VIEW_TYPE_ZOTERO_READER,
-        active: true,
-        state: {
-            libraryID: libraryID,
-            itemKey: key,
-        },
-    });
-
-    app.workspace.revealLeaf(leaf);
-}
-
 /**
  * Get the icon for a given attachment content type.
  * @param contentType The content type of the attachment.
  * @returns The icon name for the attachment.
  */
-export function getAttachmentFileIcon(contentType: string) {
+export function getAttachmentFileIcon(contentType?: string) {
     switch (contentType) {
         case "application/pdf":
             return "file-text";
@@ -44,7 +21,7 @@ export function getAttachmentFileIcon(contentType: string) {
  * @param type The type of the Zotero item.
  * @returns The icon name for the Zotero item.
  */
-export function getAttachmentTypeIcon(type: string): string {
+export function getItemTypeIcon(type: string): string {
     const map: Record<string, string> = {
         annotation: "highlighter",
         artwork: "palette",
@@ -85,7 +62,7 @@ export function getAttachmentTypeIcon(type: string): string {
         thesis: "graduation-cap",
         tvBroadcast: "tv",
         videoRecording: "video",
-        webpage: "globe",
+        webpage: "panel-top",
         default: "file",
     };
     return map[type] || map.default!;

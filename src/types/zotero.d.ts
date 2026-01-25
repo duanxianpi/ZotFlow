@@ -90,6 +90,7 @@ export interface ZoteroItem<T extends ZoteroItemData> {
             name: string;
             links: { [key: string]: { href: string; type: string } };
         };
+        creatorsSummary?: string;
     };
     data: T;
 }

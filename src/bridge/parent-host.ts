@@ -1,27 +1,8 @@
-import { Notice, requestUrl, RequestUrlParam } from "obsidian";
 import * as Comlink from "comlink";
+import { Notice, requestUrl } from "obsidian";
 
-export type NotificationType = "info" | "success" | "warning" | "error";
-
-export interface IRequestResponse {
-    status: number;
-    headers: Record<string, string>;
-    text?: string;
-    arrayBuffer?: ArrayBuffer;
-    json?: any;
-}
-
-export interface IUIResponder {
-    notify(type: NotificationType, message: string): void;
-    updateProgress(message: string): void;
-    updateStatusBar(text: string): void;
-}
-
-export interface INetworkFetcher {
-    request(request: RequestUrlParam): Promise<IRequestResponse>;
-}
-
-export interface IParentProxy extends IUIResponder, INetworkFetcher {}
+import type { IParentProxy, NotificationType, IRequestResponse } from "./types";
+import type { RequestUrlParam } from "obsidian";
 
 export class ParentHost implements IParentProxy {
     private progressNotice: Notice | null = null;

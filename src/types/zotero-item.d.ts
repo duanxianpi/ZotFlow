@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED ZOTERO TYPES
- * Source: schema.json (v39)
+ * Source: schema.json (v40)
  */
 
 interface BaseZoteroItemData {
@@ -305,9 +305,13 @@ interface ConferencePaperData extends BaseZoteroItemData {
   publisher?: string;
   place?: string;
   date?: string;
+  eventPlace?: string;
   volume?: string;
+  issue?: string;
+  numberOfVolumes?: string;
   pages?: string;
   series?: string;
+  seriesNumber?: string;
   DOI?: string;
   ISBN?: string;
   citationKey?: string;
@@ -1073,10 +1077,14 @@ interface StandardData extends BaseZoteroItemData {
   type?: string;
   number?: string;
   versionNumber?: string;
+  edition?: string;
   status?: string;
   date?: string;
   publisher?: string;
   place?: string;
+  partNumber?: string;
+  partTitle?: string;
+  ISBN?: string;
   DOI?: string;
   citationKey?: string;
   url?: string;
@@ -1091,7 +1099,7 @@ interface StandardData extends BaseZoteroItemData {
   rights?: string;
   extra?: string;
   creators?: Array<{
-    creatorType: "author" | "contributor";
+    creatorType: "author" | "editor" | "contributor";
     firstName?: string;
     lastName?: string;
     name?: string;

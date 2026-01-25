@@ -19,7 +19,7 @@ import type {
     ColorScheme,
     ChildEvents,
     AnnotationJSON,
-} from "../../types/zotero-reader";
+} from "types/zotero-reader";
 
 // import {
 // 	createEmbeddableMarkdownEditor,
@@ -31,10 +31,18 @@ import { EditorView } from "@codemirror/view";
 import { Platform } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
 import { connect, WindowMessenger } from "penpal";
-import { ZotFlowSettings } from "../../settings/types";
-import { getBlobUrls } from "../../bundle-assets/inline-assets";
+import { getBlobUrls } from "bundle-assets/inline-assets";
+import { services } from "services/services";
 
-type BridgeState = "idle" | "connecting" | "ready" | "disposing" | "disposed";
+import type { ZotFlowSettings } from "settings/types";
+
+type BridgeState =
+    | "idle"
+    | "connecting"
+    | "bridge-ready"
+    | "reader-ready"
+    | "disposing"
+    | "disposed";
 
 // The bootstrap signature we temporarily install on the CHILD window.
 type DirectBridgeBootstrap = () => {
@@ -47,7 +55,8 @@ export class IframeReaderBridge {
     private iframe: HTMLIFrameElement | null = null;
     private child?: ChildAPI; // Direct reference to Child API (replaces RemoteProxy<ChildAPI>)
     private _state: BridgeState = "idle";
-    private queue: Array<() => Promise<void>> = [];
+    private afterBridgeReadyQueue: Array<() => Promise<void>> = [];
+    private afterReaderReadyQueue: Array<() => Promise<void>> = [];
     private typedListeners = new Map<
         ChildEvents["type"],
         Set<(e: ChildEvents) => void>
@@ -61,10 +70,7 @@ export class IframeReaderBridge {
 
     private token: string | null = null;
 
-    constructor(
-        private container: HTMLElement,
-        private pluginSettings: ZotFlowSettings,
-    ) {}
+    constructor(private container: HTMLElement) {}
 
     /**
      * Listen to specific event types from the child iframe with type safety
@@ -126,7 +132,7 @@ export class IframeReaderBridge {
             },
 
             getPluginSettings: () => {
-                return this.pluginSettings;
+                return services.settings;
             },
 
             // createAnnotationEditor: (
@@ -183,7 +189,11 @@ export class IframeReaderBridge {
 
         this.iframe.onload = () => {
             // Only handle unexpected reloads when we're in a stable state
-            if (this._state === "ready" && this._readerOpts) {
+            if (
+                (this._state === "reader-ready" ||
+                    this._state === "bridge-ready") &&
+                this._readerOpts
+            ) {
                 // It was loaded before, but it was loaded again somehow
                 // We need to reconnect but avoid infinite loop
                 console.warn(
@@ -217,11 +227,11 @@ export class IframeReaderBridge {
                             if (t !== this.token)
                                 throw new Error("Bridge token mismatch");
                             this.child = childAPI;
-                            this._state = "ready";
+                            this._state = "bridge-ready";
 
-                            // Drain queued calls
-                            const tasks = [...this.queue];
-                            this.queue.length = 0;
+                            // Drain after bridge ready queued calls
+                            const tasks = [...this.afterBridgeReadyQueue];
+                            this.afterBridgeReadyQueue.length = 0;
                             for (const t of tasks) await t();
                             if (this.readyPromiseResolver)
                                 this.readyPromiseResolver();
@@ -277,10 +287,22 @@ export class IframeReaderBridge {
         }
     }
 
-    private enqueueOrRun(fn: () => Promise<void>) {
-        if (this._state === "ready") return fn();
+    private runAfterBridgeReady(fn: () => Promise<void>) {
+        if (this._state === "bridge-ready" || this._state === "reader-ready")
+            return fn();
         if (this._state === "connecting") {
-            this.queue.push(fn);
+            this.afterBridgeReadyQueue.push(fn);
+            return Promise.resolve();
+        }
+        return Promise.reject(
+            new Error(`Bridge not ready (state=${this._state})`),
+        );
+    }
+
+    private runAfterReaderReady(fn: () => Promise<void>) {
+        if (this._state === "reader-ready") return fn();
+        if (this._state === "connecting" || this._state === "bridge-ready") {
+            this.afterReaderReadyQueue.push(fn);
             return Promise.resolve();
         }
         return Promise.reject(
@@ -290,25 +312,31 @@ export class IframeReaderBridge {
 
     initReader(opts: CreateReaderOptions) {
         this._readerOpts = opts;
-        return this.enqueueOrRun(async () => {
+        return this.runAfterBridgeReady(async () => {
             await this.child!.initReader(opts);
+            this._state = "reader-ready";
+
+            // Drain after reader ready queued calls
+            const tasks = [...this.afterReaderReadyQueue];
+            this.afterReaderReadyQueue.length = 0;
+            for (const t of tasks) await t();
         });
     }
 
     setColorScheme(colorScheme: ColorScheme) {
-        return this.enqueueOrRun(async () => {
+        return this.runAfterBridgeReady(async () => {
             await this.child!.setColorScheme(colorScheme);
         });
     }
 
     addAnnotation(annotation: AnnotationJSON) {
-        return this.enqueueOrRun(async () => {
+        return this.runAfterReaderReady(async () => {
             await this.child!.addAnnotation(annotation);
         });
     }
 
     navigate(navigationInfo: any) {
-        return this.enqueueOrRun(async () => {
+        return this.runAfterReaderReady(async () => {
             await this.child!.navigate(navigationInfo);
         });
     }

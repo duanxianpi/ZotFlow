@@ -3,8 +3,10 @@ import { ZoteroAPIService } from "./services/zotero";
 import { SyncService } from "./services/sync";
 import { AttachmentService } from "./services/attachment";
 import { WebDavService } from "./services/webdav";
-import { ZotFlowSettings } from "settings/types";
-import { IParentProxy } from "bridge/parent-host";
+import { TreeViewService } from "./services/tree-view";
+
+import type { ZotFlowSettings } from "settings/types";
+import type { IParentProxy } from "bridge/types";
 
 /**
  * Worker API definition
@@ -16,6 +18,7 @@ export interface WorkerAPI {
     sync: SyncService;
     attachment: AttachmentService;
     webdav: WebDavService;
+    treeView: TreeViewService;
     updateSettings(settings: ZotFlowSettings): void;
 }
 
@@ -24,6 +27,7 @@ let _zotero: ZoteroAPIService | undefined;
 let _webdav: WebDavService | undefined;
 let _attachment: AttachmentService | undefined;
 let _sync: SyncService | undefined;
+let _treeView: TreeViewService | undefined;
 
 const exposedApi: WorkerAPI = {
     init: (settings: ZotFlowSettings, parentHost: IParentProxy) => {
@@ -53,6 +57,7 @@ const exposedApi: WorkerAPI = {
             parentHost,
         );
         _sync = new SyncService(_zotero, settings, parentHost);
+        _treeView = new TreeViewService(settings, parentHost);
         console.log("[ZotFlow Worker] Services initialized.");
     },
 
@@ -79,6 +84,12 @@ const exposedApi: WorkerAPI = {
         return Comlink.proxy(_attachment);
     },
 
+    get treeView() {
+        if (!_treeView)
+            throw new Error("[ZotFlow Worker] Worker not initialized");
+        return Comlink.proxy(_treeView);
+    },
+
     updateSettings: (settings: ZotFlowSettings) => {
         if (!_zotero || !_webdav || !_attachment || !_sync) {
             throw new Error("[ZotFlow Worker] Worker not initialized");
@@ -89,6 +100,7 @@ const exposedApi: WorkerAPI = {
         _webdav!.updateSettings(settings);
         _attachment!.updateSettings(settings);
         _sync!.updateSettings(settings);
+        _treeView!.updateSettings(settings);
     },
 };
 

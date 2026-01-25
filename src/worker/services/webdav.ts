@@ -1,15 +1,13 @@
 // WebDAV Client (Worker Side)
 
-import { IParentProxy } from "bridge/parent-host";
-import { ZotFlowSettings } from "settings/types";
+import type { IParentProxy } from "bridge/types";
+import type { ZotFlowSettings } from "settings/types";
 
 export class WebDavService {
     constructor(
         private settings: ZotFlowSettings,
         private parentHost: IParentProxy,
-    ) {
-        this.updateSettings(settings);
-    }
+    ) {}
 
     updateSettings(settings: ZotFlowSettings) {
         this.settings = settings;

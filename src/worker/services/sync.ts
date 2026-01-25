@@ -1,13 +1,10 @@
 import { db } from "db/db";
 import { ZoteroAPIService } from "./zotero";
-import {
-    normalizeItem,
-    normalizeCollection,
-    toZoteroDate,
-} from "utils/normalize";
-import { ZotFlowSettings } from "settings/types";
-import { IParentProxy } from "bridge/parent-host";
+import { normalizeItem, normalizeCollection, toZoteroDate } from "db/normalize";
 import pLimit from "p-limit";
+
+import type { ZotFlowSettings } from "settings/types";
+import type { IParentProxy } from "bridge/types";
 
 const PULL_BULK_SIZE = 100;
 const UPDATE_BULK_SIZE = 50;
@@ -289,7 +286,10 @@ export class SyncService {
         parentKey: string,
     ): Promise<any[]> {
         const children = await db.collections
-            .where({ libraryID: libraryID, parentCollection: parentKey })
+            .where({
+                libraryID: libraryID,
+                parentCollection: parentKey,
+            })
             .toArray();
 
         if (children.length === 0) return [];
@@ -511,7 +511,7 @@ export class SyncService {
         ];
 
         const dirtyItems = await db.items
-            .where("[libraryID+syncStatus]")
+            .where(["libraryID", "syncStatus"])
             .anyOf(dirtyParams)
             .toArray();
 

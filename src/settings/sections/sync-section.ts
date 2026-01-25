@@ -5,16 +5,17 @@ import {
     setIcon,
     SettingGroup,
 } from "obsidian";
-import MyPlugin from "main";
 import { db } from "db/db";
-import { ZoteroGroup } from "types/zotero";
-import { LibrarySyncMode } from "settings/types";
-import { IDBZoteroKey } from "types/db-schema";
 import { workerBridge } from "bridge";
+
+import type ZotFlow from "main";
+import type { ZoteroGroup } from "types/zotero";
+import type { IDBZoteroKey } from "types/db-schema";
+import type { LibrarySyncMode } from "settings/types";
 
 export class SyncSection {
     constructor(
-        private plugin: MyPlugin,
+        private plugin: ZotFlow,
         private refreshUI: () => void,
     ) {}
 
@@ -60,7 +61,7 @@ export class SyncSection {
                     } else {
                         text.inputEl.type = "text";
                     }
-                    text.inputEl.style.width = "200px";
+                    text.inputEl.size = 30;
                 });
 
             // Verify Button
@@ -170,10 +171,10 @@ export class SyncSection {
             const typeCell = row.createEl("td");
             typeCell.style.padding = "10px";
             typeCell.style.fontSize = "var(--font-ui-small)";
-            setIcon(
-                typeCell.createSpan(),
-                lib.type === "user" ? "user" : "users",
-            );
+            typeCell.style.display = "flex";
+            typeCell.style.alignItems = "center";
+            typeCell.style.gap = "6px";
+            setIcon(typeCell, lib.type === "user" ? "user" : "users");
             typeCell.createSpan({
                 text: lib.type === "user" ? " Personal" : " Group",
             });
@@ -350,6 +351,7 @@ export class SyncSection {
                     name: "My Personal Library",
                     collectionVersion: 0,
                     itemVersion: 0,
+                    syncedAt: new Date().toISOString().split(".")[0] + "Z",
                 });
             }
 
@@ -362,6 +364,7 @@ export class SyncSection {
                         name: group.name,
                         collectionVersion: 0,
                         itemVersion: 0,
+                        syncedAt: new Date().toISOString().split(".")[0] + "Z",
                     });
                 } else if (libState.name !== group.name) {
                     libState.name = group.name;

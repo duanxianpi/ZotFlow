@@ -1,14 +1,15 @@
 // Worker-side File Manager
-import { unzip, Unzipped } from "fflate";
-import { db } from "../../db/db";
-import { IDBZoteroFile, IDBZoteroItem } from "../../types/db-schema";
+import { unzip } from "fflate";
+import { db } from "db/db";
 import SparkMD5 from "spark-md5";
 import { WebDavService } from "./webdav";
-import { ZotFlowSettings } from "../../settings/types";
-import { AttachmentData } from "../../types/zotero-item";
-import { IParentProxy } from "bridge/parent-host";
 import { ZoteroAPIService } from "./zotero";
 
+import type { Unzipped } from "fflate";
+import type { ZotFlowSettings } from "settings/types";
+import type { AttachmentData } from "types/zotero-item";
+import type { IParentProxy } from "bridge/types";
+import type { IDBZoteroFile, IDBZoteroItem } from "types/db-schema";
 /**
  * Attachment management service for ZotFlow (Worker Side).
  * Handles the attachment download process.
@@ -251,25 +252,21 @@ export class AttachmentService {
         item: IDBZoteroItem<AttachmentData>,
     ): Promise<ArrayBuffer | null> {
         try {
-            const response = await this.zotero.client
-                .library(item.raw.library.type, item.libraryID)
-                .items(item.key)
-                .attachment()
-                .get();
+            const response = await fetch(
+                `https://api.zotero.org/users/${item.libraryID}/items/${item.key}/file`,
+                {
+                    headers: {
+                        "Zotero-API-Key": this.settings.zoteroApiKey,
+                    },
+                },
+            );
 
-            if (response.response.status !== 200)
-                throw new Error(`API Error ${response.response.status}`);
+            if (response.status !== 200)
+                throw new Error(`API Error ${response.status}`);
 
-            const buffer = response.getData();
+            const buffer = await response.arrayBuffer();
             // If the response is a zip file, unzip it
-            if (
-                !buffer ||
-                buffer.length < 4 ||
-                buffer[0] !== 0x50 ||
-                buffer[1] !== 0x4b ||
-                buffer[2] !== 0x03 ||
-                buffer[3] !== 0x04
-            ) {
+            if (response.headers.get("content-type") === "application/zip") {
                 const uint8Input = new Uint8Array(buffer);
 
                 const unzipped = await new Promise<Unzipped>(
@@ -292,8 +289,6 @@ export class AttachmentService {
                         );
                     },
                 );
-
-                console.log(unzipped);
 
                 const targetFileName = Object.keys(unzipped)[0];
 

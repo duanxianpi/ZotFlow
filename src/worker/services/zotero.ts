@@ -1,5 +1,7 @@
-import { ZoteroKey } from "../../types/zotero";
-import api, { ApiChain } from "zotero-api-client";
+import api from "zotero-api-client";
+
+import type { ZoteroKey } from "types/zotero";
+import type { ApiChain } from "zotero-api-client";
 
 export class ZoteroAPIService {
     private _client: ApiChain;

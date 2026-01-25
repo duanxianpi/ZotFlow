@@ -15,6 +15,7 @@
 		"isolatedModules": true,
 		"strictNullChecks": true,
 		"strictBindCallApply": true,
+		"jsx": "react-jsx",
 		"allowSyntheticDefaultImports": true,
 		"useUnknownInCatchVariables": true,
 		"lib": [
@@ -22,7 +23,8 @@
 			"ES5",
 			"ES6",
 			"ES7"
-		]
+		],
+		"verbatimModuleSyntax": true
 	},
 	"include": [
 		"src/**/*.ts"

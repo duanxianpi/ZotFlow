@@ -1,16 +1,21 @@
-import { ItemView, WorkspaceLeaf, Notice, ViewStateResult } from "obsidian";
+import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import { workerBridge } from "bridge";
 import { IframeReaderBridge } from "./bridge";
-import { AnnotationJSON, ColorScheme } from "types/zotero-reader";
-import { CreateReaderOptions } from "types/zotero-reader";
 import { db } from "db/db";
-import { IDBZoteroItem, IDBZoteroKey } from "types/db-schema";
-import { AttachmentData, AnnotationData } from "types/zotero-item";
-import { ZotFlowSettings } from "settings/types";
-import { annotationItemFromJSON } from "utils/annotation";
-import { toZoteroDate } from "utils/normalize";
+import { annotationItemFromJSON } from "db/annotation";
+import { toZoteroDate } from "db/normalize";
+import { services } from "services/services";
 
-export const VIEW_TYPE_ZOTERO_READER = "zotflow-zotero-reader-view";
+import type { ViewStateResult } from "obsidian";
+import type { AttachmentData, AnnotationData } from "types/zotero-item";
+import type { IDBZoteroItem, IDBZoteroKey } from "types/db-schema";
+import type {
+    CreateReaderOptions,
+    AnnotationJSON,
+    ColorScheme,
+} from "types/zotero-reader";
+
+export const ZOTERO_READER_VIEW_TYPE = "zotflow-zotero-reader-view";
 
 interface ReaderViewState extends Record<string, unknown> {
     libraryID: number;
@@ -19,7 +24,6 @@ interface ReaderViewState extends Record<string, unknown> {
 }
 
 export class ZoteroReaderView extends ItemView {
-    private settings: ZotFlowSettings;
     private attachmentItem: IDBZoteroItem<AttachmentData>;
     private readerOptions: Partial<CreateReaderOptions>;
     private keyInfo: IDBZoteroKey;
@@ -28,13 +32,12 @@ export class ZoteroReaderView extends ItemView {
     private colorSchemeObserver?: MutationObserver;
     private colorScheme: ColorScheme = "light"; // Default to light
 
-    constructor(leaf: WorkspaceLeaf, settings: ZotFlowSettings) {
+    constructor(leaf: WorkspaceLeaf) {
         super(leaf);
-        this.settings = settings;
     }
 
     getViewType() {
-        return VIEW_TYPE_ZOTERO_READER;
+        return ZOTERO_READER_VIEW_TYPE;
     }
 
     getDisplayText() {
@@ -49,13 +52,15 @@ export class ZoteroReaderView extends ItemView {
         state: ReaderViewState,
         result: ViewStateResult,
     ): Promise<void> {
-        const _keyInfo = await db.keys.get(this.settings.zoteroApiKey);
+        const _keyInfo = await db.keys.get(services.settings.zoteroApiKey);
 
         if (!_keyInfo) {
             console.error(
-                `[ZotFlow] Key ${this.settings.zoteroApiKey} doesn't exist`,
+                `[ZotFlow] Key ${services.settings.zoteroApiKey} doesn't exist`,
             );
-            throw new Error(`Key ${this.settings.zoteroApiKey} doesn't exist`);
+            throw new Error(
+                `Key ${services.settings.zoteroApiKey} doesn't exist`,
+            );
         }
 
         if (state.itemKey) {
@@ -106,7 +111,7 @@ export class ZoteroReaderView extends ItemView {
         try {
             // Create bridge once
             if (!this.bridge) {
-                this.bridge = new IframeReaderBridge(container, this.settings);
+                this.bridge = new IframeReaderBridge(container);
 
                 // Register event listeners
                 this.bridge.onEventType("error", (evt) => {
@@ -183,7 +188,7 @@ export class ZoteroReaderView extends ItemView {
             );
 
             // Initialize Reader if ready
-            if (this.bridge.state === "ready") {
+            if (this.bridge.state === "bridge-ready") {
                 const opts = {
                     ...this.readerOptions,
                     colorScheme: this.colorScheme,
@@ -239,6 +244,12 @@ export class ZoteroReaderView extends ItemView {
         }
     }
 
+    readerNavigate(navigationInfo: any) {
+        if (!this.bridge) return;
+
+        this.bridge.navigate(navigationInfo);
+    }
+
     getState(): ReaderViewState {
         return {
             libraryID: this.attachmentItem.libraryID,
@@ -276,11 +287,10 @@ export class ZoteroReaderView extends ItemView {
 
                 // Delete existing external annotations for this item
                 await db.items
-                    .where(["libraryID", "parentItem"])
-                    .equals([
-                        this.attachmentItem.libraryID,
-                        this.attachmentItem.key,
-                    ])
+                    .where({
+                        libraryID: this.attachmentItem.libraryID,
+                        parentItem: this.attachmentItem.key,
+                    })
                     .filter(
                         (i) =>
                             (i as IDBZoteroItem<AnnotationData>).raw.data
@@ -369,6 +379,8 @@ export class ZoteroReaderView extends ItemView {
                     searchCreators: [],
                     searchTags: [],
                     syncStatus: !json.isExternal ? "created" : "ignore",
+                    syncedAt: now,
+                    syncError: "",
                     raw: {
                         key,
                         version: 0,
@@ -436,7 +448,7 @@ export class ZoteroReaderView extends ItemView {
         item: IDBZoteroItem<AttachmentData>,
     ): Promise<AnnotationJSON[]> {
         // Get current user from settings/DB
-        const apiKey = this.settings.zoteroApiKey;
+        const apiKey = services.settings.zoteroApiKey;
         const currentUserKey = await db.keys.get(apiKey);
         const currentUser = currentUserKey
             ? {
@@ -466,8 +478,11 @@ export class ZoteroReaderView extends ItemView {
 
         // Zotero Annotations
         const annotations = (await db.items
-            .where(["libraryID", "parentItem", "itemType"])
-            .equals([item.libraryID, item.key, "annotation"])
+            .where({
+                libraryID: item.libraryID,
+                parentItem: item.key,
+                itemType: "annotation",
+            })
             .toArray()) as IDBZoteroItem<AnnotationData>[];
 
         console.log("Annotations:", annotations);

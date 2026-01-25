@@ -1,10 +1,11 @@
 import { Setting, Notice, setIcon, SettingGroup } from "obsidian";
-import MyPlugin from "main";
 import { workerBridge } from "bridge";
+
+import type ZotFlow from "main";
 
 export class WebDavSection {
     constructor(
-        private plugin: MyPlugin,
+        private plugin: ZotFlow,
         private refreshUI: () => void,
     ) {}
 

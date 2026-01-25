@@ -42,6 +42,15 @@ const inlineWorkerPlugin = {
                 target: "es2018",
                 minify: prod,
                 plugins: [], // No plugins for the worker itself to avoid recursion if not needed
+                alias: {
+                    types: path.resolve("src/types"),
+                    utils: path.resolve("src/utils"),
+                    services: path.resolve("src/services"),
+                    settings: path.resolve("src/settings"),
+                    bridge: path.resolve("src/bridge"),
+                    db: path.resolve("src/db"),
+                },
+                external: ["obsidian"],
             });
 
             const workerCode = result.outputFiles[0].text;
@@ -148,11 +157,6 @@ const context = await esbuild.context({
     },
     entryPoints: ["src/main.ts"],
     bundle: true,
-    alias: {
-        "readable-stream": "stream-browserify",
-        stream: "stream-browserify",
-        jszip: "jszip/lib/index",
-    },
     external: [
         "obsidian",
         "electron",

@@ -1,5 +1,7 @@
-import Dexie, { Table } from "dexie";
-import {
+import Dexie from "dexie";
+
+import type { Table } from "dexie";
+import type {
     IDBZoteroFile,
     IDBZoteroCollection,
     IDBZoteroLibrary,
@@ -33,9 +35,8 @@ export class ZotFlowDB extends Dexie {
             // Zotero Collections
             collections: `
                 &[libraryID+key], 
-                [libraryID+parentCollection],
-                [libraryID+syncStatus],
-                [libraryID+trashed]
+                [libraryID+trashed],
+                [libraryID+syncStatus]
             `,
 
             // Zotero Items
@@ -47,7 +48,6 @@ export class ZotFlowDB extends Dexie {
                 *collections, 
                 *searchCreators, 
                 *searchTags, 
-                lastAccessedAt,
                 dateModified
             `,
 

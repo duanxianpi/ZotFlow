@@ -6,10 +6,11 @@
  * - Extract full-text.
  * - Extract PDF file text structure that can be fed into recognizer-server.
  */
-import { annotationItemFromJSON } from "utils/annotation";
-import { AnnotationData } from "types/zotero-item";
+import { annotationItemFromJSON } from "db/annotation";
 import { getBlobUrls } from "bundle-assets/inline-assets";
-import { IDBZoteroItem } from "types/db-schema";
+
+import type { AnnotationData } from "types/zotero-item";
+import type { IDBZoteroItem } from "types/db-schema";
 
 interface PDFWorkerConfig {
     pdfWorkerURL: string;

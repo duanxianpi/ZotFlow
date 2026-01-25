@@ -1,6 +1,6 @@
-import { ZoteroItemData } from "types/zotero-item";
-import { IDBZoteroCollection, AnyIDBZoteroItem } from "../types/db-schema";
-import { ZoteroCollection, AnyZoteroItem } from "types/zotero";
+import type { ZoteroItemData } from "types/zotero-item";
+import type { IDBZoteroCollection, AnyIDBZoteroItem } from "types/db-schema";
+import type { ZoteroCollection, AnyZoteroItem } from "types/zotero";
 
 /**
  * Normalize a raw Zotero collection from the API into our IDB schema.
@@ -16,13 +16,19 @@ export function normalizeCollection(
         libraryID: libraryID,
         version: raw.version,
         name: raw.data.name,
-        parentCollection: raw.data.parentCollection || false,
+        parentCollection: raw.data.parentCollection || "",
         trashed: raw.data.deleted ? 1 : 0,
         syncStatus: "synced",
+        syncError: "",
         syncedAt: new Date().toISOString(),
         raw: raw,
     };
     return collection;
+}
+
+function extractCitationKey(extra?: string) {
+    const citationKey = extra?.match(/Citation Key: (\w+)/)?.[1];
+    return citationKey;
 }
 
 /**
@@ -41,17 +47,21 @@ export function normalizeItem(
 ): AnyIDBZoteroItem {
     // Safety check for title
     let title = "";
+    let citationKey;
 
     // We can access common properties
     const commonData = raw.data as ZoteroItemData;
 
+    // Normalize title
     if (raw.data.itemType === "attachment") {
         title = raw.data.filename || raw.data.title || "";
     } else if (raw.data.itemType === "note") {
         const plainText = raw.data.note
             ? raw.data.note.replace(/<[^>]+>/g, " ")
             : "";
-        title = plainText.slice(0, 50).trim() || `Note ${raw.data.key}`;
+        title =
+            (plainText.split("\n")[0] ?? plainText).slice(0, 50).trim() ||
+            `Note ${raw.data.key}`;
     } else if (raw.data.itemType !== "annotation") {
         // Exclude annotation which doesn't have title
         // For other types that might have title
@@ -95,8 +105,11 @@ export function normalizeItem(
         key: raw.data.key,
         libraryID: libraryID,
         itemType: raw.data.itemType,
-        parentItem: raw.data.parentItem,
-        collections: raw.data.collections,
+        citationKey:
+            (raw.data as any).citationKey ||
+            extractCitationKey((raw.data as any).extra),
+        parentItem: raw.data.parentItem || "",
+        collections: raw.data.collections ?? [],
         title: title,
         trashed: raw.data.deleted ? 1 : 0,
         dateAdded: raw.data.dateAdded,
@@ -104,10 +117,9 @@ export function normalizeItem(
         version: raw.data.version,
         searchCreators: searchCreators,
         searchTags: searchTags,
+        syncError: "",
         syncStatus: "synced",
         syncedAt: new Date().toISOString(),
-        readingProgress: 0,
-
         raw: raw,
     } as AnyIDBZoteroItem;
 

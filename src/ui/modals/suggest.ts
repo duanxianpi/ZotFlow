@@ -1,12 +1,12 @@
 import { App, SuggestModal, setIcon, Notice } from "obsidian";
 import { db, getCombinations } from "db/db";
-import { AnyIDBZoteroItem } from "types/db-schema";
-import { AttachmentSelectModal } from "./attachment-select";
-import { getAttachmentTypeIcon, openAttachment } from "utils/attachment";
-import { AttachmentData } from "types/zotero-item";
-import { IDBZoteroItem } from "types/db-schema";
+import type { AnyIDBZoteroItem } from "types/db-schema";
+import { getItemTypeIcon } from "ui/icons";
+import { openAttachment } from "ui/viewer";
+import type { AttachmentData } from "types/zotero-item";
+import type { IDBZoteroItem } from "types/db-schema";
 import { Zotero_Item_Types } from "types/zotero-item-const";
-import { ZotFlowSettings } from "settings/types";
+import type { ZotFlowSettings } from "settings/types";
 
 interface SearchHeader {
     isHeader: true;
@@ -151,7 +151,7 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
 
         // Icon
         const iconContainer = el.createDiv({ cls: "zotflow-item-icon" });
-        setIcon(iconContainer, getAttachmentTypeIcon(zItem.itemType));
+        setIcon(iconContainer, getItemTypeIcon(zItem.itemType));
 
         // Main Content Container
         const contentContainer = el.createDiv({ cls: "zotflow-item-content" });
@@ -245,15 +245,6 @@ export class ZoteroSearchModal extends SuggestModal<SuggestionItem> {
                 this.app,
             );
             this.close();
-        }
-        // If there are multiple attachments, open the attachment select modal
-        else {
-            new AttachmentSelectModal(
-                this.app,
-                zItem,
-                attachments,
-                this,
-            ).open();
         }
     }
 
