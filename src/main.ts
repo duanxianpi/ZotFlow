@@ -1,3 +1,4 @@
+import * as Comlink from "comlink";
 import {
     addIcon,
     App,
@@ -36,7 +37,7 @@ export default class ZotFlow extends Plugin {
         services.initialize(this.app, this.settings);
 
         // Initialize worker bridge
-        await workerBridge.initialize(this.settings);
+        await workerBridge.initialize(this.settings, this.app);
 
         // Register views
         this.registerView(
@@ -69,13 +70,11 @@ export default class ZotFlow extends Plugin {
             new Component(),
         );
 
-        // this.addRibbonIcon(
-        //     "library",
-        //     "ZotFlow: Open Library",
-        //     (evt: MouseEvent) => {
-        //         new ZoteroSearchModal(this.app).open();
-        //     },
-        // );
+        this.addRibbonIcon(
+            "library",
+            "ZotFlow: Test",
+            async (evt: MouseEvent) => {},
+        );
 
         this.addRibbonIcon(
             "sync",
@@ -195,7 +194,7 @@ export default class ZotFlow extends Plugin {
             }
 
             if (type === "open-note") {
-                await services.note.createOrOpenNote(libID, key, false);
+                await workerBridge.note.openNote(libID, key);
             } else if (type === "open-attachment") {
                 await openAttachment(libID, key, this.app, navigation);
             } else {

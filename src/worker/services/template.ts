@@ -1,6 +1,4 @@
-import { App, Notice, TFile } from "obsidian";
 import { Liquid } from "liquidjs";
-import { SettingsService } from "./setting-service";
 import type { AnyIDBZoteroItem, IDBZoteroItem } from "types/db-schema";
 import { db, getCombinations } from "db/db";
 import type {
@@ -17,10 +15,8 @@ import type {
 import type { ZotFlowSettings } from "settings/types";
 
 const DEFAULT_ITEM_TEMPLATE = `---
-zotflow-locked: true
-zotero-key: {{ item.key }}
 citationKey: {{ item.citationKey }}
-title: "{{ item.title | replace: '"', '\"' }}"
+title: {{ item.title | json }}
 itemType: {{ item.itemType }}
 creators: [{% for c in item.creators %}"{{ c.name }}"{% unless forloop.last %}, {% endunless %}{% endfor %}]
 publication: "{{ item.publicationTitle | default: item.publisher }}"
@@ -50,6 +46,11 @@ doi: {{ item.DOI }}
 {% endfor %}
 {% endif -%}
 
+{%- capture newline %}
+{% endcapture -%}
+{%- capture quote_string %}{{ newline }}> {% endcapture -%}
+{%- capture quote_string_2 %}{{ newline }}> >{% endcapture -%}
+
 {% if item.attachments.length > 0 -%}
 ## Annotations
 {% for attachment in item.attachments -%}
@@ -57,11 +58,15 @@ doi: {{ item.DOI }}
 ### {{ attachment.filename }}
 {% for annotation in attachment.annotations %}
 > [!zotflow-{{ annotation.type }}-{{ annotation.color }}] [{{ attachment.filename }}, p.{{ annotation.pageLabel }}](obsidian://zotflow?type=open-attachment&libraryID={{ attachment.libraryID }}&key={{ attachment.key }}&navigation={{ annotation.key | process_nav_info}})
-> > {{ annotation.text }}
+{% if annotation.type == "ink" or annotation.type == "image"-%}
+> > ![[{{settings.annotationImageFolder}}/{{ annotation.key }}.png]]
+{%- else -%}
+> > {{ annotation.text | replace: newline, quote_string_2 }}
+{%- endif %}
 {% if annotation.comment != "" -%}
 >
-> {{ annotation.comment }}
-{% endif -%}^{{ annotation.key }}
+> {{ annotation.comment | replace: newline, quote_string }}
+{% endif %}^{{ annotation.key }}
 {% endfor %}
 {% endif %}
 {% endfor %}
@@ -69,12 +74,10 @@ doi: {{ item.DOI }}
 `;
 
 export class TemplateService {
-    private app: App;
     private settings: ZotFlowSettings;
     private engine: Liquid;
 
-    constructor(app: App, settings: ZotFlowSettings) {
-        this.app = app;
+    constructor(settings: ZotFlowSettings) {
         this.settings = settings;
         this.initialize();
     }
@@ -95,49 +98,114 @@ export class TemplateService {
         this.settings = newSettings;
     }
 
-    async renderItem(item: AnyIDBZoteroItem): Promise<string> {
+    async renderItem(
+        item: AnyIDBZoteroItem,
+        templateContent: string | null,
+    ): Promise<string> {
         const context = await this.prepareItemContext(item);
 
         try {
-            let template: string;
-
-            const templateFile = this.app.vault.getAbstractFileByPath(
-                this.settings.sourceNoteTemplatePath,
-            );
-            if (!templateFile || !(templateFile instanceof TFile)) {
-                template = DEFAULT_ITEM_TEMPLATE;
-            } else {
-                template = await this.app.vault.read(templateFile);
-            }
-
-            // Make sure zotflow-locked: true is in the frontmatter
-            const frontmatterRegex = /---\s*([\s\S]*?)\s*---/;
-            const frontmatterMatch = template.match(frontmatterRegex);
-            if (frontmatterMatch) {
-                const frontmatter = frontmatterMatch[1]!;
-                if (frontmatter.includes("zotflow-locked: false")) {
-                    template = template.replace(
-                        "zotflow-locked: false",
-                        "zotflow-locked: true",
-                    );
-                } else if (!frontmatter.includes("zotflow-locked: true")) {
-                    template = template.replace(
-                        frontmatterRegex,
-                        `---\nzotflow-locked: true\n${frontmatter}\n---`,
-                    );
-                }
-            }
+            let template = templateContent || DEFAULT_ITEM_TEMPLATE;
+            template = this.ensureMandatoryFrontmatter(template);
 
             const res = await this.engine.parseAndRender(template, context);
             return res as string;
         } catch (err) {
             console.error("ZotFlow: Template rendering error", err);
-            new Notice("ZotFlow: Template rendering error. Check console.");
+            // We cannot show Notice here directly, caller (NoteService) should handle error or use parentHost to notify
             throw err;
         }
     }
 
-    private sanitizeString(str: string): string {
+    private ensureMandatoryFrontmatter(template: string): string {
+        const frontmatterRegex = /^---\s*([\s\S]*?)\s*---/;
+        const match = template.match(frontmatterRegex);
+
+        let frontmatterContent = "";
+        let body = template;
+
+        if (match) {
+            frontmatterContent = match[1] || "";
+            body = template.substring(match[0].length);
+        } else {
+            // If no frontmatter, just add empty one at start
+            body = template;
+        }
+
+        const lines = frontmatterContent.split("\n");
+        const newLines: string[] = [];
+
+        // Mandatory keys map: key -> required complete line
+        const mandatory = new Map([
+            ["zotflow-locked", "zotflow-locked: true"],
+            ["zotero-key", "zotero-key: {{ item.key }}"],
+            ["item-version", "item-version: {{ item.version }}"],
+        ]);
+
+        const foundKeys = new Set<string>();
+
+        // Process existing lines
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) {
+                // Preserve empty lines if needed, or just skip.
+                // To behave like previous code which reconstructed, we can skip or add empty.
+                // Let's add empty if it's not the very beginning/end to preserve spacing if desired,
+                // but checking for "ensured" fields is priority.
+                if (
+                    newLines.length > 0 &&
+                    newLines[newLines.length - 1] !== ""
+                ) {
+                    newLines.push("");
+                }
+                continue;
+            }
+
+            const colonIndex = trimmed.indexOf(":");
+            if (colonIndex !== -1) {
+                const key = trimmed.substring(0, colonIndex).trim();
+                if (mandatory.has(key)) {
+                    // Replace with mandatory value
+                    newLines.push(mandatory.get(key)!);
+                    foundKeys.add(key);
+                } else {
+                    newLines.push(line);
+                }
+            } else {
+                newLines.push(line);
+            }
+        }
+
+        // Prepend missing mandatory keys
+        const missingLines: string[] = [];
+        // Intentionally checking in reverse order of desired appearance if we were unshifting,
+        // but here we are pushing to missingLines which will be prepended.
+        // Let's decide on an order: zotflow-locked, zotero-key, item-version.
+        // We want them at the top.
+
+        if (!foundKeys.has("item-version")) {
+            missingLines.unshift(mandatory.get("item-version")!);
+        }
+        if (!foundKeys.has("zotero-key")) {
+            missingLines.unshift(mandatory.get("zotero-key")!);
+        }
+        if (!foundKeys.has("zotflow-locked")) {
+            missingLines.unshift(mandatory.get("zotflow-locked")!);
+        }
+
+        const finalFrontmatter = [...missingLines, ...newLines]
+            .join("\n")
+            .trim();
+
+        // Construct final template
+        // Ensure strictly one newline after frontmatter
+        const cleanBody = body.startsWith("\n") ? body : `\n${body}`;
+        return `---
+${finalFrontmatter}
+---${cleanBody}`;
+    }
+
+    private sanitizeQuotesString(str: string): string {
         // Escape >, < into \>, \<
         return str.replace(/>/g, "\\>").replace(/</g, "\\<");
     }
@@ -145,6 +213,7 @@ export class TemplateService {
     public async prepareItemContext(item: AnyIDBZoteroItem): Promise<any> {
         return {
             item: await this.mapToItemContext(item),
+            settings: this.settings,
         };
     }
 
@@ -194,6 +263,7 @@ export class TemplateService {
 
         return {
             key: item.key,
+            version: item.version,
             libraryID: item.libraryID,
             citationKey: item.citationKey || "",
             notes,
@@ -247,8 +317,8 @@ export class TemplateService {
             libraryID: item.libraryID,
             type: data.annotationType,
             authorName: data.annotationAuthorName,
-            text: this.sanitizeString(data.annotationText || ""),
-            comment: this.sanitizeString(data.annotationComment),
+            text: this.sanitizeQuotesString(data.annotationText || ""),
+            comment: this.sanitizeQuotesString(data.annotationComment),
             color: data.annotationColor,
             pageLabel: data.annotationPageLabel,
             tags: data.tags || [],
@@ -260,17 +330,21 @@ export class TemplateService {
     public async mapToAttachmentContext(
         item: IDBZoteroItem<AttachmentData>,
     ): Promise<AttachmentTemplateContext> {
-        const children = (await db.items
-            .where(["libraryID", "parentItem", "itemType", "trashed"])
-            .anyOf(
-                getCombinations([
-                    [item.libraryID],
-                    [item.key],
-                    ["annotation"],
-                    [0],
-                ]),
-            )
-            .toArray()) as IDBZoteroItem<AnnotationData>[];
+        const children = (
+            await db.items
+                .where(["libraryID", "parentItem", "itemType", "trashed"])
+                .anyOf(
+                    getCombinations([
+                        [item.libraryID],
+                        [item.key],
+                        ["annotation"],
+                        [0],
+                    ]),
+                )
+                .toArray()
+        ).filter(
+            (i) => i.syncStatus !== "deleted",
+        ) as IDBZoteroItem<AnnotationData>[];
 
         const annotations = await Promise.all(
             children.map((ann) => this.mapToAnnotationContext(ann)),

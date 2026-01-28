@@ -42,14 +42,6 @@ const inlineWorkerPlugin = {
                 target: "es2018",
                 minify: prod,
                 plugins: [], // No plugins for the worker itself to avoid recursion if not needed
-                alias: {
-                    types: path.resolve("src/types"),
-                    utils: path.resolve("src/utils"),
-                    services: path.resolve("src/services"),
-                    settings: path.resolve("src/settings"),
-                    bridge: path.resolve("src/bridge"),
-                    db: path.resolve("src/db"),
-                },
                 external: ["obsidian"],
             });
 

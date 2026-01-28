@@ -18,6 +18,8 @@ export interface ZotFlowSettings {
     maxCacheSizeMB: number;
     sourceNoteTemplatePath: string;
     sourceNoteFolder: string;
+    autoImportAnnotationImages: boolean;
+    annotationImageFolder: string;
 }
 
 export const DEFAULT_SETTINGS: ZotFlowSettings = {
@@ -30,4 +32,6 @@ export const DEFAULT_SETTINGS: ZotFlowSettings = {
     maxCacheSizeMB: 500,
     sourceNoteTemplatePath: "",
     sourceNoteFolder: "",
+    autoImportAnnotationImages: false,
+    annotationImageFolder: "",
 };

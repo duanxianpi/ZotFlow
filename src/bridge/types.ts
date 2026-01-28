@@ -21,4 +21,17 @@ export interface INetworkFetcher {
     request(request: any): Promise<IRequestResponse>;
 }
 
-export interface IParentProxy extends IUIResponder, INetworkFetcher {}
+export interface IParentProxy extends IUIResponder, INetworkFetcher {
+    readTextFile(path: string): Promise<string | null>;
+    writeTextFile(path: string, content: string): Promise<void>;
+    writeBinaryFile(path: string, buffer: ArrayBuffer): Promise<void>;
+    checkFile(path: string): Promise<{
+        exists: boolean;
+        path: string;
+        frontmatter?: Record<string, any>;
+    }>;
+    deleteFile(path: string): Promise<void>;
+    openFile(path: string, newLeaf: boolean): Promise<void>;
+    getFileByKey(key: string): Promise<string | null>;
+    indexFile(path: string): Promise<void>;
+}

@@ -253,7 +253,7 @@ export class AttachmentService {
     ): Promise<ArrayBuffer | null> {
         try {
             const response = await fetch(
-                `https://api.zotero.org/users/${item.libraryID}/items/${item.key}/file`,
+                `https://api.zotero.org/${item.raw.library.type}s/${item.libraryID}/items/${item.key}/file`,
                 {
                     headers: {
                         "Zotero-API-Key": this.settings.zoteroApiKey,

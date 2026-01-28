@@ -1,16 +1,10 @@
-/**
- * The pdf worker is not the pdf.worker.js from pdf.js, it is from
- * https://github.com/zotero/pdf-worker
- * - Import/export annotations.
- * - Extract general PDF file information.
- * - Extract full-text.
- * - Extract PDF file text structure that can be fed into recognizer-server.
- */
-import { annotationItemFromJSON } from "db/annotation";
-import { getBlobUrls } from "bundle-assets/inline-assets";
-
-import type { AnnotationData } from "types/zotero-item";
+import * as Comlink from "comlink";
+import { db } from "db/db";
+import type { ZotFlowSettings } from "settings/types";
+import type { IParentProxy } from "bridge/types";
 import type { IDBZoteroItem } from "types/db-schema";
+import type { AnnotationData } from "types/zotero-item";
+import { annotationItemFromJSON } from "db/annotation";
 
 interface PDFWorkerConfig {
     pdfWorkerURL: string;
@@ -42,28 +36,40 @@ export class PDFProcessWorker {
     private _waitingPromises: { [key: number]: PromiseResolvers };
     private _queue: QueueItem[];
     private _processingQueue: boolean;
+    private _blobUrls: Record<string, string>;
 
-    constructor() {
+    constructor(
+        private settings: ZotFlowSettings,
+        private parentHost: IParentProxy,
+        blobUrls: Record<string, string>,
+    ) {
         this._worker = null;
         this._lastPromiseID = 0;
         this._waitingPromises = {};
         this._queue = [];
         this._processingQueue = false;
+        this._blobUrls = blobUrls;
 
         try {
-            const blobUrls = getBlobUrls();
-            const workerUrl = blobUrls["pdf/zotero-pdf-worker.js"];
+            const workerUrl = this._blobUrls["pdf/zotero-pdf-worker.js"];
             if (!workerUrl) throw new Error("Worker URL not found");
 
             this.config = {
                 pdfWorkerURL: workerUrl,
             };
-            console.log("[ZotFlow] PdfWorkerService initialized");
+            console.log("[ZotFlow Worker] PdfWorkerService initialized");
         } catch (e) {
-            console.error("[ZotFlow] Failed to initialize PdfWorkerService", e);
+            console.error(
+                "[ZotFlow Worker] Failed to initialize PdfWorkerService",
+                e,
+            );
             // Default config to avoid crashes, though functionality will be broken
             this.config = { pdfWorkerURL: "" };
         }
+    }
+
+    updateSettings(settings: ZotFlowSettings) {
+        this.settings = settings;
     }
 
     async _processQueue() {
@@ -138,11 +144,13 @@ export class PDFProcessWorker {
                 }
                 if (message.id) {
                     let respData: any = null;
-                    const blobUrls = getBlobUrls();
+
                     try {
                         if (message.action === "FetchBuiltInCMap") {
                             const cMapUrl =
-                                blobUrls[`pdf/web/cmaps/${message.data}.bcmap`];
+                                this._blobUrls[
+                                    `pdf/web/cmaps/${message.data}.bcmap`
+                                ];
                             if (cMapUrl) {
                                 const response = await fetch(cMapUrl);
                                 const arrayBuffer =
@@ -163,7 +171,7 @@ export class PDFProcessWorker {
                     try {
                         if (message.action === "FetchStandardFontData") {
                             const fontUrl =
-                                blobUrls[
+                                this._blobUrls[
                                     `pdf/web/standard_fonts/${message.data}`
                                 ];
                             if (fontUrl) {
@@ -179,6 +187,34 @@ export class PDFProcessWorker {
                         }
                     } catch (e) {
                         console.log("Failed to fetch standard font data:");
+                        console.log(e);
+                    }
+
+                    try {
+                        if (message.action === "SaveRenderedAnnotation") {
+                            const { libraryID, annotationKey, buf } =
+                                message.data;
+
+                            await db.items
+                                .where({ libraryID, key: annotationKey })
+                                .modify((item) => {
+                                    item.annotationImageVersion = item.version;
+                                });
+                            const path =
+                                this.settings.annotationImageFolder +
+                                "/" +
+                                annotationKey +
+                                ".png";
+
+                            await this.parentHost.writeBinaryFile(
+                                path,
+                                Comlink.transfer(buf, [buf]),
+                            );
+
+                            respData = true;
+                        }
+                    } catch (e) {
+                        console.log("Failed to render annotations:");
                         console.log(e);
                     }
 
@@ -210,16 +246,17 @@ export class PDFProcessWorker {
         isPriority?: boolean,
     ): Promise<Uint8Array> {
         return this._enqueue(async () => {
+            // ... (Logic extracted from original file, largely database independent logic)
+            // Need to verify if `items` are raw objects or Dexie objects depending on worker
+            // But they are passed as arguments.
+
             items = items.filter((x) => !x.raw.data.annotationIsExternal);
             let annotations: any[] = [];
             for (let item of items) {
                 annotations.push({
                     id: item.key,
                     type: item.raw.data.annotationType,
-                    // Author name is only set when the PDF file is 1) in a group library,
-                    // 2) was moved back to a private library or 3) was imported from a PDF file
-                    // that was previously exported in 1) or 2) case
-                    authorName: item.raw.data.annotationAuthorName || "", // TODO: || Zotero.Users.getName(item.createdByUserID) || '',
+                    authorName: item.raw.data.annotationAuthorName || "",
                     comment: (item.raw.data.annotationComment || "").replace(
                         /<\/?(i|b|sub|sup)>/g,
                         "",
@@ -376,5 +413,38 @@ export class PDFProcessWorker {
             }
             return result;
         }, isPriority);
+    }
+
+    /**
+     * Get rendered annotations
+     */
+    async renderAnnotations(
+        libraryID: number,
+        buf: ArrayBuffer,
+        annotations: any[],
+        password?: string,
+    ): Promise<any> {
+        return this._enqueue(async () => {
+            let result: any;
+            try {
+                result = await this._query(
+                    "renderAnnotations",
+                    { libraryID, buf, annotations, password },
+                    [buf],
+                );
+            } catch (e: any) {
+                let error = new Error(
+                    `Worker 'renderAnnotations' failed: ${JSON.stringify({ error: e.message })}`,
+                );
+                try {
+                    error.name = JSON.parse(e.message).name;
+                } catch (e) {
+                    console.log(e);
+                }
+                console.log(error);
+                throw error;
+            }
+            return result;
+        });
     }
 }

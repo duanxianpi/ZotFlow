@@ -4,6 +4,7 @@ import type { ViewNode } from "./TreeView";
 import { ObsidianIcon } from "./ObsidianIcon";
 import { getAttachmentFileIcon, getItemTypeIcon } from "ui/icons";
 import { services } from "../../services/services";
+import { workerBridge } from "bridge";
 
 import { openAttachment } from "ui/viewer";
 
@@ -43,7 +44,7 @@ export const NodeItem = ({
     let iconName = "";
     switch (nodeType) {
         case "library":
-            iconName = "library";
+            iconName = "landmark";
             break;
         case "collection":
             iconName = "folder";
@@ -102,13 +103,30 @@ export const NodeItem = ({
                     .setIcon("file-badge")
                     .onClick(async () => {
                         try {
-                            await services.note.createOrOpenNote(
+                            await workerBridge.note.openNote(
                                 node.data.libraryID,
                                 node.data.key,
-                                true,
                             );
                         } catch (err) {
                             console.error("Failed to create/open note", err);
+                        }
+                    });
+            });
+            menu.addItem((item) => {
+                item.setTitle("Force update note (with images)")
+                    .setIcon("rotate-cw")
+                    .onClick(async () => {
+                        try {
+                            await workerBridge.note.openNote(
+                                node.data.libraryID,
+                                node.data.key,
+                                {
+                                    forceUpdateContent: true,
+                                    forceUpdateImages: true,
+                                },
+                            );
+                        } catch (err) {
+                            console.error("Failed to update note", err);
                         }
                     });
             });

@@ -1,11 +1,27 @@
 import * as Comlink from "comlink";
-import { Notice, requestUrl } from "obsidian";
+import {
+    Notice,
+    requestUrl,
+    App,
+    TFile,
+    normalizePath,
+    MarkdownView,
+} from "obsidian";
+import {
+    saveTextFile,
+    saveBinaryFile,
+    readTextFile,
+    checkFile,
+    deleteFile,
+} from "utils";
+import { services } from "services/services";
 
 import type { IParentProxy, NotificationType, IRequestResponse } from "./types";
 import type { RequestUrlParam } from "obsidian";
 
 export class ParentHost implements IParentProxy {
     private progressNotice: Notice | null = null;
+    constructor(private app: App) {}
 
     public notify(type: NotificationType, message: string) {
         if (this.progressNotice) {
@@ -52,5 +68,59 @@ export class ParentHost implements IParentProxy {
             console.error(`[ParentHost] Fetch failed:`, error);
             throw new Error(`Network Error: ${error.message}`);
         }
+    }
+
+    public async readTextFile(path: string): Promise<string | null> {
+        return readTextFile(this.app, path);
+    }
+
+    public async writeTextFile(path: string, content: string): Promise<void> {
+        await saveTextFile(this.app, path, content);
+    }
+
+    public async writeBinaryFile(
+        path: string,
+        buffer: ArrayBuffer,
+    ): Promise<void> {
+        await saveBinaryFile(this.app, path, buffer);
+    }
+
+    public async checkFile(path: string): Promise<{
+        exists: boolean;
+        path: string;
+        frontmatter?: Record<string, any>;
+    }> {
+        return checkFile(this.app, path);
+    }
+
+    public async openFile(path: string, newLeaf: boolean): Promise<void> {
+        const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+        if (file instanceof TFile) {
+            const leaves = this.app.workspace.getLeavesOfType("markdown");
+            for (const leaf of leaves) {
+                const view = leaf.view as MarkdownView;
+                if (view.file && view.file.path === file.path) {
+                    this.app.workspace.setActiveLeaf(leaf);
+                    return;
+                }
+            }
+            await this.app.workspace.getLeaf(newLeaf).openFile(file);
+        }
+    }
+
+    public async getFileByKey(key: string): Promise<string | null> {
+        const file = services.indexService.getFileByKey(key);
+        return file ? file.path : null;
+    }
+
+    public async indexFile(path: string): Promise<void> {
+        const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+        if (file instanceof TFile) {
+            services.indexService.indexFile(file);
+        }
+    }
+
+    public async deleteFile(path: string): Promise<void> {
+        await deleteFile(this.app, path);
     }
 }

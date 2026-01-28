@@ -6,6 +6,7 @@ export interface TemplateUtils {
 export interface ItemTemplateContext {
     // Identity
     key: string;
+    version: number;
     citationKey: string;
     libraryID: number;
     itemType: string;

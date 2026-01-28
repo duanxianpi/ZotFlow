@@ -75,8 +75,11 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     syncError: string;
     syncedAt: string;
 
-    // Annotation Extraction Tracking
-    annotationExtractionFileMD5?: string;
+    // External Annotation Extraction Tracking
+    externalAnnotationExtractionFileMD5?: string;
+
+    // Annotation Image Version Tracking
+    annotationImageVersion?: number;
 
     // Citation Key
     citationKey?: string;

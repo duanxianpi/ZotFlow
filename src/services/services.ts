@@ -1,29 +1,26 @@
 import { App } from "obsidian";
 
-import { TemplateService } from "./template-service";
-import { NoteService } from "./note-service";
-
 import type { ZotFlowSettings } from "settings/types";
+import { IndexService } from "./index-service";
 
 class ServiceLocator {
     private _app: App;
     private _settings: ZotFlowSettings;
-    private _template: TemplateService;
-    private _note: NoteService;
+
+    private _indexService: IndexService;
 
     initialize(app: App, settings: ZotFlowSettings) {
         this._app = app;
         this._settings = settings;
-        this._template = new TemplateService(app, this._settings);
-        this._note = new NoteService(app, this._template, this._settings);
+
+        this._indexService = new IndexService(app);
+        this._indexService.load();
 
         console.log("[ZotFlow] Services initialized.");
     }
 
     updateSettings(newSettings: ZotFlowSettings) {
         this._settings = newSettings;
-        this._template.updateSettings(newSettings);
-        this._note.updateSettings(newSettings);
     }
 
     get app() {
@@ -34,12 +31,8 @@ class ServiceLocator {
         return this._settings;
     }
 
-    get template() {
-        return this._template;
-    }
-
-    get note() {
-        return this._note;
+    get indexService() {
+        return this._indexService;
     }
 }
 

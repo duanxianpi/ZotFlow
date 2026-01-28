@@ -47,5 +47,39 @@ export class GeneralSection {
                     text.inputEl.size = 40;
                 });
         });
+
+        settingGroup.addSetting((setting) => {
+            setting
+                .setName("Auto Import Annotation Images")
+                .setDesc(
+                    "Auto import annotation images for area and ink annotations from PDF when creating source notes.",
+                )
+                .addToggle((toggle) => {
+                    toggle.setValue(
+                        this.plugin.settings.autoImportAnnotationImages,
+                    );
+                    toggle.onChange(async (value) => {
+                        this.plugin.settings.autoImportAnnotationImages = value;
+                        await this.plugin.saveSettings();
+                    });
+                });
+        });
+
+        settingGroup.addSetting((setting) => {
+            setting
+                .setName("Annotation Image Folder")
+                .setDesc(
+                    "Default folder for annotation images (relative to vault root).",
+                )
+                .addText((text) => {
+                    text.setPlaceholder("e.g. Attachments/ZotFlow")
+                        .setValue(this.plugin.settings.annotationImageFolder)
+                        .onChange(async (value) => {
+                            this.plugin.settings.annotationImageFolder = value;
+                            await this.plugin.saveSettings();
+                        });
+                    text.inputEl.size = 40;
+                });
+        });
     }
 }

@@ -1,8 +1,9 @@
+import * as Comlink from "comlink";
 import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
 import { workerBridge } from "bridge";
 import { IframeReaderBridge } from "./bridge";
-import { db } from "db/db";
-import { annotationItemFromJSON } from "db/annotation";
+import { db, getCombinations } from "db/db";
+import { annotationItemFromJSON, getAnnotationJson } from "db/annotation";
 import { toZoteroDate } from "db/normalize";
 import { services } from "services/services";
 
@@ -94,6 +95,11 @@ export class ZoteroReaderView extends ItemView {
         loadingEl.setText(`Downloading/Loading ${this.attachmentItem.key}...`);
 
         try {
+            // Try force update the source note
+            workerBridge.note.triggerUpdate(
+                this.attachmentItem.libraryID,
+                this.attachmentItem.parentItem,
+            );
             this.renderReader();
         } catch (e) {
             console.error(e);
@@ -183,10 +189,11 @@ export class ZoteroReaderView extends ItemView {
             }
 
             // Get Annotations
-            const annotationJson = await this.getAnnotationJson(
+            const annotationJson = await getAnnotationJson(
                 this.attachmentItem,
+                services.settings.zoteroApiKey,
+                (item) => item.syncStatus !== "deleted",
             );
-
             // Initialize Reader if ready
             if (this.bridge.state === "bridge-ready") {
                 const opts = {
@@ -270,7 +277,7 @@ export class ZoteroReaderView extends ItemView {
     private async extractExternalAnnotation(fileBlob: Blob) {
         const currentMD5 = this.attachmentItem.raw.data.md5;
         const lastExtractionMD5 =
-            this.attachmentItem.annotationExtractionFileMD5;
+            this.attachmentItem.externalAnnotationExtractionFileMD5;
         // Only extract for PDFs
         const isPDF =
             this.attachmentItem.raw.data.contentType === "application/pdf";
@@ -298,9 +305,10 @@ export class ZoteroReaderView extends ItemView {
                     )
                     .delete();
 
+                const buffer = await fileBlob.arrayBuffer();
                 const externalAnnotationsRaw =
                     await workerBridge.pdfProcessWorker.import(
-                        await fileBlob.arrayBuffer(),
+                        Comlink.transfer(buffer, [buffer]),
                         true,
                     );
 
@@ -323,10 +331,10 @@ export class ZoteroReaderView extends ItemView {
                             this.attachmentItem.key,
                         ],
                         {
-                            annotationExtractionFileMD5: currentMD5,
+                            externalAnnotationExtractionFileMD5: currentMD5,
                         },
                     );
-                    this.attachmentItem.annotationExtractionFileMD5 =
+                    this.attachmentItem.externalAnnotationExtractionFileMD5 =
                         currentMD5;
                 }
                 console.log("[ZotFlow] Annotations extracted successfully");
@@ -334,42 +342,112 @@ export class ZoteroReaderView extends ItemView {
         }
     }
 
+    /**
+     * Compare annotation data to check if it has changed
+     */
+    private annotationDataDiff(
+        existing: AnnotationData,
+        annotationData: Partial<AnnotationData>,
+    ) {
+        return (
+            existing.annotationComment !== annotationData.annotationComment ||
+            existing.annotationColor !== annotationData.annotationColor ||
+            existing.annotationPageLabel !==
+                annotationData.annotationPageLabel ||
+            existing.annotationPosition !== annotationData.annotationPosition ||
+            existing.annotationSortIndex !==
+                annotationData.annotationSortIndex ||
+            existing.annotationText !== annotationData.annotationText ||
+            existing.annotationType !== annotationData.annotationType
+        );
+    }
+
+    /**
+     * Handle saved/updated annotations
+     */
     private async handleAnnotationsSaved(annotations: any[]) {
-        const { libraryID, key: parentItem } = this.attachmentItem;
+        const { libraryID, parentItem: paperKey } = this.attachmentItem;
         const library = this.attachmentItem.raw.library;
+        const attachmentKey = this.attachmentItem.key;
+
+        let hasChanges = false;
+
+        const itemsToPut: IDBZoteroItem<AnnotationData>[] = [];
+
+        const existingItems = (
+            await db.items
+                .where({
+                    libraryID,
+                    parentItem: attachmentKey,
+                    itemType: "annotation",
+                })
+                .toArray()
+        ).filter(
+            (i) => i.syncStatus !== "deleted" && i.syncStatus !== "ignore",
+        ) as IDBZoteroItem<AnnotationData>[];
+
+        const existingMap = new Map(existingItems.map((i) => [i.key, i]));
+
+        const now = new Date().toISOString().split(".")[0] + "Z";
+        const zoteroDate = toZoteroDate(new Date().toISOString());
 
         for (const json of annotations) {
             const annotationData = annotationItemFromJSON(json);
             const key = json.id;
+            const existing = existingMap.get(key);
 
-            const existing = await db.items.get([libraryID, key]);
+            if (existing) {
+                // === Update logic (UPDATE) ===
+                if (!json.isExternal) {
+                    if (
+                        this.annotationDataDiff(
+                            existing.raw.data,
+                            annotationData,
+                        )
+                    ) {
+                        hasChanges = true;
 
-            if (existing && !json.isExternal) {
-                // Determine new sync status
-                const newSyncStatus =
-                    existing.syncStatus === "created" ? "created" : "updated";
+                        const newSyncStatus =
+                            existing.syncStatus === "created"
+                                ? "created"
+                                : "updated";
 
-                await db.transaction("rw", db.items, async () => {
-                    await db.items.update([libraryID, key], {
-                        raw: {
-                            ...existing.raw,
-                            data: {
-                                ...existing.raw.data,
-                                ...annotationData,
-                            } as any,
-                        },
-                        dateModified: toZoteroDate(new Date().toISOString()),
-                        syncStatus: newSyncStatus,
-                    });
-                });
+                        // If it's an image/ink annotation and data has changed, reset version to 0
+                        let annotationImageVersion =
+                            existing.annotationImageVersion;
+                        const isVisual =
+                            annotationData.annotationType === "image" ||
+                            annotationData.annotationType === "ink";
+
+                        if (isVisual) {
+                            annotationImageVersion = 0; // Reset version to trigger re-render
+                        }
+
+                        itemsToPut.push({
+                            ...existing,
+                            annotationImageVersion,
+                            syncStatus: newSyncStatus,
+                            dateModified: now,
+                            raw: {
+                                ...existing.raw,
+                                data: {
+                                    ...existing.raw.data,
+                                    ...annotationData,
+                                    dateModified: zoteroDate,
+                                } as any,
+                            },
+                        });
+                    }
+                }
             } else {
-                const now = new Date().toISOString().split(".")[0] + "Z";
-                // Mock user for local creation if needed, or rely on what's in settings/library
+                // === Create logic (CREATE) ===
+                hasChanges = true;
+
                 const newItem: IDBZoteroItem<AnnotationData> = {
                     libraryID,
                     key,
                     itemType: "annotation",
-                    parentItem,
+                    parentItem: attachmentKey, // Annotation parent item is PDF
                     title: "",
                     collections: [],
                     dateAdded: now,
@@ -381,192 +459,135 @@ export class ZoteroReaderView extends ItemView {
                     syncStatus: !json.isExternal ? "created" : "ignore",
                     syncedAt: now,
                     syncError: "",
+                    annotationImageVersion: 0, // New image defaults to 0
                     raw: {
                         key,
                         version: 0,
                         library,
                         links: {},
-                        meta: {
-                            numChildren: 0,
-                        },
+                        meta: { numChildren: 0 },
                         data: {
                             ...annotationData,
                             key,
                             itemType: "annotation",
-                            parentItem,
+                            parentItem: attachmentKey,
                             relations: {},
-                            dateAdded: now,
-                            dateModified: now,
+                            dateAdded: zoteroDate,
+                            dateModified: zoteroDate,
                             tags: annotationData.tags || [],
                             deleted: false,
                             version: 0,
                         } as unknown as AnnotationData,
                     },
                 };
-                await db.transaction("rw", db.items, async () => {
-                    await db.items.put(newItem);
-                });
+
+                if (library.type === "group" && this.keyInfo) {
+                    newItem.raw.meta.createdByUser = {
+                        id: this.keyInfo.userID,
+                        name: this.keyInfo.displayName,
+                        username: this.keyInfo.username,
+                        links: {},
+                    };
+                }
+
+                itemsToPut.push(newItem);
             }
         }
-    }
 
-    private async handleAnnotationsDeleted(ids: string[]) {
-        console.log("[ZotFlow] Handling deleted annotations:", ids);
-        const { libraryID } = this.attachmentItem;
+        // Execute batch transaction
+        if (itemsToPut.length > 0) {
+            await db.transaction("rw", db.items, async () => {
+                await db.items.bulkPut(itemsToPut);
+            });
+        }
 
-        await db.transaction("rw", db.items, async () => {
-            for (const key of ids) {
-                const existing = await db.items.get([libraryID, key]);
-
-                if (existing) {
-                    // Synced/Other: Mark Deleted
-                    await db.items.update([libraryID, key], {
-                        syncStatus: "deleted",
-                        dateModified:
-                            new Date().toISOString().split(".")[0] + "Z",
-                        raw: {
-                            ...existing.raw,
-                            data: {
-                                ...existing.raw.data,
-                                deleted: true,
-                            } as any,
-                        },
-                    });
-                }
-            }
-        });
+        // Debounce Update Source Note
+        if (hasChanges && paperKey) {
+            await workerBridge.note.triggerUpdate(
+                libraryID,
+                paperKey,
+                {
+                    forceUpdateContent: true,
+                    forceUpdateImages: false,
+                },
+                true,
+            );
+        }
     }
 
     /**
-     * Get all annotations for a given item from the local database.
-     *
-     * @param libraryID The ID of the Zotero library (user or group ID).
-     * @param itemKey The key of the parent item (e.g., journal article) to fetch annotations for.
-     * @returns A promise that resolves to an array of annotation items.
+     * Handle deleted annotations
+     * Optimization: Batch processing,区分物理删除和软删除
      */
-    private async getAnnotationJson(
-        item: IDBZoteroItem<AttachmentData>,
-    ): Promise<AnnotationJSON[]> {
-        // Get current user from settings/DB
-        const apiKey = services.settings.zoteroApiKey;
-        const currentUserKey = await db.keys.get(apiKey);
-        const currentUser = currentUserKey
-            ? {
-                  id: currentUserKey.userID,
-                  username: currentUserKey.username,
-                  displayName: currentUserKey.displayName,
-              }
-            : null;
+    private async handleAnnotationsDeleted(ids: string[]) {
+        console.log("[ZotFlow] Handling deleted annotations:", ids);
+        const { libraryID } = this.attachmentItem;
+        const paperKey = this.attachmentItem.parentItem;
 
-        // Get Library Info
-        const library = await db.libraries.get(item.libraryID);
-        const isGroup = library?.type === "group";
+        if (!ids.length) return;
 
-        // Get User info (for creator/modifier)
-        // lastModifiedByUser is not readily available in standard Zotero item API response
-        // We will assume it's createdByUser if not present.
+        const itemsToDeletePhysical: [number, string][] = [];
+        const itemsToDeleteSoft: IDBZoteroItem<AnnotationData>[] = [];
+        const now = new Date().toISOString().split(".")[0] + "Z";
 
-        // Tag Colors from Settings
-        const tagColors = new Map();
-        /*
-        if (client.settings.tagColors && client.settings.tagColors.value) {
-            client.settings.tagColors.value.forEach((tc: any) => {
-                tagColors.set(tc.name, { color: tc.color, position: 0 }); // Position logic might need refinement if present in settings
-            });
-        }
-        */
-
-        // Zotero Annotations
-        const annotations = (await db.items
-            .where({
-                libraryID: item.libraryID,
-                parentItem: item.key,
-                itemType: "annotation",
-            })
+        // Read affected items to determine types
+        const items = (await db.items
+            .where(["libraryID", "key"])
+            .anyOf(getCombinations([[libraryID], ids]))
             .toArray()) as IDBZoteroItem<AnnotationData>[];
 
-        console.log("Annotations:", annotations);
+        console.log("[ZotFlow] Found annotations to delete:", items);
 
-        // External Annotations
-        const annotationJson: AnnotationJSON[] = [];
-        for (const annotation of annotations) {
-            const o: any = {};
-            o.libraryID = annotation.libraryID;
-            o.id = annotation.key;
-            o.type = annotation.raw.data.annotationType;
-            o.isExternal = annotation.raw.data.annotationIsExternal || false; // Default to false
+        // Iterate and handle delete logic
+        for (const existing of items) {
+            const isVisual =
+                existing.raw.data.annotationType === "image" ||
+                existing.raw.data.annotationType === "ink";
 
-            const isAuthor =
-                !annotation.raw.meta.createdByUser?.id ||
-                annotation.raw.meta.createdByUser?.id === currentUser?.id;
-            const isReadOnly = false; // Defaulting to false
-
-            if (annotation.raw.data.annotationAuthorName) {
-                o.authorName = annotation.raw.data.annotationAuthorName;
-                if (isGroup) {
-                    // Not sure what is lastModifiedByUser
-                }
-            } else if (
-                !o.isExternal &&
-                isGroup &&
-                annotation.raw.meta.createdByUser
-            ) {
-                o.authorName =
-                    annotation.raw.meta.createdByUser.username ||
-                    annotation.raw.meta.createdByUser.name;
-                o.isAuthorNameAuthoritative = true;
+            // Only delete physical images if it's a visual annotation
+            if (isVisual) {
+                await workerBridge.note.deleteAnnotationImage(existing.key);
             }
 
-            o.readOnly = isReadOnly || o.isExternal || !isAuthor;
-
-            if (o.type === "highlight" || o.type === "underline") {
-                o.text = annotation.raw.data.annotationText;
+            if (existing.syncStatus === "created") {
+                itemsToDeletePhysical.push([libraryID, existing.key]);
+            } else {
+                itemsToDeleteSoft.push({
+                    ...existing,
+                    syncStatus: "deleted",
+                    dateModified: now,
+                    raw: {
+                        ...existing.raw,
+                        data: {
+                            ...existing.raw.data,
+                            deleted: true,
+                        } as any,
+                    },
+                });
             }
-
-            o.comment = annotation.raw.data.annotationComment;
-            o.pageLabel = annotation.raw.data.annotationPageLabel;
-            o.color = annotation.raw.data.annotationColor;
-            o.sortIndex = annotation.raw.data.annotationSortIndex;
-            o.position = JSON.parse(annotation.raw.data.annotationPosition);
-
-            // Add tags
-            const tags = annotation.raw.data.tags || [];
-
-            const processedTags = tags.map((t) => {
-                const obj: any = {
-                    name: t.tag,
-                };
-                /*
-                if (tagColors.has(t.tag)) {
-                    obj.color = tagColors.get(t.tag).color;
-                    obj.position = tagColors.get(t.tag).position;
-                }
-                */
-                return obj;
-            });
-
-            processedTags.sort((a, b) => {
-                if (!a.color && !b.color) {
-                    return a.name.localeCompare(b.name, {
-                        sensitivity: "accent",
-                    });
-                }
-                if (!a.color && !b.color) {
-                    return -1;
-                }
-                if (!a.color && b.color) {
-                    return 1;
-                }
-                return a.position - b.position;
-            });
-
-            processedTags.forEach((t) => delete t.position);
-            o.tags = processedTags;
-
-            o.dateModified = annotation.dateModified;
-            annotationJson.push(o);
         }
-        return annotationJson;
+
+        // Execute batch transaction
+        if (itemsToDeletePhysical.length > 0 || itemsToDeleteSoft.length > 0) {
+            await db.transaction("rw", db.items, async () => {
+                if (itemsToDeletePhysical.length > 0) {
+                    await db.items.bulkDelete(itemsToDeletePhysical);
+                }
+                if (itemsToDeleteSoft.length > 0) {
+                    await db.items.bulkPut(itemsToDeleteSoft);
+                }
+            });
+        }
+
+        // Trigger note update
+        if (paperKey) {
+            await workerBridge.note.triggerUpdate(
+                libraryID,
+                paperKey,
+                { forceUpdateContent: true },
+                true,
+            );
+        }
     }
 
     private handleExternalAnnotation(annotation: any): AnnotationJSON {

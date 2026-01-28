@@ -4,6 +4,9 @@ import { SyncService } from "./services/sync";
 import { AttachmentService } from "./services/attachment";
 import { WebDavService } from "./services/webdav";
 import { TreeViewService } from "./services/tree-view";
+import { TemplateService } from "./services/template";
+import { NoteService } from "./services/note";
+import { PDFProcessWorker } from "./services/pdf-processor";
 
 import type { ZotFlowSettings } from "settings/types";
 import type { IParentProxy } from "bridge/types";
@@ -13,12 +16,18 @@ import type { IParentProxy } from "bridge/types";
  * This interface defines the methods exposed by the worker
  */
 export interface WorkerAPI {
-    init(settings: ZotFlowSettings, parentHost: IParentProxy): void;
+    init(
+        settings: ZotFlowSettings,
+        parentHost: IParentProxy,
+        blobUrls: Record<string, string>,
+    ): void;
     zotero: ZoteroAPIService;
     sync: SyncService;
     attachment: AttachmentService;
     webdav: WebDavService;
     treeView: TreeViewService;
+    note: NoteService;
+    pdfProcessor: PDFProcessWorker;
     updateSettings(settings: ZotFlowSettings): void;
 }
 
@@ -28,9 +37,16 @@ let _webdav: WebDavService | undefined;
 let _attachment: AttachmentService | undefined;
 let _sync: SyncService | undefined;
 let _treeView: TreeViewService | undefined;
+let _template: TemplateService | undefined;
+let _note: NoteService | undefined;
+let _pdfProcessor: PDFProcessWorker | undefined;
 
 const exposedApi: WorkerAPI = {
-    init: (settings: ZotFlowSettings, parentHost: IParentProxy) => {
+    init: (
+        settings: ZotFlowSettings,
+        parentHost: IParentProxy,
+        blobUrls: Record<string, string>,
+    ) => {
         // Patch global fetch
         (globalThis as any).fetch = async (url: string, init?: RequestInit) => {
             const response = await parentHost.request({
@@ -41,6 +57,18 @@ const exposedApi: WorkerAPI = {
                 throw: false,
                 contentType: "application/json",
             });
+
+            // Handle empty response
+            if (
+                !response.arrayBuffer ||
+                response.arrayBuffer.byteLength === 0
+            ) {
+                return new Response(null, {
+                    status: response.status,
+                    headers: new Headers(response.headers),
+                });
+            }
+
             // Convert Obsidian response to standard Response object
             return new Response(response.arrayBuffer, {
                 status: response.status,
@@ -58,6 +86,21 @@ const exposedApi: WorkerAPI = {
         );
         _sync = new SyncService(_zotero, settings, parentHost);
         _treeView = new TreeViewService(settings, parentHost);
+
+        _pdfProcessor = new PDFProcessWorker(settings, parentHost, blobUrls);
+
+        _template = new TemplateService(settings);
+        _note = new NoteService(
+            settings,
+            _template,
+            parentHost,
+            _attachment,
+            _pdfProcessor,
+        );
+
+        // Initialize PDF Worker
+        _pdfProcessor._init();
+
         console.log("[ZotFlow Worker] Services initialized.");
     },
 
@@ -90,8 +133,28 @@ const exposedApi: WorkerAPI = {
         return Comlink.proxy(_treeView);
     },
 
+    get note() {
+        if (!_note) throw new Error("[ZotFlow Worker] Worker not initialized");
+        return Comlink.proxy(_note);
+    },
+
+    get pdfProcessor() {
+        if (!_pdfProcessor)
+            throw new Error("[ZotFlow Worker] Worker not initialized");
+        return Comlink.proxy(_pdfProcessor);
+    },
+
     updateSettings: (settings: ZotFlowSettings) => {
-        if (!_zotero || !_webdav || !_attachment || !_sync) {
+        if (
+            !_zotero ||
+            !_webdav ||
+            !_attachment ||
+            !_sync ||
+            !_treeView ||
+            !_template ||
+            !_note ||
+            !_pdfProcessor
+        ) {
             throw new Error("[ZotFlow Worker] Worker not initialized");
         }
 
@@ -101,6 +164,9 @@ const exposedApi: WorkerAPI = {
         _attachment!.updateSettings(settings);
         _sync!.updateSettings(settings);
         _treeView!.updateSettings(settings);
+        _template!.updateSettings(settings);
+        _note!.updateSettings(settings);
+        _pdfProcessor!.updateSettings(settings);
     },
 };
 
