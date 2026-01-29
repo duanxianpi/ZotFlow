@@ -1,12 +1,13 @@
 import type { NodeRendererProps } from "react-arborist";
-import { Menu, Notice } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
 import type { ViewNode } from "./TreeView";
 import { ObsidianIcon } from "./ObsidianIcon";
 import { getAttachmentFileIcon, getItemTypeIcon } from "ui/icons";
-import { services } from "../../services/services";
+import { services } from "services/services";
 import { workerBridge } from "bridge";
 
 import { openAttachment } from "ui/viewer";
+import { getNotePath } from "utils/utils";
 
 export const INDENT_SIZE = 20;
 
@@ -141,15 +142,88 @@ export const NodeItem = ({
         }
     };
 
-    const handleDragStart = (e: React.DragEvent) => {
-        if (
-            node.data.itemType === "attachment" &&
-            node.data.contentType === "application/pdf"
-        ) {
-            const link = `[[${node.data.name}]]`;
-            e.dataTransfer.setData("text/plain", link);
-            e.dataTransfer.effectAllowed = "copy";
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+        let link = "";
+        let dragText = "";
+        if (node.data.itemType === "attachment") {
+            const url = `obsidian://zotflow?type=open-attachment&libraryID=${node.data.libraryID}&key=${node.data.key}`;
+            link = `[${node.data.name}](${url})`;
+            dragText = node.data.name;
+        } else if (nodeType === "item" && node.data.itemType !== "attachment") {
+            // Try force update the source note
+            workerBridge.note.triggerUpdate(node.data.libraryID, node.data.key);
+
+            const file = services.indexService.getFileByKey(node.data.key);
+            if (file) {
+                link = services.app.fileManager.generateMarkdownLink(
+                    file,
+                    "",
+                    "",
+                    file.name.split(".").shift(),
+                );
+                dragText = file.name;
+            } else {
+                const path = getNotePath({
+                    citationKey: node.data.citationKey,
+                    title: node.data.name,
+                    key: node.data.key,
+                    sourceNoteFolder: services.settings.sourceNoteFolder,
+                    libraryName: node.data.libraryName,
+                });
+                console.log({
+                    citationKey: node.data.citationKey,
+                    title: node.data.name,
+                    key: node.data.key,
+                    sourceNoteFolder: services.settings.sourceNoteFolder,
+                    libraryName: node.data.libraryName,
+                });
+                const filename = path.split("/").pop()!;
+                const alias = filename.split(".").shift()!;
+                link = `[[${path}|${alias}]]`;
+                dragText = filename;
+            }
         }
+
+        // Custom Drag Ghost using Obsidian classes
+        const ghost = document.createElement("div");
+        ghost.addClass("drag-ghost");
+
+        const self = document.createElement("div");
+        self.addClass("drag-ghost-self");
+
+        let iconName = "";
+        if (nodeType === "library") iconName = "landmark";
+        else if (nodeType === "collection") iconName = "folder";
+        else if (node.data.itemType === "attachment") {
+            iconName = getAttachmentFileIcon(node.data.contentType);
+        } else {
+            iconName = getItemTypeIcon(node.data.itemType);
+        }
+
+        setIcon(self, iconName || "file");
+
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = dragText || "Untitled";
+
+        self.appendChild(titleSpan);
+
+        const action = document.createElement("div");
+        action.addClass("drag-ghost-action");
+        action.textContent = "Insert link here";
+
+        ghost.appendChild(self);
+        ghost.appendChild(action);
+
+        document.body.appendChild(ghost);
+
+        // Set data for drag
+        e.dataTransfer.setData("text/plain", link);
+        e.dataTransfer.setDragImage(ghost, 0, 0);
+        e.dataTransfer.effectAllowed = "copy";
+
+        // requestAnimationFrame(() => {
+        //     document.body.removeChild(ghost);
+        // });
     };
 
     return (
@@ -159,7 +233,7 @@ export const NodeItem = ({
             onClick={handleOnClick}
             onDoubleClick={handleDoubleClick}
             onContextMenu={handleContextMenu}
-            draggable={node.data.itemType === "attachment"}
+            draggable={nodeType === "item" && node.data.itemType !== "note"}
             onDragStart={handleDragStart}
         >
             {/* Indent Lines */}
@@ -180,7 +254,6 @@ export const NodeItem = ({
                     }}
                 />
             </div>
-
             {iconName !== "" && (
                 <ObsidianIcon
                     icon={iconName}

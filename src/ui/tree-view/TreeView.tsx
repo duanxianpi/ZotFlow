@@ -8,8 +8,9 @@ import React, {
 import { NodeApi, Tree } from "react-arborist";
 import { workerBridge } from "bridge";
 import { ObsidianIcon } from "./ObsidianIcon";
-import type { TreeTransferPayload } from "worker/services/tree-view";
 import { NodeItem, INDENT_SIZE } from "./Node";
+
+import type { TreeTransferPayload } from "worker/services/tree-view";
 
 // --- TYPES ---
 
@@ -21,6 +22,8 @@ export type ViewNode = {
     itemType: string;
     contentType?: string;
     libraryID: number;
+    libraryName: string;
+    citationKey?: string;
     key: string;
     nodeType: "library" | "collection" | "item" | "spacer";
 };
@@ -55,6 +58,8 @@ function rebuildTreeFromWorker(payload: TreeTransferPayload): ViewNode[] {
             name: entity.name,
             itemType: entity.itemType,
             libraryID: entity.libraryID,
+            libraryName: entity.libraryName,
+            citationKey: entity.citationKey,
             contentType: entity.contentType,
 
             // Initialize Children
@@ -88,6 +93,7 @@ function rebuildTreeFromWorker(payload: TreeTransferPayload): ViewNode[] {
         nodeType: "spacer",
         name: "",
         itemType: "",
+        libraryName: "",
         libraryID: 0,
         children: [],
     });
@@ -133,6 +139,9 @@ export default function ZotFlowTreeView() {
 
         loadTree();
     }, []);
+
+    // Prevent react-dnd from interfering with global events
+    const voidElement = useMemo(() => document.createElement("div"), []);
 
     const handleRefresh = async () => {
         setLoading(true);
@@ -251,8 +260,10 @@ export default function ZotFlowTreeView() {
                         searchTerm={term}
                         searchMatch={handleSearch}
                         openByDefault={false}
-                        disableDrag={false}
-                        disableDrop={false}
+                        disableDrag={true}
+                        disableDrop={true}
+                        disableMultiSelection={true}
+                        dndRootElement={voidElement}
                     >
                         {NodeItem}
                     </Tree>

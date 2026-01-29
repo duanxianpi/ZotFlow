@@ -13,7 +13,7 @@ import {
     readTextFile,
     checkFile,
     deleteFile,
-} from "utils";
+} from "utils/file";
 import { services } from "services/services";
 
 import type { IParentProxy, NotificationType, IRequestResponse } from "./types";

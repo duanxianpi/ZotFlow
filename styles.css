@@ -35,6 +35,13 @@
     padding-top: var(--size-4-2);
 }
 
+.zotflow-node-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
 .zotflow-node {
     position: relative;
     display: flex;

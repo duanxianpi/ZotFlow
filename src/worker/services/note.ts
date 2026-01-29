@@ -7,6 +7,7 @@ import { getAnnotationJson } from "db/annotation";
 import type { IParentProxy } from "bridge/types";
 import type { AttachmentService } from "./attachment";
 import type { PDFProcessWorker } from "./pdf-processor";
+import { getNotePath } from "utils/utils";
 
 const DEBOUNCE_DELAY = 2000;
 
@@ -156,7 +157,13 @@ export class NoteService {
 
         // If Cache lookup fails, calculate default path
         if (!path) {
-            path = this.getNotePath(item, library);
+            path = getNotePath({
+                citationKey: item.citationKey,
+                title: item.title,
+                key: item.key,
+                sourceNoteFolder: this.settings.sourceNoteFolder,
+                libraryName: library.name,
+            });
         }
 
         // Check physical file status (Stat)
@@ -202,6 +209,11 @@ export class NoteService {
      * Perform file creation
      */
     private async performCreate(item: AnyIDBZoteroItem, path: string) {
+        // Create empty file first
+        await this.parentHost.writeTextFile(path, "");
+        await this.parentHost.indexFile(path);
+
+        // Then write content
         const templateContent = await this.parentHost.readTextFile(
             this.settings.sourceNoteTemplatePath,
         );
@@ -211,7 +223,6 @@ export class NoteService {
         );
 
         await this.parentHost.writeTextFile(path, content);
-        await this.parentHost.indexFile(path);
 
         console.log(`[ZotFlow] Created note: ${path}`);
     }
@@ -326,30 +337,5 @@ export class NoteService {
                 e,
             );
         }
-    }
-
-    /**
-     * Generate default file path (Sanitization)
-     */
-    private getNotePath(item: AnyIDBZoteroItem, library: any): string {
-        const illegalRe = /[\/?<>\\:*|"]/g;
-        const controlRe = /[\x00-\x1f\x80-\x9f]/g;
-        const reservedRe = /^\.+$/;
-        const windowsReservedRe =
-            /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
-
-        let filename = `@${item.citationKey || item.title || item.key}`;
-        filename = filename
-            .replace(illegalRe, "")
-            .replace(controlRe, "")
-            .replace(reservedRe, "")
-            .replace(windowsReservedRe, "");
-
-        const folder = this.settings.sourceNoteFolder.replace(/\/$/, "");
-        const extension = "md";
-
-        let path = `${folder}/${library.name}/${filename}.${extension}`;
-        console.log(`[ZotFlow] Generated note path: ${path}`);
-        return path.replace(/\/+/g, "/");
     }
 }

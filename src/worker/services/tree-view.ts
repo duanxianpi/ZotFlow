@@ -4,6 +4,8 @@ export type EntityMap = Record<
         name: string;
         itemType: string;
         libraryID: number;
+        libraryName: string;
+        citationKey?: string;
         contentType?: string;
     }
 >;
@@ -144,11 +146,20 @@ export class TreeViewService {
             name: string,
             itemType: string,
             libraryID: number,
+            libraryName: string,
+            citationKey?: string,
             contentType?: string,
         ) => {
             // Only register when the key is not registered
             if (!entities[key]) {
-                entities[key] = { name, itemType, libraryID, contentType };
+                entities[key] = {
+                    name,
+                    itemType,
+                    libraryID,
+                    libraryName,
+                    citationKey,
+                    contentType,
+                };
             }
         };
 
@@ -159,12 +170,17 @@ export class TreeViewService {
 
             // Register data
             // Add contentType for attachments
+            const libName = libraries.find(
+                (lib) => lib.id === item.libraryID,
+            )!.name;
+
             if (item.itemType === "attachment") {
                 registerEntity(
                     item.key,
                     item.title,
                     item.itemType,
                     item.libraryID,
+                    libName,
                     item.raw.data.contentType,
                 );
             } else {
@@ -173,6 +189,8 @@ export class TreeViewService {
                     item.title,
                     item.itemType,
                     item.libraryID,
+                    libName,
+                    item.citationKey,
                 );
             }
 
@@ -199,6 +217,8 @@ export class TreeViewService {
                     attName || "Untitled",
                     att.itemType,
                     att.libraryID,
+                    libName,
+                    "",
                     attContentType,
                 );
 
@@ -222,8 +242,16 @@ export class TreeViewService {
                 (c) => c.parentCollection === col.key,
             );
             const childItems = itemsByCollection.get(col.key) || [];
-
-            registerEntity(col.key, col.name, "collection", col.libraryID);
+            const libName = libraries.find(
+                (lib) => lib.id === col.libraryID,
+            )!.name;
+            registerEntity(
+                col.key,
+                col.name,
+                "collection",
+                col.libraryID,
+                libName,
+            );
 
             topology.push({
                 id: colId,
@@ -244,11 +272,13 @@ export class TreeViewService {
             const topCols = libCols.filter((c) => !c.parentCollection);
             const unfiled = unfiledItemsByLib.get(lib.id) || [];
 
-            const libName =
-                lib.type === "user"
-                    ? "My Library"
-                    : lib.name || `Group ${lib.id}`;
-            registerEntity(lib.id.toString(), libName, "library", lib.id);
+            registerEntity(
+                lib.id.toString(),
+                lib.name,
+                "library",
+                lib.id,
+                lib.name,
+            );
 
             topology.push({
                 id: libId,

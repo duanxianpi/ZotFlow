@@ -278,7 +278,7 @@ export class SyncSection {
             libraryItems.push({
                 id: keyInfo.userID,
                 type: "user",
-                name: "My Personal Library",
+                name: "My Library",
                 canRead,
                 canWrite,
                 allowedModes: allowed,
@@ -348,7 +348,7 @@ export class SyncSection {
                 await db.libraries.add({
                     id: verifiedKeyInfo.userID,
                     type: "user",
-                    name: "My Personal Library",
+                    name: "My Library",
                     collectionVersion: 0,
                     itemVersion: 0,
                     syncedAt: new Date().toISOString().split(".")[0] + "Z",

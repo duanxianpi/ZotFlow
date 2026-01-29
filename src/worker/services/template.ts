@@ -25,31 +25,31 @@ year: {{ item.date | slice: 0, 4 }}
 url: {{ item.url }}
 doi: {{ item.DOI }}
 ---
+{% capture newline %}
+{% endcapture -%}
+{%- capture quote_string %}{{ newline }}> {% endcapture -%}
+{%- capture quote_string_2 %}{{ newline }}> >{% endcapture -%}
+
 # {{ item.title }}
 {% if item.abstractNote %}
 ## Abstract
-> {{ item.abstractNote }}
-{% endif %}
+> {{ item.abstractNote | replace: newline, quote_string }}
+{%- endif %}
 
 {% if item.attachments.length > 0 -%}
 ## Attachments
 {% for attachment in item.attachments -%}
 - [{{ attachment.filename }}](obsidian://zotflow?type=open-attachment&libraryID={{ attachment.libraryID }}&key={{ attachment.key }})
-{% endfor %}
-{% endif -%}
+{%- endfor %}
+{%- endif %}
 
 {% if item.notes.length > 0 -%}
 ## Notes
 {% for note in item.notes -%}
 ### {{ note.title | default: "Note" }}
 {{ note.note }}
-{% endfor %}
-{% endif -%}
-
-{%- capture newline %}
-{% endcapture -%}
-{%- capture quote_string %}{{ newline }}> {% endcapture -%}
-{%- capture quote_string_2 %}{{ newline }}> >{% endcapture -%}
+{%- endfor %}
+{%- endif %}
 
 {% if item.attachments.length > 0 -%}
 ## Annotations
