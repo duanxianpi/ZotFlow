@@ -269,13 +269,19 @@ export class NoteService {
         forceUpdateAnnotationImage: boolean,
     ) {
         // Get all PDF attachments
-        let attachments = (await db.items
-            .where({
-                libraryID: item.libraryID,
-                parentItem: item.key,
-                itemType: "attachment",
-            })
-            .toArray()) as IDBZoteroItem<AttachmentData>[];
+        let attachments;
+        console.log(item);
+        if (item.itemType === "attachment") {
+            attachments = [item as IDBZoteroItem<AttachmentData>];
+        } else {
+            attachments = (await db.items
+                .where({
+                    libraryID: item.libraryID,
+                    parentItem: item.key,
+                    itemType: "attachment",
+                })
+                .toArray()) as IDBZoteroItem<AttachmentData>[];
+        }
 
         attachments = attachments.filter(
             (a) => a.raw.data.contentType === "application/pdf",

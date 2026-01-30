@@ -35,6 +35,9 @@ import { getBlobUrls } from "bundle-assets/inline-assets";
 import { services } from "services/services";
 
 import type { ZotFlowSettings } from "settings/types";
+import { getAnnotationJson } from "db/annotation";
+import type { IDBZoteroItem } from "types/db-schema";
+import type { AttachmentData } from "types/zotero-item";
 
 type BridgeState =
     | "idle"
@@ -70,7 +73,10 @@ export class IframeReaderBridge {
 
     private token: string | null = null;
 
-    constructor(private container: HTMLElement) {}
+    constructor(
+        private container: HTMLElement,
+        private attachmentItem: IDBZoteroItem<AttachmentData>,
+    ) {}
 
     /**
      * Listen to specific event types from the child iframe with type safety
@@ -283,7 +289,18 @@ export class IframeReaderBridge {
         ]);
 
         if (this._readerOpts) {
-            await this.child!.initReader(this._readerOpts);
+            // Update annotation json
+            const annotationJson = await getAnnotationJson(
+                this.attachmentItem,
+                services.settings.zoteroApiKey,
+                (item) => item.syncStatus !== "deleted",
+            );
+            const newReaderOpts: CreateReaderOptions = {
+                ...this._readerOpts,
+                annotations: annotationJson,
+            };
+
+            await this.initReader(newReaderOpts);
         }
     }
 

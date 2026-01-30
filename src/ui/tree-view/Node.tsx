@@ -35,6 +35,10 @@ export const NodeItem = ({
     tree,
 }: NodeRendererProps<ViewNode>) => {
     const { nodeType, name, children } = node.data;
+    const isTopLevelItem =
+        nodeType === "item" &&
+        (node.parent?.data.nodeType === "library" ||
+            node.parent?.data.nodeType === "collection");
     const isFolder = children.length > 0;
 
     if (nodeType === "spacer") {
@@ -84,6 +88,7 @@ export const NodeItem = ({
         node.select();
 
         const menu = new Menu();
+        console.log("node", node);
 
         if (nodeType === "collection" || nodeType === "library") {
             menu.addItem((item) => {
@@ -94,11 +99,7 @@ export const NodeItem = ({
                         // await services.note.batchCreateNotes([]);
                     });
             });
-        } else if (
-            nodeType === "item" &&
-            node.data.itemType !== "attachment" &&
-            node.data.itemType !== "note"
-        ) {
+        } else if (isTopLevelItem && node.data.itemType !== "note") {
             menu.addItem((item) => {
                 item.setTitle("Open source note")
                     .setIcon("file-badge")
@@ -136,7 +137,7 @@ export const NodeItem = ({
         if (
             nodeType === "collection" ||
             nodeType === "library" ||
-            (nodeType === "item" && node.data.itemType !== "attachment")
+            (isTopLevelItem && node.data.itemType !== "note")
         ) {
             menu.showAtMouseEvent(e.nativeEvent);
         }

@@ -44,6 +44,7 @@ export interface ItemTemplateContext {
     // Children
     attachments: AttachmentTemplateContext[];
     annotations: AnnotationTemplateContext[];
+    attachmentAnnotations: AnnotationTemplateContext[];
     notes: NoteTemplateContext[];
 }
 

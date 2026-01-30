@@ -25,52 +25,66 @@ year: {{ item.date | slice: 0, 4 }}
 url: {{ item.url }}
 doi: {{ item.DOI }}
 ---
-{% capture newline %}
-{% endcapture -%}
 {%- capture quote_string %}{{ newline }}> {% endcapture -%}
 {%- capture quote_string_2 %}{{ newline }}> >{% endcapture -%}
-
 # {{ item.title }}
-{% if item.abstractNote %}
+{%- if item.abstractNote -%}
 ## Abstract
 > {{ item.abstractNote | replace: newline, quote_string }}
-{%- endif %}
 
-{% if item.attachments.length > 0 -%}
+{%- endif -%}
+{%- if item.attachments.length > 0 -%}
 ## Attachments
-{% for attachment in item.attachments -%}
+{%- for attachment in item.attachments -%}
 - [{{ attachment.filename }}](obsidian://zotflow?type=open-attachment&libraryID={{ attachment.libraryID }}&key={{ attachment.key }})
-{%- endfor %}
-{%- endif %}
+{%- endfor -%}
 
-{% if item.notes.length > 0 -%}
+{%- endif -%}
+{%- if item.notes.length > 0 -%}
 ## Notes
-{% for note in item.notes -%}
+{%- for note in item.notes -%}
 ### {{ note.title | default: "Note" }}
 {{ note.note }}
-{%- endfor %}
-{%- endif %}
+{%- endfor -%}
 
-{% if item.attachments.length > 0 -%}
+{%- endif -%}
+{%- if item.attachments.length > 0 and item.attachmentAnnotations.length > 0 -%}
 ## Annotations
-{% for attachment in item.attachments -%}
-{% if attachment.annotations.length > 0 -%}
+{%- for attachment in item.attachments -%}
+{%- if attachment.annotations.length > 0 -%}
 ### {{ attachment.filename }}
-{% for annotation in attachment.annotations %}
+{%- for annotation in attachment.annotations -%}
 > [!zotflow-{{ annotation.type }}-{{ annotation.color }}] [{{ attachment.filename }}, p.{{ annotation.pageLabel }}](obsidian://zotflow?type=open-attachment&libraryID={{ attachment.libraryID }}&key={{ attachment.key }}&navigation={{ annotation.key | process_nav_info}})
-{% if annotation.type == "ink" or annotation.type == "image"-%}
+{%- if annotation.type == "ink" or annotation.type == "image"-%}
 > > ![[{{settings.annotationImageFolder}}/{{ annotation.key }}.png]]
 {%- else -%}
 > > {{ annotation.text | replace: newline, quote_string_2 }}
-{%- endif %}
-{% if annotation.comment != "" -%}
+{%- endif -%}
+{%- if annotation.comment != "" -%}
 >
 > {{ annotation.comment | replace: newline, quote_string }}
-{% endif %}^{{ annotation.key }}
-{% endfor %}
-{% endif %}
-{% endfor %}
-{% endif %}
+{%- endif -%}^{{ annotation.key }}
+
+{%- endfor -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{%- if item.attachments.length == 0 and item.itemType == "attachment" and item.annotations.length > 0 -%}
+## Annotations
+{%- for annotation in item.annotations -%}
+> [!zotflow-{{ annotation.type }}-{{ annotation.color }}] [{{ item.title }}, p.{{ annotation.pageLabel }}](obsidian://zotflow?type=open-attachment&libraryID={{ item.libraryID }}&key={{ item.key }}&navigation={{ annotation.key | process_nav_info}})
+{%- if annotation.type == "ink" or annotation.type == "image"-%}
+> > ![[{{settings.annotationImageFolder}}/{{ annotation.key }}.png]]
+{%- else -%}
+> > {{ annotation.text | replace: newline, quote_string_2 }}
+{%- endif -%}
+{%- if annotation.comment != "" -%}
+>
+> {{ annotation.comment | replace: newline, quote_string }}
+{%- endif -%}^{{ annotation.key }}
+
+{%- endfor -%}
+{%- endif -%}
 `;
 
 export class TemplateService {
@@ -85,6 +99,10 @@ export class TemplateService {
     initialize() {
         this.engine = new Liquid({
             extname: ".md",
+            greedy: false,
+            globals: {
+                newline: "\n",
+            },
         });
         this.engine.registerFilter("process_nav_info", (input: string) => {
             const navInfo = {
@@ -103,7 +121,7 @@ export class TemplateService {
         templateContent: string | null,
     ): Promise<string> {
         const context = await this.prepareItemContext(item);
-
+        console.log(context);
         try {
             let template = templateContent || DEFAULT_ITEM_TEMPLATE;
             template = this.ensureMandatoryFrontmatter(template);
@@ -148,10 +166,6 @@ export class TemplateService {
         for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed) {
-                // Preserve empty lines if needed, or just skip.
-                // To behave like previous code which reconstructed, we can skip or add empty.
-                // Let's add empty if it's not the very beginning/end to preserve spacing if desired,
-                // but checking for "ensured" fields is priority.
                 if (
                     newLines.length > 0 &&
                     newLines[newLines.length - 1] !== ""
@@ -178,10 +192,6 @@ export class TemplateService {
 
         // Prepend missing mandatory keys
         const missingLines: string[] = [];
-        // Intentionally checking in reverse order of desired appearance if we were unshifting,
-        // but here we are pushing to missingLines which will be prepended.
-        // Let's decide on an order: zotflow-locked, zotero-key, item-version.
-        // We want them at the top.
 
         if (!foundKeys.has("item-version")) {
             missingLines.unshift(mandatory.get("item-version")!);
@@ -247,7 +257,19 @@ ${finalFrontmatter}
                 .map((att) => this.mapToAttachmentContext(att)),
         );
 
-        const annotations = attachments.map((att) => att.annotations).flat();
+        const annotations = await Promise.all(
+            children
+                .filter(
+                    (c) =>
+                        c.syncStatus !== "deleted" &&
+                        c.itemType === "annotation",
+                )
+                .map((att: any) => this.mapToAnnotationContext(att)),
+        );
+
+        const attachmentAnnotations = attachments.flatMap(
+            (att) => att.annotations,
+        );
 
         let creatorsObj: { name: string }[] = [];
         if (raw.meta?.creatorsSummary) {
@@ -268,6 +290,7 @@ ${finalFrontmatter}
             citationKey: item.citationKey || "",
             notes,
             annotations,
+            attachmentAnnotations,
             attachments,
             itemType: item.itemType,
             title: item.title || "",

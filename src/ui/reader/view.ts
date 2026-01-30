@@ -98,8 +98,11 @@ export class ZoteroReaderView extends ItemView {
             // Try force update the source note
             workerBridge.note.triggerUpdate(
                 this.attachmentItem.libraryID,
-                this.attachmentItem.parentItem,
+                this.attachmentItem.parentItem !== ""
+                    ? this.attachmentItem.parentItem
+                    : this.attachmentItem.key,
             );
+
             this.renderReader();
         } catch (e) {
             console.error(e);
@@ -117,7 +120,10 @@ export class ZoteroReaderView extends ItemView {
         try {
             // Create bridge once
             if (!this.bridge) {
-                this.bridge = new IframeReaderBridge(container);
+                this.bridge = new IframeReaderBridge(
+                    container,
+                    this.attachmentItem,
+                );
 
                 // Register event listeners
                 this.bridge.onEventType("error", (evt) => {
@@ -502,10 +508,10 @@ export class ZoteroReaderView extends ItemView {
         }
 
         // Debounce Update Source Note
-        if (hasChanges && paperKey) {
+        if (hasChanges) {
             await workerBridge.note.triggerUpdate(
                 libraryID,
-                paperKey,
+                paperKey !== "" ? paperKey : attachmentKey,
                 {
                     forceUpdateContent: true,
                     forceUpdateImages: false,
@@ -580,14 +586,12 @@ export class ZoteroReaderView extends ItemView {
         }
 
         // Trigger note update
-        if (paperKey) {
-            await workerBridge.note.triggerUpdate(
-                libraryID,
-                paperKey,
-                { forceUpdateContent: true },
-                true,
-            );
-        }
+        await workerBridge.note.triggerUpdate(
+            libraryID,
+            paperKey !== "" ? paperKey : this.attachmentItem.key,
+            { forceUpdateContent: true },
+            true,
+        );
     }
 
     private handleExternalAnnotation(annotation: any): AnnotationJSON {
