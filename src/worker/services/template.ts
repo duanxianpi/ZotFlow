@@ -7,6 +7,7 @@ import type {
     AnnotationTemplateContext,
     AttachmentTemplateContext,
 } from "types/template-context";
+import type { IParentProxy } from "bridge/types";
 import type {
     AnnotationData,
     AttachmentData,
@@ -15,15 +16,15 @@ import type {
 import type { ZotFlowSettings } from "settings/types";
 
 const DEFAULT_ITEM_TEMPLATE = `---
-citationKey: {{ item.citationKey }}
+citationKey: {{ item.citationKey | json }}
 title: {{ item.title | json }}
-itemType: {{ item.itemType }}
+itemType: {{ item.itemType | json }}
 creators: [{% for c in item.creators %}"{{ c.name }}"{% unless forloop.last %}, {% endunless %}{% endfor %}]
-publication: "{{ item.publicationTitle | default: item.publisher }}"
-date: {{ item.date }}
+publication: {{ item.publicationTitle | default: item.publisher | json }}
+date: {{ item.date | json }}
 year: {{ item.date | slice: 0, 4 }}
-url: {{ item.url }}
-doi: {{ item.DOI }}
+url: {{ item.url | json }}
+doi: {{ item.DOI | json }}
 ---
 {%- capture quote_string %}{{ newline }}> {% endcapture -%}
 {%- capture quote_string_2 %}{{ newline }}> >{% endcapture -%}
@@ -88,11 +89,12 @@ doi: {{ item.DOI }}
 `;
 
 export class TemplateService {
-    private settings: ZotFlowSettings;
     private engine: Liquid;
 
-    constructor(settings: ZotFlowSettings) {
-        this.settings = settings;
+    constructor(
+        private settings: ZotFlowSettings,
+        private parentHost: IParentProxy,
+    ) {
         this.initialize();
     }
 
@@ -119,100 +121,74 @@ export class TemplateService {
     async renderItem(
         item: AnyIDBZoteroItem,
         templateContent: string | null,
+        originalFrontmatter: Record<string, any> = {},
     ): Promise<string> {
         const context = await this.prepareItemContext(item);
         console.log(context);
         try {
-            let template = templateContent || DEFAULT_ITEM_TEMPLATE;
-            template = this.ensureMandatoryFrontmatter(template);
+            const template = templateContent || DEFAULT_ITEM_TEMPLATE;
 
-            const res = await this.engine.parseAndRender(template, context);
-            return res as string;
+            // Separate Frontmatter and Body
+            const frontmatterRegex = /^---\s*([\s\S]*?)\s*---\n/;
+            const match = template.match(frontmatterRegex);
+
+            let templateFrontmatterRaw = "";
+            let body = template;
+
+            if (match) {
+                templateFrontmatterRaw = match[1] || "";
+                body = template.substring(match[0].length);
+            } else {
+                body = template;
+            }
+
+            // Parse Template Frontmatter
+            let templateFrontmatter: any = {};
+            if (templateFrontmatterRaw.trim()) {
+                try {
+                    // Render the frontmatter raw string first (as it may contain liquid tags)
+                    const renderedFrontmatterRaw =
+                        await this.engine.parseAndRender(
+                            templateFrontmatterRaw,
+                            context,
+                        );
+
+                    // Then parse the rendered string as YAML
+                    templateFrontmatter = await this.parentHost.parseYaml(
+                        renderedFrontmatterRaw,
+                    );
+                } catch (e) {
+                    console.error("Failed to parse template frontmatter", e);
+                }
+            }
+
+            // Merge Frontmatter (Original + Rendered Template)
+            // Merge = Original + Template. Template keys overwrite Original keys.
+            const finalFrontmatter = {
+                ...originalFrontmatter,
+                ...templateFrontmatter,
+            };
+
+            // Ensure Mandatory Fields
+            finalFrontmatter["zotflow-locked"] = true;
+            finalFrontmatter["zotero-key"] = item.key;
+            finalFrontmatter["item-version"] = item.version;
+
+            // Stringify Frontmatter
+            const frontmatterString =
+                await this.parentHost.stringifyYaml(finalFrontmatter);
+
+            // Render Body
+            const renderedBody = await this.engine.parseAndRender(
+                body,
+                context,
+            );
+
+            return `---\n${frontmatterString}---\n${renderedBody}`;
         } catch (err) {
             console.error("ZotFlow: Template rendering error", err);
-            // We cannot show Notice here directly, caller (NoteService) should handle error or use parentHost to notify
             throw err;
         }
-    }
-
-    private ensureMandatoryFrontmatter(template: string): string {
-        const frontmatterRegex = /^---\s*([\s\S]*?)\s*---/;
-        const match = template.match(frontmatterRegex);
-
-        let frontmatterContent = "";
-        let body = template;
-
-        if (match) {
-            frontmatterContent = match[1] || "";
-            body = template.substring(match[0].length);
-        } else {
-            // If no frontmatter, just add empty one at start
-            body = template;
-        }
-
-        const lines = frontmatterContent.split("\n");
-        const newLines: string[] = [];
-
-        // Mandatory keys map: key -> required complete line
-        const mandatory = new Map([
-            ["zotflow-locked", "zotflow-locked: true"],
-            ["zotero-key", "zotero-key: {{ item.key }}"],
-            ["item-version", "item-version: {{ item.version }}"],
-        ]);
-
-        const foundKeys = new Set<string>();
-
-        // Process existing lines
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) {
-                if (
-                    newLines.length > 0 &&
-                    newLines[newLines.length - 1] !== ""
-                ) {
-                    newLines.push("");
-                }
-                continue;
-            }
-
-            const colonIndex = trimmed.indexOf(":");
-            if (colonIndex !== -1) {
-                const key = trimmed.substring(0, colonIndex).trim();
-                if (mandatory.has(key)) {
-                    // Replace with mandatory value
-                    newLines.push(mandatory.get(key)!);
-                    foundKeys.add(key);
-                } else {
-                    newLines.push(line);
-                }
-            } else {
-                newLines.push(line);
-            }
-        }
-
-        // Prepend missing mandatory keys
-        const missingLines: string[] = [];
-
-        if (!foundKeys.has("item-version")) {
-            missingLines.unshift(mandatory.get("item-version")!);
-        }
-        if (!foundKeys.has("zotero-key")) {
-            missingLines.unshift(mandatory.get("zotero-key")!);
-        }
-        if (!foundKeys.has("zotflow-locked")) {
-            missingLines.unshift(mandatory.get("zotflow-locked")!);
-        }
-
-        const finalFrontmatter = [...missingLines, ...newLines]
-            .join("\n")
-            .trim();
-
-        // Construct final template
-        // Ensure strictly one newline after frontmatter
-        const cleanBody = body.startsWith("\n") ? body : `\n${body}`;
-        return `---
-${finalFrontmatter}
----${cleanBody}`;
     }
 
     private sanitizeQuotesString(str: string): string {

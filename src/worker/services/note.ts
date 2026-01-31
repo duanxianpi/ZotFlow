@@ -177,15 +177,16 @@ export class NoteService {
                     path,
                     fileCheck,
                     forceUpdateContent,
+                    forceUpdateImages,
                 );
             } else {
                 // Case B: File does not exist -> Create new file
                 await this.performCreate(item, path);
-            }
 
-            // Post processing: Extract images (if setting is enabled)
-            if (this.settings.autoImportAnnotationImages) {
-                await this.extractAnnotationImages(item, forceUpdateImages);
+                // Post processing: Extract images (if setting is enabled)
+                if (this.settings.autoImportAnnotationImages) {
+                    await this.extractAnnotationImages(item, true);
+                }
             }
 
             return path;
@@ -220,6 +221,7 @@ export class NoteService {
         const content = await this.templateService.renderItem(
             item,
             templateContent,
+            {},
         );
 
         await this.parentHost.writeTextFile(path, content);
@@ -235,6 +237,7 @@ export class NoteService {
         path: string,
         fileCheck: any,
         forceUpdate: boolean,
+        forceUpdateImages: boolean,
     ) {
         // Read Frontmatter version from file
         const currentVersion =
@@ -249,12 +252,18 @@ export class NoteService {
             const content = await this.templateService.renderItem(
                 item,
                 templateContent,
+                fileCheck.frontmatter || {},
             );
 
             await this.parentHost.writeTextFile(path, content);
             console.log(
                 `[ZotFlow] Updated note: ${path} (v${currentVersion} -> v${newVersion})`,
             );
+
+            // Extract images (if setting is enabled)
+            if (this.settings.autoImportAnnotationImages) {
+                await this.extractAnnotationImages(item, forceUpdateImages);
+            }
         } else {
             // Version is the same, skip writing
             // console.log(`[ZotFlow] Note is up to date: ${path}`);
@@ -322,6 +331,21 @@ export class NoteService {
                 );
             }
         }
+    }
+
+    async saveBase64Image(image: string, annotationKey: string) {
+        const base64 = image.split(",")[1]!;
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        const path =
+            this.settings.annotationImageFolder + "/" + annotationKey + ".png";
+
+        await this.parentHost.writeBinaryFile(path, bytes.buffer);
     }
 
     async deleteAnnotationImage(annotationKey: string) {

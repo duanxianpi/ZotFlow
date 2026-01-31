@@ -108,6 +108,10 @@ export const NodeItem = ({
                             await workerBridge.note.openNote(
                                 node.data.libraryID,
                                 node.data.key,
+                                {
+                                    forceUpdateContent: true,
+                                    forceUpdateImages: false,
+                                },
                             );
                         } catch (err) {
                             console.error("Failed to create/open note", err);
@@ -115,8 +119,8 @@ export const NodeItem = ({
                     });
             });
             menu.addItem((item) => {
-                item.setTitle("Force update note (with images)")
-                    .setIcon("rotate-cw")
+                item.setTitle("Extract annotation images")
+                    .setIcon("image")
                     .onClick(async () => {
                         try {
                             await workerBridge.note.openNote(

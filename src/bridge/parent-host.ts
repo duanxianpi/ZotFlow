@@ -6,6 +6,8 @@ import {
     TFile,
     normalizePath,
     MarkdownView,
+    parseYaml,
+    stringifyYaml,
 } from "obsidian";
 import {
     saveTextFile,
@@ -122,5 +124,13 @@ export class ParentHost implements IParentProxy {
 
     public async deleteFile(path: string): Promise<void> {
         await deleteFile(this.app, path);
+    }
+
+    public async parseYaml(text: string): Promise<any> {
+        return parseYaml(text);
+    }
+
+    public async stringifyYaml(obj: any): Promise<string> {
+        return stringifyYaml(obj);
     }
 }

@@ -7,6 +7,8 @@ import { TreeViewService } from "./services/tree-view";
 import { TemplateService } from "./services/template";
 import { NoteService } from "./services/note";
 import { PDFProcessWorker } from "./services/pdf-processor";
+import { LocalNoteService } from "./services/local-note";
+import { LocalTemplateService } from "./services/local-template";
 
 import type { ZotFlowSettings } from "settings/types";
 import type { IParentProxy } from "bridge/types";
@@ -27,6 +29,8 @@ export interface WorkerAPI {
     webdav: WebDavService;
     treeView: TreeViewService;
     note: NoteService;
+
+    localNote: LocalNoteService;
     pdfProcessor: PDFProcessWorker;
     updateSettings(settings: ZotFlowSettings): void;
 }
@@ -39,6 +43,9 @@ let _sync: SyncService | undefined;
 let _treeView: TreeViewService | undefined;
 let _template: TemplateService | undefined;
 let _note: NoteService | undefined;
+
+let _localNote: LocalNoteService | undefined;
+let _localTemplate: LocalTemplateService | undefined;
 let _pdfProcessor: PDFProcessWorker | undefined;
 
 const exposedApi: WorkerAPI = {
@@ -48,6 +55,7 @@ const exposedApi: WorkerAPI = {
         blobUrls: Record<string, string>,
     ) => {
         // Patch global fetch
+        (globalThis as any).originalFetch = (globalThis as any).fetch;
         (globalThis as any).fetch = async (url: string, init?: RequestInit) => {
             const response = await parentHost.request({
                 url: url,
@@ -89,7 +97,7 @@ const exposedApi: WorkerAPI = {
 
         _pdfProcessor = new PDFProcessWorker(settings, parentHost, blobUrls);
 
-        _template = new TemplateService(settings);
+        _template = new TemplateService(settings, parentHost);
         _note = new NoteService(
             settings,
             _template,
@@ -97,6 +105,9 @@ const exposedApi: WorkerAPI = {
             _attachment,
             _pdfProcessor,
         );
+
+        _localTemplate = new LocalTemplateService(settings);
+        _localNote = new LocalNoteService(settings, parentHost, _localTemplate);
 
         // Initialize PDF Worker
         _pdfProcessor._init();
@@ -138,6 +149,12 @@ const exposedApi: WorkerAPI = {
         return Comlink.proxy(_note);
     },
 
+    get localNote() {
+        if (!_localNote)
+            throw new Error("[ZotFlow Worker] Worker not initialized");
+        return Comlink.proxy(_localNote);
+    },
+
     get pdfProcessor() {
         if (!_pdfProcessor)
             throw new Error("[ZotFlow Worker] Worker not initialized");
@@ -166,6 +183,8 @@ const exposedApi: WorkerAPI = {
         _treeView!.updateSettings(settings);
         _template!.updateSettings(settings);
         _note!.updateSettings(settings);
+
+        _localNote!.updateSettings(settings);
         _pdfProcessor!.updateSettings(settings);
     },
 };

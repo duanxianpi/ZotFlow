@@ -7,6 +7,12 @@
     overflow: hidden;
 }
 
+.workspace-leaf-content[data-type="zotflow-local-zotero-reader-view"]
+    .view-content {
+    padding: 0;
+    overflow: hidden;
+}
+
 .zotflow-tree {
     padding: 10px;
     padding-bottom: 0 !important;

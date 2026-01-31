@@ -102,6 +102,7 @@ export interface AnnotationJSON {
     libraryID?: number;
     id: string;
     type: AnnotationType;
+    image?: Uint8Array;
     isExternal?: boolean;
     authorName?: string;
     isAuthorNameAuthoritative?: boolean;

@@ -13,6 +13,7 @@ import type { ZoteroAPIService } from "worker/services/zotero";
 import type { WebDavService } from "worker/services/webdav";
 import type { TreeViewService } from "worker/services/tree-view";
 import type { NoteService } from "worker/services/note";
+import type { LocalNoteService } from "worker/services/local-note";
 import type { App } from "obsidian";
 
 export class WorkerBridge {
@@ -26,6 +27,7 @@ export class WorkerBridge {
     private _webdav: WebDavService;
     private _treeView: TreeViewService;
     private _note: NoteService;
+    private _localNote: LocalNoteService;
     private _pdfProcessor: PDFProcessWorker;
 
     constructor() {
@@ -48,6 +50,7 @@ export class WorkerBridge {
         this._webdav = await this._api.webdav;
         this._treeView = await this._api.treeView;
         this._note = await this._api.note;
+        this._localNote = await this._api.localNote;
         this._pdfProcessor = await this._api.pdfProcessor;
 
         console.log("[ZotFlow] Client services initialized.");
@@ -75,6 +78,10 @@ export class WorkerBridge {
 
     get note() {
         return this._note;
+    }
+
+    get localNote() {
+        return this._localNote;
     }
 
     get pdfProcessWorker() {

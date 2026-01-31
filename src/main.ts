@@ -25,6 +25,12 @@ import { ZotFlowLockExtension } from "ui/zotflow-lock-extension";
 import { openAttachment } from "ui/viewer";
 
 import type { ZotFlowSettings } from "./settings/types";
+import {
+    LOCAL_ZOTERO_READER_VIEW_TYPE,
+    LocalReaderView,
+} from "ui/reader/local-view";
+
+const SUPPORTED_EXTENSIONS = ["pdf", "epub", "html"];
 
 export default class ZotFlow extends Plugin {
     settings: ZotFlowSettings;
@@ -39,12 +45,19 @@ export default class ZotFlow extends Plugin {
         // Initialize worker bridge
         await workerBridge.initialize(this.settings, this.app);
 
+        // Add Icons
+        this.addIcons();
+
         // Register views
         this.registerView(
             ZOTERO_READER_VIEW_TYPE,
             (leaf) => new ZoteroReaderView(leaf),
         );
         this.registerView(TREE_VIEW_TYPE, (leaf) => new ZotFlowTreeView(leaf));
+        this.registerView(
+            LOCAL_ZOTERO_READER_VIEW_TYPE,
+            (leaf) => new LocalReaderView(leaf),
+        );
 
         // Add tree view to left
         this.app.workspace.onLayoutReady(async () => {
@@ -60,6 +73,38 @@ export default class ZotFlow extends Plugin {
             "zotflow",
             this.handleProtocolCall.bind(this),
         );
+
+        if (this.settings.overwriteViewer) {
+            try {
+                /**@ts-expect-error */
+                this.app.viewRegistry.unregisterExtensions(
+                    SUPPORTED_EXTENSIONS,
+                );
+                this.registerExtensions(
+                    SUPPORTED_EXTENSIONS,
+                    LOCAL_ZOTERO_READER_VIEW_TYPE,
+                );
+            } catch {
+                const message = `[ZotFlow]: Could not unregister extension: '${SUPPORTED_EXTENSIONS}'`;
+                new Notice(message);
+
+                console.error(message);
+            }
+        } else {
+            for (const extension of SUPPORTED_EXTENSIONS) {
+                try {
+                    this.registerExtensions(
+                        [extension],
+                        LOCAL_ZOTERO_READER_VIEW_TYPE,
+                    );
+                } catch {
+                    const message = `[ZotFlow]: Could not register extension: '${extension}'`;
+                    new Notice(message);
+
+                    console.error(message);
+                }
+            }
+        }
 
         // Ensure MathJax is loaded
         MarkdownRenderer.render(
@@ -93,9 +138,12 @@ export default class ZotFlow extends Plugin {
         });
 
         this.addSettingTab(new ZotFlowSettingTab(this.app, this));
+    }
 
+    onunload() {}
+
+    addIcons() {
         // Add Icons
-
         addIcon(
             "zotero-underline",
             `
@@ -133,8 +181,6 @@ export default class ZotFlow extends Plugin {
 			`,
         );
     }
-
-    onunload() {}
 
     async registerTreeView(active = false) {
         const { workspace } = this.app;

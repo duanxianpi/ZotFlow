@@ -15,6 +15,7 @@ import type {
     AnnotationJSON,
     ColorScheme,
 } from "types/zotero-reader";
+import { saveBinaryFile } from "utils/file";
 
 export const ZOTERO_READER_VIEW_TYPE = "zotflow-zotero-reader-view";
 
@@ -122,6 +123,7 @@ export class ZoteroReaderView extends ItemView {
             if (!this.bridge) {
                 this.bridge = new IframeReaderBridge(
                     container,
+                    false,
                     this.attachmentItem,
                 );
 
@@ -401,6 +403,12 @@ export class ZoteroReaderView extends ItemView {
             const annotationData = annotationItemFromJSON(json);
             const key = json.id;
             const existing = existingMap.get(key);
+            const isVisual =
+                annotationData.annotationType === "image" ||
+                annotationData.annotationType === "ink";
+            if (isVisual) {
+                workerBridge.note.saveBase64Image(json.image, key);
+            }
 
             if (existing) {
                 // === Update logic (UPDATE) ===
@@ -418,20 +426,8 @@ export class ZoteroReaderView extends ItemView {
                                 ? "created"
                                 : "updated";
 
-                        // If it's an image/ink annotation and data has changed, reset version to 0
-                        let annotationImageVersion =
-                            existing.annotationImageVersion;
-                        const isVisual =
-                            annotationData.annotationType === "image" ||
-                            annotationData.annotationType === "ink";
-
-                        if (isVisual) {
-                            annotationImageVersion = 0; // Reset version to trigger re-render
-                        }
-
                         itemsToPut.push({
                             ...existing,
-                            annotationImageVersion,
                             syncStatus: newSyncStatus,
                             dateModified: now,
                             raw: {
@@ -465,7 +461,7 @@ export class ZoteroReaderView extends ItemView {
                     syncStatus: !json.isExternal ? "created" : "ignore",
                     syncedAt: now,
                     syncError: "",
-                    annotationImageVersion: 0, // New image defaults to 0
+                    annotationImageVersion: 1,
                     raw: {
                         key,
                         version: 0,
@@ -509,6 +505,7 @@ export class ZoteroReaderView extends ItemView {
 
         // Debounce Update Source Note
         if (hasChanges) {
+            console.log("[ZotFlow] Triggering update for note:", paperKey);
             await workerBridge.note.triggerUpdate(
                 libraryID,
                 paperKey !== "" ? paperKey : attachmentKey,
@@ -523,7 +520,7 @@ export class ZoteroReaderView extends ItemView {
 
     /**
      * Handle deleted annotations
-     * Optimization: Batch processing,区分物理删除和软删除
+     * Optimization: Batch processing
      */
     private async handleAnnotationsDeleted(ids: string[]) {
         console.log("[ZotFlow] Handling deleted annotations:", ids);

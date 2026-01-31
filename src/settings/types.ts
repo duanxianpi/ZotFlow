@@ -20,6 +20,7 @@ export interface ZotFlowSettings {
     sourceNoteFolder: string;
     autoImportAnnotationImages: boolean;
     annotationImageFolder: string;
+    overwriteViewer: boolean;
 }
 
 export const DEFAULT_SETTINGS: ZotFlowSettings = {
@@ -34,4 +35,5 @@ export const DEFAULT_SETTINGS: ZotFlowSettings = {
     sourceNoteFolder: "",
     autoImportAnnotationImages: false,
     annotationImageFolder: "",
+    overwriteViewer: false,
 };

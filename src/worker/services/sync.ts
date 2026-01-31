@@ -118,6 +118,7 @@ export class SyncService {
         const response = await libHandle.collections().get({
             format: "versions",
             since: localVersion,
+            includeTrashed: true,
         });
 
         const versionsMap = await response.raw.json();
@@ -137,6 +138,7 @@ export class SyncService {
             for (const slice of slices) {
                 const batchRes = await libHandle.collections().get({
                     collectionKey: slice.join(","),
+                    includeTrashed: true,
                 });
                 const newCollections = batchRes.raw;
                 if (newCollections.length > 0) {
@@ -321,7 +323,7 @@ export class SyncService {
         const response = await libHandle.items().get({
             format: "versions",
             since: localVersion,
-            includeTrashed: false,
+            includeTrashed: true,
         });
 
         const versionsMap = await response.raw.json();
@@ -347,6 +349,7 @@ export class SyncService {
             for (const slice of slices) {
                 const batchRes = await libHandle.items().get({
                     itemKey: slice.join(","),
+                    includeTrashed: true,
                 });
 
                 const newItems = batchRes.raw;
@@ -521,6 +524,7 @@ export class SyncService {
         const upserts = dirtyItems.filter(
             (i) => i.syncStatus === "created" || i.syncStatus === "updated",
         );
+        console.log(upserts);
 
         console.log(
             `[ZotFlow] Pushing changes: ${deletions.length} deletions, ${upserts.length} upserts.`,
@@ -590,10 +594,14 @@ export class SyncService {
                         data.key = item.key;
                         data.version = item.version;
                     }
+
+                    // Remove annotationIsExternal
+                    delete data.annotationIsExternal;
                     return data;
                 });
 
                 try {
+                    console.log(payload);
                     const response = await this.zotero.client
                         .library(libraryType, libraryID)
                         .items()

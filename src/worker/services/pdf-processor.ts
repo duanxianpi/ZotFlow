@@ -152,7 +152,9 @@ export class PDFProcessWorker {
                                     `pdf/web/cmaps/${message.data}.bcmap`
                                 ];
                             if (cMapUrl) {
-                                const response = await fetch(cMapUrl);
+                                const response = await (
+                                    globalThis as any
+                                ).originalFetch(cMapUrl);
                                 const arrayBuffer =
                                     await response.arrayBuffer();
                                 respData = {
@@ -175,7 +177,10 @@ export class PDFProcessWorker {
                                     `pdf/web/standard_fonts/${message.data}`
                                 ];
                             if (fontUrl) {
-                                const response = await fetch(fontUrl);
+                                console.log(`fontUrl: ${fontUrl}`);
+                                const response = await (
+                                    globalThis as any
+                                ).originalFetch(fontUrl);
                                 const arrayBuffer =
                                     await response.arrayBuffer();
                                 respData = new Uint8Array(arrayBuffer);

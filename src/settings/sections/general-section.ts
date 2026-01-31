@@ -81,5 +81,23 @@ export class GeneralSection {
                     text.inputEl.size = 40;
                 });
         });
+
+        const localZoteroReaderSettingGroup = new SettingGroup(containerEl);
+        localZoteroReaderSettingGroup.setHeading("Local Zotero Reader");
+
+        localZoteroReaderSettingGroup.addSetting((setting) => {
+            setting
+                .setName("Overwrite PDF/EPUB/HTML Viewer")
+                .setDesc(
+                    "Overwrite PDF/EPUB/HTML viewer with local Zotero reader (Requires Restart).",
+                )
+                .addToggle((toggle) => {
+                    toggle.setValue(this.plugin.settings.overwriteViewer);
+                    toggle.onChange(async (value) => {
+                        this.plugin.settings.overwriteViewer = value;
+                        await this.plugin.saveSettings();
+                    });
+                });
+        });
     }
 }

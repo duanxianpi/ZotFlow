@@ -14,6 +14,7 @@ export class ZotFlowSettingTab extends PluginSettingTab {
     constructor(app: App, plugin: ZotFlow) {
         super(app, plugin);
         this.plugin = plugin;
+        this.icon = "zotero-icon";
     }
 
     async display(): Promise<void> {

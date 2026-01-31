@@ -34,4 +34,6 @@ export interface IParentProxy extends IUIResponder, INetworkFetcher {
     openFile(path: string, newLeaf: boolean): Promise<void>;
     getFileByKey(key: string): Promise<string | null>;
     indexFile(path: string): Promise<void>;
+    parseYaml(text: string): Promise<any>;
+    stringifyYaml(obj: any): Promise<string>;
 }

@@ -75,7 +75,8 @@ export class IframeReaderBridge {
 
     constructor(
         private container: HTMLElement,
-        private attachmentItem: IDBZoteroItem<AttachmentData>,
+        private isLocal: boolean,
+        private attachmentItem?: IDBZoteroItem<AttachmentData>,
     ) {}
 
     /**
@@ -290,14 +291,18 @@ export class IframeReaderBridge {
 
         if (this._readerOpts) {
             // Update annotation json
-            const annotationJson = await getAnnotationJson(
-                this.attachmentItem,
-                services.settings.zoteroApiKey,
-                (item) => item.syncStatus !== "deleted",
-            );
+            let newAnnotationJson: AnnotationJSON[] = [];
+
+            if (!this.isLocal && this.attachmentItem) {
+                newAnnotationJson = await getAnnotationJson(
+                    this.attachmentItem,
+                    services.settings.zoteroApiKey,
+                    (item) => item.syncStatus !== "deleted",
+                );
+            }
             const newReaderOpts: CreateReaderOptions = {
                 ...this._readerOpts,
-                annotations: annotationJson,
+                annotations: newAnnotationJson,
             };
 
             await this.initReader(newReaderOpts);
