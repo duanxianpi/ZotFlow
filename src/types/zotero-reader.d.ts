@@ -120,6 +120,7 @@ export interface AnnotationJSON {
         position?: number;
     }>;
     dateModified: string;
+    dateCreated: string;
 }
 
 export interface CustomReaderTheme {

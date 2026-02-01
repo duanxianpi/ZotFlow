@@ -170,17 +170,19 @@ export class NoteService {
         const fileCheck = await this.parentHost.checkFile(path);
 
         try {
-            if (fileCheck.exists) {
+            if (
+                fileCheck.exists &&
+                fileCheck.frontmatter?.["zotero-key"] === key
+            ) {
                 // Case A: File exists -> Try update (version check)
                 await this.performUpdate(
                     item,
-                    path,
                     fileCheck,
                     forceUpdateContent,
                     forceUpdateImages,
                 );
             } else {
-                // Case B: File does not exist -> Create new file
+                // Case B: File does not exist or frontmatter is different -> Create new file
                 await this.performCreate(item, path);
 
                 // Post processing: Extract images (if setting is enabled)
@@ -210,9 +212,21 @@ export class NoteService {
      * Perform file creation
      */
     private async performCreate(item: AnyIDBZoteroItem, path: string) {
+        // If file exists but frontmatter create a file with different name
+        let fileCheck = await this.parentHost.checkFile(path);
+        let notePath = path;
+        if (fileCheck.exists) {
+            let counter = 1;
+            while (fileCheck.exists) {
+                notePath = path.replace(/\.md$/, `(${counter}).md`);
+                fileCheck = await this.parentHost.checkFile(notePath);
+                counter++;
+            }
+        }
+
         // Create empty file first
-        await this.parentHost.writeTextFile(path, "");
-        await this.parentHost.indexFile(path);
+        await this.parentHost.writeTextFile(notePath, "");
+        await this.parentHost.indexFile(notePath);
 
         // Then write content
         const templateContent = await this.parentHost.readTextFile(
@@ -224,9 +238,9 @@ export class NoteService {
             {},
         );
 
-        await this.parentHost.writeTextFile(path, content);
+        await this.parentHost.writeTextFile(notePath, content);
 
-        console.log(`[ZotFlow] Created note: ${path}`);
+        console.log(`[ZotFlow] Created note: ${notePath}`);
     }
 
     /**
@@ -234,7 +248,6 @@ export class NoteService {
      */
     private async performUpdate(
         item: AnyIDBZoteroItem,
-        path: string,
         fileCheck: any,
         forceUpdate: boolean,
         forceUpdateImages: boolean,
@@ -255,9 +268,9 @@ export class NoteService {
                 fileCheck.frontmatter || {},
             );
 
-            await this.parentHost.writeTextFile(path, content);
+            await this.parentHost.writeTextFile(fileCheck.path, content);
             console.log(
-                `[ZotFlow] Updated note: ${path} (v${currentVersion} -> v${newVersion})`,
+                `[ZotFlow] Updated note: ${fileCheck.path} (v${currentVersion} -> v${newVersion})`,
             );
 
             // Extract images (if setting is enabled)
@@ -342,8 +355,8 @@ export class NoteService {
             bytes[i] = binaryString.charCodeAt(i);
         }
 
-        const path =
-            this.settings.annotationImageFolder + "/" + annotationKey + ".png";
+        const folder = this.settings.annotationImageFolder.replace(/\/$/, "");
+        const path = `${folder}/${annotationKey}.png`;
 
         await this.parentHost.writeBinaryFile(path, bytes.buffer);
     }
@@ -351,7 +364,7 @@ export class NoteService {
     async deleteAnnotationImage(annotationKey: string) {
         // Calculate image path
         const filename = `${annotationKey}.png`;
-        const folder = this.settings.annotationImageFolder;
+        const folder = this.settings.annotationImageFolder.replace(/\/$/, "");
         const path = `${folder}/${filename}`;
 
         // Call main thread to delete file

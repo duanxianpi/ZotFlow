@@ -84,6 +84,6 @@ export interface AnnotationTemplateContext {
     color?: string;
     pageLabel?: string;
     tags: Array<{ tag: string; type?: number }>;
-    dateAdded: string;
+    dateCreated: string;
     dateModified: string;
 }

@@ -124,7 +124,7 @@ export class TemplateService {
         originalFrontmatter: Record<string, any> = {},
     ): Promise<string> {
         const context = await this.prepareItemContext(item);
-        console.log(context);
+
         try {
             const template = templateContent || DEFAULT_ITEM_TEMPLATE;
 
@@ -199,7 +199,11 @@ export class TemplateService {
     public async prepareItemContext(item: AnyIDBZoteroItem): Promise<any> {
         return {
             item: await this.mapToItemContext(item),
-            settings: this.settings,
+            settings: {
+                ...this.settings,
+                annotationImageFolder:
+                    this.settings.annotationImageFolder.replace(/\/$/, ""),
+            },
         };
     }
 
@@ -321,7 +325,7 @@ export class TemplateService {
             color: data.annotationColor,
             pageLabel: data.annotationPageLabel,
             tags: data.tags || [],
-            dateAdded: item.dateAdded,
+            dateCreated: item.dateAdded,
             dateModified: item.dateModified,
         };
     }

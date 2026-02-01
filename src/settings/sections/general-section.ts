@@ -99,5 +99,44 @@ export class GeneralSection {
                     });
                 });
         });
+
+        localZoteroReaderSettingGroup.addSetting((setting) => {
+            setting
+                .setName("Local Source Note Template Path")
+                .setDesc(
+                    "Path to template file for local source notes (relative to vault root).",
+                )
+                .addText((text) => {
+                    text.setPlaceholder(
+                        "e.g. templates/LocalSourceNoteTemplate.md",
+                    )
+                        .setValue(
+                            this.plugin.settings.localSourceNoteTemplatePath,
+                        )
+                        .onChange(async (value) => {
+                            this.plugin.settings.localSourceNoteTemplatePath =
+                                value;
+                            await this.plugin.saveSettings();
+                        });
+                    text.inputEl.size = 40;
+                });
+        });
+
+        localZoteroReaderSettingGroup.addSetting((setting) => {
+            setting
+                .setName("Local Source Note Folder")
+                .setDesc(
+                    "Default folder for local source notes (relative to vault root).",
+                )
+                .addText((text) => {
+                    text.setPlaceholder("e.g. Source/ZotFlow/Local")
+                        .setValue(this.plugin.settings.localSourceNoteFolder)
+                        .onChange(async (value) => {
+                            this.plugin.settings.localSourceNoteFolder = value;
+                            await this.plugin.saveSettings();
+                        });
+                    text.inputEl.size = 40;
+                });
+        });
     }
 }

@@ -1,4 +1,5 @@
 import { App, TFile, TFolder, normalizePath } from "obsidian";
+import type { TFileWithoutParentAndVault } from "types/zotflow";
 
 /**
  * Ensure folder exists
@@ -146,4 +147,52 @@ export async function deleteFile(app: App, path: string): Promise<void> {
     if (file && file instanceof TFile) {
         await app.vault.trash(file, true);
     }
+}
+
+/**
+ * Get linked source note
+ */
+export async function getLinkedSourceNote(
+    app: App,
+    file: TFileWithoutParentAndVault,
+): Promise<TFileWithoutParentAndVault | null> {
+    const pdfPath = file.path;
+    const resolvedLinks = app.metadataCache.resolvedLinks;
+
+    for (const [sourcePath, links] of Object.entries(resolvedLinks)) {
+        if (!links[pdfPath]) continue;
+        const sourceFile = app.vault.getAbstractFileByPath(sourcePath);
+        if (!sourceFile || !(sourceFile instanceof TFile)) continue;
+
+        const cache = app.metadataCache.getFileCache(sourceFile);
+        const fmLink = cache?.frontmatter?.["zotflow-local-attachment"];
+        if (!fmLink) continue;
+
+        const dest = app.metadataCache.getFirstLinkpathDest(
+            extractPathFromLink(fmLink),
+            sourceFile.path,
+        );
+
+        if (dest && dest.path === pdfPath) {
+            return {
+                path: sourceFile.path,
+                name: sourceFile.name,
+                extension: sourceFile.extension,
+                basename: sourceFile.basename,
+            };
+        }
+    }
+
+    return null;
+}
+
+function extractPathFromLink(text: string): string {
+    if (!text) return "";
+
+    // Remove [[ and ]]
+    let path = text.replace(/\[\[|\]\]/g, "");
+
+    path = path.split("|")[0]!;
+
+    return path.trim();
 }

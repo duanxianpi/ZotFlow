@@ -106,7 +106,7 @@ const exposedApi: WorkerAPI = {
             _pdfProcessor,
         );
 
-        _localTemplate = new LocalTemplateService(settings);
+        _localTemplate = new LocalTemplateService(settings, parentHost);
         _localNote = new LocalNoteService(settings, parentHost, _localTemplate);
 
         // Initialize PDF Worker

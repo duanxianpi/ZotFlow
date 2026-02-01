@@ -205,11 +205,12 @@ export class PDFProcessWorker {
                                 .modify((item) => {
                                     item.annotationImageVersion = item.version;
                                 });
-                            const path =
-                                this.settings.annotationImageFolder +
-                                "/" +
-                                annotationKey +
-                                ".png";
+                            const folder =
+                                this.settings.annotationImageFolder.replace(
+                                    /\/$/,
+                                    "",
+                                );
+                            const path = `${folder}/${annotationKey}.png`;
 
                             await this.parentHost.writeBinaryFile(
                                 path,

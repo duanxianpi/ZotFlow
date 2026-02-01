@@ -15,11 +15,13 @@ import {
     readTextFile,
     checkFile,
     deleteFile,
+    getLinkedSourceNote,
 } from "utils/file";
 import { services } from "services/services";
 
 import type { IParentProxy, NotificationType, IRequestResponse } from "./types";
 import type { RequestUrlParam } from "obsidian";
+import type { TFileWithoutParentAndVault } from "types/zotflow";
 
 export class ParentHost implements IParentProxy {
     private progressNotice: Notice | null = null;
@@ -132,5 +134,11 @@ export class ParentHost implements IParentProxy {
 
     public async stringifyYaml(obj: any): Promise<string> {
         return stringifyYaml(obj);
+    }
+
+    public async getLinkedSourceNote(
+        file: TFileWithoutParentAndVault,
+    ): Promise<TFileWithoutParentAndVault | null> {
+        return getLinkedSourceNote(this.app, file);
     }
 }

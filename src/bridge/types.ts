@@ -1,3 +1,5 @@
+import type { TFileWithoutParentAndVault } from "types/zotflow";
+
 export type NotificationType = "info" | "success" | "warning" | "error";
 
 export interface IRequestResponse {
@@ -36,4 +38,7 @@ export interface IParentProxy extends IUIResponder, INetworkFetcher {
     indexFile(path: string): Promise<void>;
     parseYaml(text: string): Promise<any>;
     stringifyYaml(obj: any): Promise<string>;
+    getLinkedSourceNote(
+        file: TFileWithoutParentAndVault,
+    ): Promise<TFileWithoutParentAndVault | null>;
 }

@@ -1,19 +1,24 @@
-import { FileView, WorkspaceLeaf, Notice, TFile } from "obsidian";
-import * as Comlink from "comlink";
+import { FileView, WorkspaceLeaf, Notice, TFile, ItemView } from "obsidian";
 import { workerBridge } from "bridge";
 import { IframeReaderBridge } from "./bridge";
+import { LocalAnnotationManager } from "./local-anno-manager";
 
-import type { CreateReaderOptions, ColorScheme } from "types/zotero-reader";
-import type { IDBZoteroItem } from "types/db-schema";
-import type { AttachmentData } from "types/zotero-item";
+import type {
+    CreateReaderOptions,
+    ColorScheme,
+    AnnotationJSON,
+} from "types/zotero-reader";
+import { services } from "services/services";
 
 export const LOCAL_ZOTERO_READER_VIEW_TYPE = "zotflow-local-zotero-reader-view";
 
-export class LocalReaderView extends FileView {
+export class LocalReaderView extends ItemView {
+    private file: TFile | null = null;
     private bridge?: IframeReaderBridge;
     private colorSchemeObserver?: MutationObserver;
     private colorScheme: ColorScheme = "light"; // Default to light
     private readerOptions: Partial<CreateReaderOptions> = {};
+    private annotationManager?: LocalAnnotationManager;
 
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -31,8 +36,31 @@ export class LocalReaderView extends FileView {
         return "book-open";
     }
 
-    async onLoadFile(file: TFile): Promise<void> {
-        this.loadDocument(file);
+    async onOpen() {
+        // add action to trigger update
+        this.addAction("dice", "Trigger Update", () => {
+            console.log(this.file);
+        });
+    }
+
+    async setState(state: any, result: any) {
+        if (state.file) {
+            const file = services.app.vault.getAbstractFileByPath(state.file);
+            if (file instanceof TFile) {
+                this.file = file;
+                this.containerEl
+                    .getElementsByClassName("view-header-title")[0]
+                    ?.setText(this.file.name);
+                this.loadDocument(this.file);
+            }
+        }
+        super.setState(state, result);
+    }
+
+    getState(): any {
+        return {
+            file: this.file?.path,
+        };
     }
 
     private async loadDocument(file: TFile) {
@@ -79,12 +107,12 @@ export class LocalReaderView extends FileView {
                     console.log("Opening link:", evt.url);
                 });
 
-                this.bridge.onEventType("annotationsSaved", (evt) => {
-                    console.log("Annotations saved:", evt.annotations);
+                this.bridge.onEventType("annotationsSaved", async (evt) => {
+                    await this.handleAnnotationsSaved(evt.annotations);
                 });
 
-                this.bridge.onEventType("annotationsDeleted", (evt) => {
-                    console.log("Annotations deleted:", evt.ids);
+                this.bridge.onEventType("annotationsDeleted", async (evt) => {
+                    await this.handleAnnotationsDeleted(evt.ids);
                 });
 
                 this.bridge.onEventType("viewStateChanged", (evt) => {
@@ -119,55 +147,23 @@ export class LocalReaderView extends FileView {
             }
 
             // Connect Bridge & Get File concurrently
-            await this.bridge.connect();
-            const buffer = await this.app.vault.readBinary(file);
+            const [_, buffer, loadedAnnotations] = await Promise.all([
+                this.bridge.connect(),
+                this.app.vault.readBinary(file),
+                (async () => {
+                    this.annotationManager = new LocalAnnotationManager(file);
+                    return await this.annotationManager.load();
+                })(),
+            ]);
 
-            // Process Local File (MD5 & Source Note)
-            try {
-                // Slice buffer: Head (1KB), Mid (1KB), Tail (1KB)
-                const sliceSize = 1024;
-                const slices: ArrayBuffer[] = [];
-                const len = buffer.byteLength;
-
-                if (len <= sliceSize * 3) {
-                    // Small file: take whole
-                    slices.push(buffer.slice(0));
-                } else {
-                    slices.push(buffer.slice(0, sliceSize)); // Head
-                    slices.push(
-                        buffer.slice(
-                            Math.floor(len / 2),
-                            Math.floor(len / 2) + sliceSize,
-                        ),
-                    ); // Mid
-                    slices.push(buffer.slice(len - sliceSize)); // Tail
-                }
-
-                // Call worker with Transferable
-                const result = await workerBridge.localNote.openNote({
-                    slices: Comlink.transfer(slices, slices),
-                    filename: file.name,
-                    path: file.path,
-                });
-
-                if (result) {
-                    console.log(
-                        `[LocalReaderView] Processed file. Key: ${result.key}, Note: ${result.path}`,
-                    );
-                }
-            } catch (err) {
-                console.error(
-                    "[LocalReaderView] Failed to process local file:",
-                    err,
-                );
-            }
+            console.log(this.bridge);
 
             // Initialize Reader if ready
             if (this.bridge.state === "bridge-ready") {
                 const opts = {
                     ...this.readerOptions,
                     colorScheme: this.colorScheme,
-                    annotations: [], // No annotations for local files
+                    annotations: loadedAnnotations,
                 };
 
                 const type = this.getReaderType(file.extension);
@@ -208,6 +204,29 @@ export class LocalReaderView extends FileView {
                 return "pdf";
         }
     }
+    // Handle navigation info
+    setEphemeralState(state: any): void {
+        if (state && state.subpath) {
+            const subpath = state.subpath;
+            const navigationInfo = this.parseNavigationInfo(subpath);
+
+            if (navigationInfo) {
+                this.readerNavigate(navigationInfo);
+            }
+        }
+
+        super.setEphemeralState(state);
+    }
+
+    // Parse navigation info
+    parseNavigationInfo(subpath: string): any {
+        //Regex to match annotation=url_encoded_string
+        const match = subpath.match(/annotation=([^&]+)/);
+        if (match && match[1]) {
+            return JSON.parse(decodeURIComponent(match[1]));
+        }
+        return null;
+    }
 
     readerNavigate(navigationInfo: any) {
         if (!this.bridge) return;
@@ -220,6 +239,46 @@ export class LocalReaderView extends FileView {
         }
         if (this.bridge) {
             await this.bridge.dispose();
+        }
+    }
+
+    /**
+     * Handle saved/updated annotations
+     */
+    private async handleAnnotationsSaved(annotations: any[]) {
+        if (this.annotationManager) {
+            for (const annotation of annotations) {
+                const isVisual =
+                    annotation.type === "image" || annotation.type === "ink";
+                if (isVisual && annotation.image) {
+                    workerBridge.localNote.saveBase64Image(
+                        annotation.image,
+                        annotation.id,
+                    );
+                }
+                await this.annotationManager.save(annotation);
+            }
+        }
+    }
+
+    /**
+     * Handle deleted annotations
+     * Optimization: Batch processing
+     */
+    private async handleAnnotationsDeleted(ids: string[]) {
+        if (this.annotationManager) {
+            for (const id of ids) {
+                const annotation = this.annotationManager.get(id);
+                if (annotation) {
+                    const isVisual =
+                        annotation.type === "image" ||
+                        annotation.type === "ink";
+                    if (isVisual) {
+                        workerBridge.localNote.deleteAnnotationImage(id);
+                    }
+                }
+                await this.annotationManager.delete(id);
+            }
         }
     }
 }

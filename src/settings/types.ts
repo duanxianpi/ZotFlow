@@ -17,6 +17,8 @@ export interface ZotFlowSettings {
     useCache: boolean;
     maxCacheSizeMB: number;
     sourceNoteTemplatePath: string;
+    localSourceNoteTemplatePath: string;
+    localSourceNoteFolder: string;
     sourceNoteFolder: string;
     autoImportAnnotationImages: boolean;
     annotationImageFolder: string;
@@ -33,6 +35,8 @@ export const DEFAULT_SETTINGS: ZotFlowSettings = {
     maxCacheSizeMB: 500,
     sourceNoteTemplatePath: "",
     sourceNoteFolder: "",
+    localSourceNoteTemplatePath: "",
+    localSourceNoteFolder: "",
     autoImportAnnotationImages: false,
     annotationImageFolder: "",
     overwriteViewer: false,

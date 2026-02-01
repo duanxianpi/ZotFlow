@@ -29,6 +29,7 @@ import {
     LOCAL_ZOTERO_READER_VIEW_TYPE,
     LocalReaderView,
 } from "ui/reader/local-view";
+import { ZotFlowCommentExtension } from "ui/zotflow-comment-extension";
 
 const SUPPORTED_EXTENSIONS = ["pdf", "epub", "html"];
 
@@ -64,8 +65,13 @@ export default class ZotFlow extends Plugin {
             this.registerTreeView();
         });
 
+        this.registerEvent(
+            this.app.workspace.on("file-open", this.handleFileOpen.bind(this)),
+        );
+
         // Register lock extension
         this.registerEditorExtension([ZotFlowLockExtension()]);
+        this.registerEditorExtension([ZotFlowCommentExtension()]);
 
         // Register protocol handler for zotflow URIs
         // Usage: obsidian://zotflow?filePath=path/to/file.md
@@ -249,6 +255,41 @@ export default class ZotFlow extends Plugin {
         } catch (error) {
             console.error("Error handling zotflow protocol call:", error);
             new Notice("Failed to handle ZotFlow protocol call");
+        }
+    }
+
+    async handleFileOpen(file: TFile | null) {
+        if (!file || file.extension !== "md") return;
+
+        const cache = this.app.metadataCache.getFileCache(file);
+
+        if (
+            cache?.frontmatter &&
+            cache.frontmatter["zotflow-locked"] === true
+        ) {
+            const leaf = this.app.workspace.getLeaf(false);
+            const view = leaf.view;
+
+            if (view instanceof MarkdownView) {
+                const state = leaf.getViewState();
+
+                if (state.state && state.state.mode !== "preview") {
+                    const newState = {
+                        ...state,
+                        state: {
+                            ...state.state,
+                            mode: "preview",
+                            source: false,
+                        },
+                    };
+
+                    setTimeout(async () => {
+                        if (leaf.view instanceof MarkdownView) {
+                            await leaf.setViewState(newState);
+                        }
+                    }, 10);
+                }
+            }
         }
     }
 }

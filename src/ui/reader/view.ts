@@ -406,7 +406,7 @@ export class ZoteroReaderView extends ItemView {
             const isVisual =
                 annotationData.annotationType === "image" ||
                 annotationData.annotationType === "ink";
-            if (isVisual) {
+            if (isVisual && json.image) {
                 workerBridge.note.saveBase64Image(json.image, key);
             }
 
@@ -506,7 +506,7 @@ export class ZoteroReaderView extends ItemView {
         // Debounce Update Source Note
         if (hasChanges) {
             console.log("[ZotFlow] Triggering update for note:", paperKey);
-            await workerBridge.note.triggerUpdate(
+            workerBridge.note.triggerUpdate(
                 libraryID,
                 paperKey !== "" ? paperKey : attachmentKey,
                 {
@@ -583,7 +583,7 @@ export class ZoteroReaderView extends ItemView {
         }
 
         // Trigger note update
-        await workerBridge.note.triggerUpdate(
+        workerBridge.note.triggerUpdate(
             libraryID,
             paperKey !== "" ? paperKey : this.attachmentItem.key,
             { forceUpdateContent: true },
@@ -606,6 +606,7 @@ export class ZoteroReaderView extends ItemView {
             position: JSON.parse(annotation.annotationPosition),
             tags: annotation.tags,
             dateModified: "",
+            dateCreated: "",
         };
     }
 }
