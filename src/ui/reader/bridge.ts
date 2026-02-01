@@ -38,6 +38,9 @@ import type { ZotFlowSettings } from "settings/types";
 import { getAnnotationJson } from "db/annotation";
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
+import type { LocalAnnotationManager } from "./local-anno-manager";
+import { getLinkedSourceNote } from "utils/file";
+import type { TFile } from "obsidian";
 
 type BridgeState =
     | "idle"
@@ -77,6 +80,8 @@ export class IframeReaderBridge {
         private container: HTMLElement,
         private isLocal: boolean,
         private attachmentItem?: IDBZoteroItem<AttachmentData>,
+        private localAttachment?: TFile,
+        private localAnnoManager?: LocalAnnotationManager,
     ) {}
 
     /**
@@ -140,6 +145,44 @@ export class IframeReaderBridge {
 
             getPluginSettings: () => {
                 return services.settings;
+            },
+
+            handleSetDataTransferAnnotations: (
+                dataTransfer: DataTransfer,
+                annotations: AnnotationJSON[],
+                fromText: boolean,
+            ) => {
+                if (this.isLocal && this.localAttachment) {
+                    console.log("Handle Local Attachment");
+                    const note = getLinkedSourceNote(
+                        services.app,
+                        this.localAttachment,
+                    );
+                    console.log(note, annotations);
+                    if (note) {
+                        const content = annotations.reduce((acc, anno) => {
+                            return acc + `![[${note.path}#^${anno.id}]]\n\n`;
+                        }, "");
+                        dataTransfer.setData("text/plain", content);
+                        return;
+                    }
+                } else if (!this.isLocal && this.attachmentItem) {
+                    console.log("Handle Remote Attachment");
+                    const note = services.indexService.getFileByKey(
+                        this.attachmentItem.parentItem === ""
+                            ? this.attachmentItem.key
+                            : this.attachmentItem.parentItem,
+                    );
+                    console.log(note);
+                    if (note) {
+                        const content = annotations.reduce((acc, anno) => {
+                            return acc + `![[${note.path}#^${anno.id}]]\n\n`;
+                        }, "");
+                        dataTransfer.setData("text/plain", content);
+                        return;
+                    }
+                }
+                dataTransfer.setData("text/plain", " ");
             },
 
             // createAnnotationEditor: (
@@ -299,7 +342,10 @@ export class IframeReaderBridge {
                     services.settings.zoteroApiKey,
                     (item) => item.syncStatus !== "deleted",
                 );
+            } else if (this.isLocal && this.localAnnoManager) {
+                newAnnotationJson = this.localAnnoManager.getAll();
             }
+
             const newReaderOpts: CreateReaderOptions = {
                 ...this._readerOpts,
                 annotations: newAnnotationJson,

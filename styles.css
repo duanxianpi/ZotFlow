@@ -13,6 +13,14 @@
     overflow: hidden;
 }
 
+/* .internal-embed.markdown-embed:has([data-callout^="zotflow"]) {
+    border: none;
+
+    & .markdown-embed-content > .markdown-preview-view {
+        padding: 0 !important;
+    }
+} */
+
 .zotflow-tree {
     padding: 10px;
     padding-bottom: 0 !important;

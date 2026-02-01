@@ -152,10 +152,10 @@ export async function deleteFile(app: App, path: string): Promise<void> {
 /**
  * Get linked source note
  */
-export async function getLinkedSourceNote(
+export function getLinkedSourceNote(
     app: App,
     file: TFileWithoutParentAndVault,
-): Promise<TFileWithoutParentAndVault | null> {
+): TFileWithoutParentAndVault | null {
     const pdfPath = file.path;
     const resolvedLinks = app.metadataCache.resolvedLinks;
 

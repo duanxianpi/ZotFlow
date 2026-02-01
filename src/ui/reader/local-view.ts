@@ -88,7 +88,15 @@ export class LocalReaderView extends ItemView {
         try {
             // Create bridge once
             if (!this.bridge) {
-                this.bridge = new IframeReaderBridge(container, true);
+                // Initialize annotation manager
+                this.annotationManager = new LocalAnnotationManager(file);
+                this.bridge = new IframeReaderBridge(
+                    container,
+                    true,
+                    undefined,
+                    file,
+                    this.annotationManager,
+                );
 
                 // Register event listeners
                 this.bridge.onEventType("error", (evt) => {
@@ -151,8 +159,7 @@ export class LocalReaderView extends ItemView {
                 this.bridge.connect(),
                 this.app.vault.readBinary(file),
                 (async () => {
-                    this.annotationManager = new LocalAnnotationManager(file);
-                    return await this.annotationManager.load();
+                    return await this.annotationManager?.load();
                 })(),
             ]);
 

@@ -69,6 +69,11 @@ export type ParentAPI = {
     getStyleSheets: () => StyleSheetList;
     getColorScheme: () => ColorScheme;
     getPluginSettings: () => ZotFlowSettings;
+    handleSetDataTransferAnnotations: (
+        dataTransfer: DataTransfer,
+        annotations: AnnotationJSON[],
+        fromText: boolean,
+    ) => void;
     // createAnnotationEditor: (
     // 	container: HTMLElement,
     // 	options: Partial<MarkdownEditorProps>
@@ -78,8 +83,8 @@ export type ParentAPI = {
 export type ChildAPI = {
     // parent → child
     initReader: (opts: CreateReaderOptions) => Promise<boolean>;
-    addAnnotation: (annotation: AnnotationJSON) => Promise<boolean>;
     setColorScheme: (colorScheme: ColorScheme) => Promise<boolean>;
+    addAnnotation: (annotation: AnnotationJSON) => Promise<boolean>;
     navigate: (navigationInfo: any) => Promise<boolean>;
     destroy: () => Promise<boolean>;
 };
