@@ -23,6 +23,7 @@ import { services } from "./services/services";
 import { ZotFlowLockExtension } from "ui/zotflow-lock-extension";
 
 import { openAttachment } from "ui/viewer";
+import { ActivityCenterModal } from "ui/activity-center/modal";
 
 import type { ZotFlowSettings } from "./settings/types";
 import {
@@ -122,16 +123,10 @@ export default class ZotFlow extends Plugin {
         );
 
         this.addRibbonIcon(
-            "library",
-            "ZotFlow: Test",
-            async (evt: MouseEvent) => {},
-        );
-
-        this.addRibbonIcon(
-            "sync",
-            "ZotFlow: Sync Library",
-            (evt: MouseEvent) => {
-                workerBridge.sync.startSync();
+            "zotero-icon",
+            "ZotFlow: Activity Center",
+            async (evt: MouseEvent) => {
+                new ActivityCenterModal(this.app).open();
             },
         );
 

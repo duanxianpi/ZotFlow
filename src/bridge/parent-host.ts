@@ -113,6 +113,7 @@ export class ParentHost implements IParentProxy {
     }
 
     public async getFileByKey(key: string): Promise<string | null> {
+        await services.indexService.initializePromise;
         const file = services.indexService.getFileByKey(key);
         return file ? file.path : null;
     }

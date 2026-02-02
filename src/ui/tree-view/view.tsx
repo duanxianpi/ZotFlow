@@ -2,7 +2,7 @@ import { ItemView, WorkspaceLeaf } from "obsidian";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
-import TreeView from "./TreeView";
+import { ZotFlowTree } from "./TreeView";
 
 export const TREE_VIEW_TYPE = "zotflow-tree-view";
 
@@ -22,14 +22,14 @@ export class ZotFlowTreeView extends ItemView {
     }
 
     getIcon() {
-        return "zotero-icon";
+        return "library";
     }
 
     async onOpen() {
         this.root = createRoot(this.contentEl);
         this.root.render(
             <React.StrictMode>
-                <TreeView />
+                <ZotFlowTree />
             </React.StrictMode>,
         );
     }

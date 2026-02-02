@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { NodeApi, Tree } from "react-arborist";
 import { workerBridge } from "bridge";
-import { ObsidianIcon } from "./ObsidianIcon";
+import { ObsidianIcon } from "../ObsidianIcon";
 import { NodeItem, INDENT_SIZE } from "./Node";
 
 import type { TreeTransferPayload } from "worker/services/tree-view";
@@ -101,7 +101,7 @@ function rebuildTreeFromWorker(payload: TreeTransferPayload): ViewNode[] {
     return roots;
 }
 
-export default function ZotFlowTreeView() {
+export const ZotFlowTree = () => {
     const [rawData, setRawData] = useState<TreeTransferPayload | null>(null);
     const [term, setTerm] = useState("");
     const [loading, setLoading] = useState(true);
@@ -271,4 +271,4 @@ export default function ZotFlowTreeView() {
             </div>
         </div>
     );
-}
+};

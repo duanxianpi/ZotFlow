@@ -8,10 +8,23 @@ import { TFile, App, Notice } from "obsidian";
 export class IndexService {
     private keyToFileMap: Map<string, TFile> = new Map();
     private app: App;
-    private initialized: boolean = false;
+
+    private _initialized: boolean = false;
+    private _initializePromise: Promise<void> = new Promise((resolve) => {
+        this.resolve = resolve;
+    });
+    private resolve: (() => void) | null = null;
 
     constructor(app: App) {
         this.app = app;
+    }
+
+    get initializePromise(): Promise<void> {
+        return this._initializePromise;
+    }
+
+    get initialized(): boolean {
+        return this._initialized;
     }
 
     // Initialize
@@ -21,7 +34,8 @@ export class IndexService {
             console.log("ZotFlow: Layout ready, building index...");
             this.rebuildIndex();
             this.registerEvents();
-            this.initialized = true;
+            this._initialized = true;
+            this.resolve?.();
         });
     }
 
@@ -79,10 +93,12 @@ export class IndexService {
 
     // Public query API
     public getFileByKey(key: string): TFile | undefined {
-        if (!this.initialized) {
+        if (!this._initialized) {
             new Notice(
                 "ZotFlow: Index not initialized. Please wait for the layout to be ready.",
             );
+
+            throw new Error("ZotFlow: Index not initialized.");
         }
         return this.keyToFileMap.get(key);
     }

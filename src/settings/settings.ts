@@ -23,14 +23,20 @@ export class ZotFlowSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        // const title = containerEl.createEl( { text: "Obsidian ZotFlow" });
-        // title.style.paddingInline = "0px";
+        const settingsContainer = containerEl.createDiv({
+            cls: "zotflow-settings-container",
+        });
+
+        const title = settingsContainer.createDiv({
+            text: "ZotFlow Settings",
+            cls: "zotflow-settings-title",
+        });
 
         // Horizontal Navigation Tabs
-        this.renderNav(containerEl);
+        this.renderNav(settingsContainer);
 
         // Render Active Section Content
-        const contentContainer = containerEl.createDiv({
+        const contentContainer = settingsContainer.createDiv({
             cls: "zotflow-settings-content",
         });
 
@@ -62,12 +68,11 @@ export class ZotFlowSettingTab extends PluginSettingTab {
     private renderNav(containerEl: HTMLElement) {
         const navContainer = containerEl.createDiv();
         navContainer.style.display = "flex";
-        // navContainer.style.gap = "8px"; // Spacing between pills
         navContainer.style.marginTop = "0.5rem";
-        navContainer.style.marginBottom = "1rem";
-        // navContainer.style.paddingBottom = "0.75rem";
         navContainer.style.borderBottom =
             "1px solid var(--background-modifier-border)";
+        navContainer.style.overflowX = "auto";
+        navContainer.style.overflowY = "auto";
 
         const tabs: { id: TabSection; label: string; icon: string }[] = [
             { id: "general", label: "General", icon: "settings" },

@@ -1,3 +1,23 @@
+.zotflow-settings-title {
+    font-size: var(--font-ui-medium);
+    font-weight: var(--font-semibold);
+    margin-bottom: var(--size-4-3);
+}
+
+.zotflow-settings-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+.zotflow-settings-content {
+    flex: 1;
+    overflow: auto;
+    padding-top: var(--size-4-4);
+}
+
 .workspace-leaf-content[data-type="zotflow-tree-view"] .view-content {
     padding: 0;
 }
@@ -41,7 +61,7 @@
 }
 
 .zotflow-tree-view-container {
-    flex: 1 1 0%;
+    flex: 1;
     position: relative;
     min-height: 0px;
     min-width: 0px;
@@ -236,4 +256,71 @@
 
 .callout[data-callout^="zotflow-ink"] {
     --callout-icon: zotero-ink;
+}
+
+.mod-zotflow-ac {
+    width: 90vw;
+    height: 80vh;
+
+    & .modal-header {
+        & .modal-title {
+            font-size: var(--font-ui-medium);
+        }
+    }
+
+    & .modal-content {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+}
+
+.zotflow-ac {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Tabs */
+.zotflow-ac-tabs {
+    display: flex;
+    overflow-x: auto;
+    gap: 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.zotflow-ac-tab {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    font-weight: 500;
+    padding: 10px 16px;
+    cursor: pointer;
+    position: relative;
+    transition:
+        all 0.2s ease,
+        border-bottom 0s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.zotflow-ac-tab:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
+}
+
+.zotflow-ac-tab.is-active {
+    color: var(--interactive-accent);
+    border-bottom: 2px solid var(--interactive-accent);
+}
+
+.zotflow-ac-content {
+    flex: 1;
+    overflow: auto;
+    padding: var(--size-4-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-4-3);
 }

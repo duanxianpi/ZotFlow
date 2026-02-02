@@ -1,7 +1,7 @@
 import type { NodeRendererProps } from "react-arborist";
 import { Menu, Notice, setIcon } from "obsidian";
 import type { ViewNode } from "./TreeView";
-import { ObsidianIcon } from "./ObsidianIcon";
+import { ObsidianIcon } from "../ObsidianIcon";
 import { getAttachmentFileIcon, getItemTypeIcon } from "ui/icons";
 import { services } from "services/services";
 import { workerBridge } from "bridge";
