@@ -5,6 +5,7 @@ import type { IParentProxy } from "bridge/types";
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AnnotationData } from "types/zotero-item";
 import { annotationItemFromJSON } from "db/annotation";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 interface PDFWorkerConfig {
     pdfWorkerURL: string;
@@ -52,19 +53,29 @@ export class PDFProcessWorker {
 
         try {
             const workerUrl = this._blobUrls["pdf/zotero-pdf-worker.js"];
-            if (!workerUrl) throw new Error("Worker URL not found");
+            if (!workerUrl) {
+                throw new ZotFlowError(
+                    ZotFlowErrorCode.RESOURCE_MISSING,
+                    "PDFProcessWorker",
+                    "Worker URL not found in blobUrls",
+                );
+            }
 
             this.config = {
                 pdfWorkerURL: workerUrl,
             };
-            console.log("[ZotFlow Worker] PdfWorkerService initialized");
-        } catch (e) {
-            console.error(
-                "[ZotFlow Worker] Failed to initialize PdfWorkerService",
-                e,
+            this.parentHost.log(
+                "debug",
+                "PdfWorkerService initialized",
+                "PDFProcessWorker",
             );
-            // Default config to avoid crashes, though functionality will be broken
-            this.config = { pdfWorkerURL: "" };
+        } catch (e) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.RESOURCE_MISSING,
+                "PDFProcessWorker",
+                "Failed to initialize PdfWorkerService",
+            );
         }
     }
 
@@ -109,9 +120,19 @@ export class PDFProcessWorker {
         transfer?: Transferable[],
     ): Promise<any> {
         return new Promise((resolve, reject) => {
+            if (!this._worker) {
+                reject(
+                    new ZotFlowError(
+                        ZotFlowErrorCode.RESOURCE_MISSING,
+                        "PDFProcessWorker",
+                        "PDF Worker not initialized",
+                    ),
+                );
+                return;
+            }
             this._lastPromiseID++;
             this._waitingPromises[this._lastPromiseID] = { resolve, reject };
-            this._worker!.postMessage(
+            this._worker.postMessage(
                 { id: this._lastPromiseID, action, data },
                 transfer || [],
             );
@@ -129,6 +150,8 @@ export class PDFProcessWorker {
             "message",
             async (event: MessageEvent<WorkerMessage>) => {
                 let message = event.data;
+
+                // Handle Response (Worker -> Main Request)
                 if (message.responseID) {
                     let resolver = this._waitingPromises[message.responseID];
                     if (resolver) {
@@ -137,13 +160,30 @@ export class PDFProcessWorker {
                         if (message.data) {
                             resolve(message.data);
                         } else {
-                            reject(new Error(JSON.stringify(message.error)));
+                            // Extract error details safely
+                            const rawErr = message.error || {};
+                            const errMsg =
+                                rawErr.message || JSON.stringify(rawErr);
+                            const errName = rawErr.name || "WorkerError";
+
+                            // Convert to ZotFlowError
+                            // Check specific names if we need to distinguish (e.g. PasswordException)
+                            reject(
+                                new ZotFlowError(
+                                    ZotFlowErrorCode.PARSE_ERROR,
+                                    "PDFProcessWorker",
+                                    `PDF Worker Error (${errName}): ${errMsg}`,
+                                ),
+                            );
                         }
                     }
                     return;
                 }
+
+                // Handle Request (Worker -> Main Request)
                 if (message.id) {
                     let respData: any = null;
+                    let respError: any = null;
 
                     try {
                         if (message.action === "FetchBuiltInCMap") {
@@ -162,12 +202,24 @@ export class PDFProcessWorker {
                                     cMapData: new Uint8Array(arrayBuffer),
                                 };
                             } else {
-                                console.warn(`CMap not found: ${message.data}`);
+                                this.parentHost.log(
+                                    "warn",
+                                    `CMap not found: ${message.data}`,
+                                    "PDFProcessWorker",
+                                );
+                                throw new Error(
+                                    `CMap not found: ${message.data}`,
+                                );
                             }
                         }
                     } catch (e) {
-                        console.log("Failed to fetch CMap data:");
-                        console.log(e);
+                        this.parentHost.log(
+                            "error",
+                            "Failed to fetch CMap data:",
+                            "PDFProcessWorker",
+                            e,
+                        );
+                        respError = { message: (e as Error).message };
                     }
 
                     try {
@@ -185,14 +237,24 @@ export class PDFProcessWorker {
                                     await response.arrayBuffer();
                                 respData = new Uint8Array(arrayBuffer);
                             } else {
-                                console.warn(
+                                this.parentHost.log(
+                                    "warn",
+                                    `Standard font not found: ${message.data}`,
+                                    "PDFProcessWorker",
+                                );
+                                throw new Error(
                                     `Standard font not found: ${message.data}`,
                                 );
                             }
                         }
                     } catch (e) {
-                        console.log("Failed to fetch standard font data:");
-                        console.log(e);
+                        this.parentHost.log(
+                            "error",
+                            "Failed to fetch standard font data:",
+                            "PDFProcessWorker",
+                            e,
+                        );
+                        respError = { message: (e as Error).message };
                     }
 
                     try {
@@ -220,20 +282,29 @@ export class PDFProcessWorker {
                             respData = true;
                         }
                     } catch (e) {
-                        console.log("Failed to render annotations:");
-                        console.log(e);
+                        this.parentHost.log(
+                            "error",
+                            "Failed to render annotations:",
+                            "PDFProcessWorker",
+                            e,
+                        );
+                        respError = { message: (e as Error).message };
                     }
 
                     this._worker!.postMessage({
                         responseID: message.id,
                         data: respData,
+                        error: respError, // Explicitly send error back
                     });
                 }
             },
         );
         this._worker.addEventListener("error", (event) => {
-            console.log(
+            this.parentHost.log(
+                "error",
                 `PDF Web Worker error (${event.filename}:${event.lineno}): ${event.message}`,
+                "PDFProcessWorker",
+                event,
             );
         });
     }
@@ -276,23 +347,17 @@ export class PDFProcessWorker {
                     tags: item.raw.data.tags.map((x) => x.tag),
                 });
             }
+
             let res: any;
             try {
                 res = await this._query("export", { buf, annotations }, [buf]);
-            } catch (e: any) {
-                let error = new Error(
-                    `Worker 'export' failed: ${JSON.stringify({
-                        annotations,
-                        error: e.message,
-                    })}`,
+            } catch (e) {
+                throw ZotFlowError.wrap(
+                    e,
+                    ZotFlowErrorCode.PARSE_ERROR,
+                    "PDFProcessWorker",
+                    "PDF Export failed",
                 );
-                try {
-                    error.name = JSON.parse(e.message).name;
-                } catch (e) {
-                    console.log(e);
-                }
-                console.log(error);
-                throw error;
             }
             return res.buf;
         }, isPriority);
@@ -300,10 +365,6 @@ export class PDFProcessWorker {
 
     /**
      * Import annotations from PDF file
-     *
-     * @param {ArrayBuffer} buf PDF file
-     * @param {Boolean} [isPriority]
-     * @returns {Promise<any[]>} Whether any annotations were imported/deleted
      */
     async import(buf: ArrayBuffer, isPriority?: boolean): Promise<any[]> {
         return this._enqueue(async () => {
@@ -314,18 +375,15 @@ export class PDFProcessWorker {
                     { buf, existingAnnotations: [] },
                     [buf],
                 ));
-            } catch (e: any) {
-                let error = new Error(
-                    `Worker 'import' failed: ${JSON.stringify({ error: e.message })}`,
+            } catch (e) {
+                throw ZotFlowError.wrap(
+                    e,
+                    ZotFlowErrorCode.PARSE_ERROR,
+                    "PDFProcessWorker",
+                    "PDF Import failed",
                 );
-                try {
-                    error.name = JSON.parse(e.message).name;
-                } catch (e) {
-                    console.log(e);
-                }
-                console.log(error);
-                throw error;
             }
+
             let annotations: any[] = [];
             for (let annotation of imported) {
                 annotation.id = Math.round(Math.random() * 4294967295)
@@ -340,13 +398,6 @@ export class PDFProcessWorker {
 
     /**
      * Rotate pages in PDF attachment
-     *
-     * @param {ArrayBuffer} buf
-     * @param {Array} pageIndexes
-     * @param {Integer} degrees 90, 180, 270
-     * @param {Boolean} [isPriority]
-     * @param {String} [password]
-     * @returns {Promise}
      */
     async rotatePages(
         buf: ArrayBuffer,
@@ -369,15 +420,12 @@ export class PDFProcessWorker {
                     [buf],
                 ));
             } catch (e: any) {
-                let error = new Error(
-                    `Worker 'rotatePages' failed: ${JSON.stringify({ error: e.message })}`,
+                throw ZotFlowError.wrap(
+                    e,
+                    ZotFlowErrorCode.PARSE_ERROR,
+                    "PDFProcessWorker",
+                    "Rotate Pages failed",
                 );
-                try {
-                    error.name = JSON.parse(e.message).name;
-                } catch {
-                    // ignore
-                }
-                throw error;
             }
 
             return modifiedBuf;
@@ -386,11 +434,6 @@ export class PDFProcessWorker {
 
     /**
      * Get data for recognizer-server
-     *
-     * @param {ArrayBuffer} buf PDF file
-     * @param {Boolean} [isPriority]
-     * @param {String} [password]
-     * @returns {Promise}
      */
     async getRecognizerData(
         buf: ArrayBuffer,
@@ -405,17 +448,13 @@ export class PDFProcessWorker {
                     { buf, password },
                     [buf],
                 );
-            } catch (e: any) {
-                let error = new Error(
-                    `Worker 'getRecognizerData' failed: ${JSON.stringify({ error: e.message })}`,
+            } catch (e) {
+                throw ZotFlowError.wrap(
+                    e,
+                    ZotFlowErrorCode.PARSE_ERROR,
+                    "PDFProcessWorker",
+                    "Get Recognizer Data failed",
                 );
-                try {
-                    error.name = JSON.parse(e.message).name;
-                } catch (e) {
-                    console.log(e);
-                }
-                console.log(error);
-                throw error;
             }
             return result;
         }, isPriority);
@@ -438,17 +477,13 @@ export class PDFProcessWorker {
                     { libraryID, buf, annotations, password },
                     [buf],
                 );
-            } catch (e: any) {
-                let error = new Error(
-                    `Worker 'renderAnnotations' failed: ${JSON.stringify({ error: e.message })}`,
+            } catch (e) {
+                throw ZotFlowError.wrap(
+                    e,
+                    ZotFlowErrorCode.PARSE_ERROR,
+                    "PDFProcessWorker",
+                    "Render Annotations failed",
                 );
-                try {
-                    error.name = JSON.parse(e.message).name;
-                } catch (e) {
-                    console.log(e);
-                }
-                console.log(error);
-                throw error;
             }
             return result;
         });

@@ -19,35 +19,40 @@ import {
 } from "utils/file";
 import { services } from "services/services";
 
-import type { IParentProxy, NotificationType, IRequestResponse } from "./types";
+import type { IParentProxy, IRequestResponse } from "./types";
 import type { RequestUrlParam } from "obsidian";
 import type { TFileWithoutParentAndVault } from "types/zotflow";
+import type { NotificationType } from "services/notification-service";
+import type { LogLevel } from "services/log-service";
 
 export class ParentHost implements IParentProxy {
-    private progressNotice: Notice | null = null;
     constructor(private app: App) {}
 
     public notify(type: NotificationType, message: string) {
-        if (this.progressNotice) {
-            this.progressNotice.hide();
-            this.progressNotice = null;
-        }
-        new Notice(`ZotFlow: ${message}`);
-
-        if (type === "error") {
-            console.error(message);
-        }
+        services.notificationService.notify(type, message);
     }
 
-    public updateProgress(message: string) {
-        if (this.progressNotice && this.progressNotice.messageEl.isConnected) {
-            this.progressNotice.setMessage(`ZotFlow: ${message}`);
-        } else {
-            this.progressNotice = new Notice(`ZotFlow: ${message}`, 0);
+    public log(
+        level: LogLevel,
+        message: string,
+        context?: string,
+        details?: any,
+    ) {
+        switch (level) {
+            case "debug":
+                services.logService.debug(message, context, details);
+                break;
+            case "info":
+                services.logService.info(message, context);
+                break;
+            case "warn":
+                services.logService.warn(message, context, details);
+                break;
+            case "error":
+                services.logService.error(message, context, details);
+                break;
         }
     }
-
-    public updateStatusBar(text: string) {}
 
     public async request(request: RequestUrlParam): Promise<IRequestResponse> {
         try {
@@ -69,7 +74,10 @@ export class ParentHost implements IParentProxy {
                 [buffer],
             );
         } catch (error: any) {
-            console.error(`[ParentHost] Fetch failed:`, error);
+            services.logService.error(
+                `Fetch failed: ${error.message}`,
+                "ParentHost",
+            );
             throw new Error(`Network Error: ${error.message}`);
         }
     }

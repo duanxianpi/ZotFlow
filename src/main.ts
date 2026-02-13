@@ -45,7 +45,16 @@ export default class ZotFlow extends Plugin {
         services.initialize(this.app, this.settings);
 
         // Initialize worker bridge
-        await workerBridge.initialize(this.settings, this.app);
+        try {
+            await workerBridge.initialize(this.settings, this.app);
+        } catch (e) {
+            services.logService.error(
+                "Failed to initialize worker bridge",
+                "Main",
+                e,
+            );
+            new Notice("ZotFlow: Failed to start background service.");
+        }
 
         // Add Icons
         this.addIcons();
@@ -148,8 +157,8 @@ export default class ZotFlow extends Plugin {
         addIcon(
             "zotero-underline",
             `
-			<path style="scale: 5;" fill-rule="evenodd" clip-rule="evenodd" d="M16 16L11 4H9L4 16H6.16667L7.41667 13H12.5833L13.8333 16H16ZM10 6.8L8.04167 11.5H11.9583L10 6.8ZM2 17H3H17H18V17.25V18V18.25H17H3H2V18V17.25V17Z" fill="currentColor"/>
-			`,
+            <path style="scale: 5;" fill-rule="evenodd" clip-rule="evenodd" d="M16 16L11 4H9L4 16H6.16667L7.41667 13H12.5833L13.8333 16H16ZM10 6.8L8.04167 11.5H11.9583L10 6.8ZM2 17H3H17H18V17.25V18V18.25H17H3H2V18V17.25V17Z" fill="currentColor"/>
+            `,
         );
 
         addIcon(
@@ -176,10 +185,10 @@ export default class ZotFlow extends Plugin {
         addIcon(
             "zotero-icon",
             `
-			<path
-			style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:8.33331;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
-			d="m 17.213858,8.3334232 h 65.067213 l 5.218851,9.8385298 -44.69689,56.088003 H 87.163227 V 91.666577 H 17.550592 L 12.500086,81.155337 56.607743,25.992326 H 17.045509 Z"/>
-			`,
+            <path
+            style="fill:none;fill-opacity:1;stroke:currentColor;stroke-width:8.33331;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
+            d="m 17.213858,8.3334232 h 65.067213 l 5.218851,9.8385298 -44.69689,56.088003 H 87.163227 V 91.666577 H 17.550592 L 12.500086,81.155337 56.607743,25.992326 H 17.045509 Z"/>
+            `,
         );
     }
 
@@ -247,9 +256,17 @@ export default class ZotFlow extends Plugin {
             } else {
                 new Notice(`ZotFlow: Unknown action type: ${type}`);
             }
-        } catch (error) {
-            console.error("Error handling zotflow protocol call:", error);
-            new Notice("Failed to handle ZotFlow protocol call");
+        } catch (error: any) {
+            services.logService.error(
+                "Error handling zotflow protocol call",
+                "Main",
+                error,
+            );
+
+            // Handle typed errors from Worker
+            new Notice(
+                `ZotFlow Protocol Error: ${error.message || "Unknown error"}`,
+            );
         }
     }
 

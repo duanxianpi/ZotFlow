@@ -8,6 +8,7 @@ import type { IParentProxy } from "bridge/types";
 import type { AttachmentService } from "./attachment";
 import type { PDFProcessWorker } from "./pdf-processor";
 import { getNotePath } from "utils/utils";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 const DEBOUNCE_DELAY = 2000;
 
@@ -53,12 +54,24 @@ export class NoteService {
         key: string,
         options: UpdateOptions = {},
     ) {
-        // Default options are empty, which means "normal update" (update only if version is different)
-        const path = await this.ensureNote(libraryID, key, options);
+        try {
+            const path = await this.ensureNote(libraryID, key, options);
 
-        if (path) {
-            console.log(`[ZotFlow] Opening note: ${path}`);
-            await this.parentHost.openFile(path, true);
+            if (path) {
+                this.parentHost.log(
+                    "debug",
+                    `Opening note: ${path}`,
+                    "NoteService",
+                );
+                await this.parentHost.openFile(path, true);
+            }
+        } catch (e) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.FILE_OPEN_FAILED,
+                "NoteService",
+                "Failed to open note",
+            );
         }
     }
 
@@ -76,13 +89,22 @@ export class NoteService {
 
         // Clear old timer
         if (this.debouncers.has(debounceId)) {
-            clearTimeout(this.debouncers.get(debounceId));
+            clearTimeout(this.debouncers.get(debounceId)!);
             this.debouncers.delete(debounceId);
         }
 
         // Mode A: Immediate execution
         if (!debounce) {
-            await this.ensureNote(libraryID, key, options);
+            try {
+                await this.ensureNote(libraryID, key, options);
+            } catch (e) {
+                throw ZotFlowError.wrap(
+                    e,
+                    ZotFlowErrorCode.FILE_WRITE_FAILED,
+                    "NoteService",
+                    "Immediate update failed",
+                );
+            }
             return;
         }
 
@@ -92,8 +114,11 @@ export class NoteService {
             try {
                 await this.ensureNote(libraryID, key, options);
             } catch (e) {
-                console.error(
-                    `[ZotFlow] Debounced update failed for ${key}`,
+                // Background task should not throw, just log
+                this.parentHost.log(
+                    "error",
+                    `Debounced update failed for ${key}`,
+                    "NoteService",
                     e,
                 );
             }
@@ -104,22 +129,50 @@ export class NoteService {
 
     /**
      * Batch create notes
+     * Wraps individual updates in try-catch to ensure batch continuity
      */
     async batchCreateNotes(items: AnyIDBZoteroItem[]) {
         this.parentHost.notify(
             "info",
             `Batch creation started for ${items.length} items.`,
         );
+
+        let successCount = 0;
+        let failCount = 0;
+
         for (const item of items) {
-            // Batch operations do not open files, no debouncing
-            await this.triggerUpdate(
-                item.libraryID,
-                item.key,
-                {
-                    forceUpdateContent: false,
-                    forceUpdateImages: false,
-                },
-                false,
+            try {
+                // Batch operations do not open files, no debouncing
+                await this.triggerUpdate(
+                    item.libraryID,
+                    item.key,
+                    {
+                        forceUpdateContent: false,
+                        forceUpdateImages: false,
+                    },
+                    false,
+                );
+                successCount++;
+            } catch (e) {
+                this.parentHost.log(
+                    "error",
+                    `Failed to create note for ${item.key}`,
+                    "NoteService",
+                    e,
+                );
+                failCount++;
+            }
+        }
+
+        if (failCount > 0) {
+            this.parentHost.notify(
+                "info",
+                `Batch finished: ${successCount} success, ${failCount} failed.`,
+            );
+        } else {
+            this.parentHost.notify(
+                "info",
+                `Batch creation finished successfully.`,
             );
         }
     }
@@ -138,7 +191,7 @@ export class NoteService {
         libraryID: number,
         key: string,
         options: UpdateOptions,
-    ): Promise<string | undefined> {
+    ): Promise<string> {
         const { forceUpdateContent = false, forceUpdateImages = false } =
             options;
 
@@ -147,29 +200,32 @@ export class NoteService {
         const library = await db.libraries.get({ id: libraryID });
 
         if (!item || !library) {
-            console.error(`[ZotFlow] Item or Library not found: ${key}`);
-            return undefined;
+            throw new ZotFlowError(
+                ZotFlowErrorCode.RESOURCE_MISSING,
+                "NoteService",
+                `Item or Library not found: ${key}`,
+            );
         }
-
-        // Determine path
-        // Ask main thread first: which file does this Key correspond to? (Cache lookup)
-        let path = await this.parentHost.getFileByKey(key);
-
-        // If Cache lookup fails, calculate default path
-        if (!path) {
-            path = getNotePath({
-                citationKey: item.citationKey,
-                title: item.title,
-                key: item.key,
-                sourceNoteFolder: this.settings.sourceNoteFolder,
-                libraryName: library.name,
-            });
-        }
-
-        // Check physical file status (Stat)
-        const fileCheck = await this.parentHost.checkFile(path);
 
         try {
+            // Determine path
+            // Ask main thread first: which file does this Key correspond to? (Cache lookup)
+            let path = await this.parentHost.getFileByKey(key);
+
+            // If Cache lookup fails, calculate default path
+            if (!path) {
+                path = getNotePath({
+                    citationKey: item.citationKey,
+                    title: item.title,
+                    key: item.key,
+                    sourceNoteFolder: this.settings.sourceNoteFolder,
+                    libraryName: library.name,
+                });
+            }
+
+            // Check physical file status
+            const fileCheck = await this.parentHost.checkFile(path);
+
             if (
                 fileCheck.exists &&
                 fileCheck.frontmatter?.["zotero-key"] === key
@@ -187,18 +243,28 @@ export class NoteService {
 
                 // Post processing: Extract images (if setting is enabled)
                 if (this.settings.autoImportAnnotationImages) {
-                    await this.extractAnnotationImages(item, true);
+                    try {
+                        await this.extractAnnotationImages(item, true);
+                    } catch (imgErr) {
+                        // Non-fatal error: Image extraction failed, but note is saved.
+                        this.parentHost.log(
+                            "warn",
+                            `Initial image extraction failed for ${key}`,
+                            "NoteService",
+                            imgErr,
+                        );
+                    }
                 }
             }
 
             return path;
         } catch (e) {
-            console.error(`[ZotFlow] Failed to ensure note for ${key}`, e);
-            this.parentHost.notify(
-                "error",
-                `Failed to save note for ${item.title}`,
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.DB_WRITE_FAILED,
+                "NoteService",
+                `Ensure note failed: ${(e as Error).message}`,
             );
-            return undefined;
         }
     }
 
@@ -212,15 +278,24 @@ export class NoteService {
      * Perform file creation
      */
     private async performCreate(item: AnyIDBZoteroItem, path: string) {
-        // If file exists but frontmatter create a file with different name
+        // If file exists but is not our note (collision), create a file with different name
         let fileCheck = await this.parentHost.checkFile(path);
         let notePath = path;
+
         if (fileCheck.exists) {
             let counter = 1;
-            while (fileCheck.exists) {
-                notePath = path.replace(/\.md$/, `(${counter}).md`);
+            const maxRetries = 100;
+            while (fileCheck.exists && counter < maxRetries) {
+                notePath = path.replace(/\.md$/, ` (${counter}).md`);
                 fileCheck = await this.parentHost.checkFile(notePath);
                 counter++;
+            }
+            if (counter >= maxRetries) {
+                throw new ZotFlowError(
+                    ZotFlowErrorCode.FILE_WRITE_FAILED,
+                    "NoteService",
+                    "Could not find a unique filename",
+                );
             }
         }
 
@@ -232,6 +307,8 @@ export class NoteService {
         const templateContent = await this.parentHost.readTextFile(
             this.settings.sourceNoteTemplatePath,
         );
+
+        // Render Item may throw ZotFlowError (Template Error), let it bubble
         const content = await this.templateService.renderItem(
             item,
             templateContent,
@@ -262,6 +339,7 @@ export class NoteService {
             const templateContent = await this.parentHost.readTextFile(
                 this.settings.sourceNoteTemplatePath,
             );
+
             const content = await this.templateService.renderItem(
                 item,
                 templateContent,
@@ -275,11 +353,19 @@ export class NoteService {
 
             // Extract images (if setting is enabled)
             if (this.settings.autoImportAnnotationImages) {
-                await this.extractAnnotationImages(item, forceUpdateImages);
+                try {
+                    await this.extractAnnotationImages(item, forceUpdateImages);
+                } catch (imgErr) {
+                    throw ZotFlowError.wrap(
+                        imgErr,
+                        ZotFlowErrorCode.FILE_WRITE_FAILED,
+                        "NoteService",
+                        `Image update failed for ${item.key}`,
+                    );
+                }
             }
         } else {
             // Version is the same, skip writing
-            // console.log(`[ZotFlow] Note is up to date: ${path}`);
         }
     }
 
@@ -291,8 +377,8 @@ export class NoteService {
         forceUpdateAnnotationImage: boolean,
     ) {
         // Get all PDF attachments
-        let attachments;
-        console.log(item);
+        let attachments: IDBZoteroItem<AttachmentData>[];
+
         if (item.itemType === "attachment") {
             attachments = [item as IDBZoteroItem<AttachmentData>];
         } else {
@@ -310,55 +396,72 @@ export class NoteService {
         );
 
         for (const attachment of attachments) {
-            const annotations = await getAnnotationJson(
-                attachment,
-                this.settings.zoteroApiKey,
-                (a) => {
-                    const isImage =
-                        a.raw.data.annotationType === "image" ||
-                        a.raw.data.annotationType === "ink";
-                    // Logic: is image annotation && (never rendered || Zotero version updated || forced refresh)
-                    const needsUpdate =
-                        !a.annotationImageVersion ||
-                        a.version > a.annotationImageVersion ||
-                        forceUpdateAnnotationImage;
-                    return isImage && needsUpdate;
-                },
-            );
+            try {
+                const annotations = await getAnnotationJson(
+                    attachment,
+                    this.settings.zoteroApiKey,
+                    (a) => {
+                        const isImage =
+                            a.raw.data.annotationType === "image" ||
+                            a.raw.data.annotationType === "ink";
+                        // Logic: is image annotation && (never rendered || Zotero version updated || forced refresh)
+                        const needsUpdate =
+                            !a.annotationImageVersion ||
+                            a.version > a.annotationImageVersion ||
+                            forceUpdateAnnotationImage;
+                        return isImage && needsUpdate;
+                    },
+                );
 
-            if (annotations.length > 0) {
-                const fileBlob =
-                    await this.attachmentService.getFileBlob(attachment);
-                if (!fileBlob) {
-                    console.warn(
-                        `[ZotFlow] Skipped image extraction: Attachment ${attachment.key} not found.`,
-                    );
-                    continue;
+                if (annotations.length > 0) {
+                    const fileBlob =
+                        await this.attachmentService.getFileBlob(attachment);
+
+                    if (fileBlob) {
+                        const buffer = await fileBlob.arrayBuffer();
+                        await this.pdfProcessor.renderAnnotations(
+                            item.libraryID,
+                            buffer,
+                            annotations,
+                        );
+                    }
                 }
-
-                const buffer = await fileBlob.arrayBuffer();
-                await this.pdfProcessor.renderAnnotations(
-                    item.libraryID,
-                    buffer,
-                    annotations,
+            } catch (e) {
+                throw ZotFlowError.wrap(
+                    e,
+                    ZotFlowErrorCode.FILE_WRITE_FAILED,
+                    "NoteService",
+                    `Failed to process attachment ${attachment.key}`,
                 );
             }
         }
     }
 
     async saveBase64Image(image: string, annotationKey: string) {
-        const base64 = image.split(",")[1]!;
-        const binaryString = atob(base64);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+        try {
+            const base64 = image.split(",")[1]!;
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            const folder = this.settings.annotationImageFolder.replace(
+                /\/$/,
+                "",
+            );
+            const path = `${folder}/${annotationKey}.png`;
+
+            await this.parentHost.writeBinaryFile(path, bytes.buffer);
+        } catch (e) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.FILE_WRITE_FAILED,
+                "NoteService",
+                `Failed to save image ${annotationKey}`,
+            );
         }
-
-        const folder = this.settings.annotationImageFolder.replace(/\/$/, "");
-        const path = `${folder}/${annotationKey}.png`;
-
-        await this.parentHost.writeBinaryFile(path, bytes.buffer);
     }
 
     async deleteAnnotationImage(annotationKey: string) {
@@ -375,10 +478,13 @@ export class NoteService {
                 console.log(`[ZotFlow] Deleted orphaned image: ${path}`);
             }
         } catch (e) {
-            console.warn(
-                `[ZotFlow] Failed to delete image for ${annotationKey}:`,
+            this.parentHost.log(
+                "error",
+                `Failed to delete image ${annotationKey}: ${(e as Error).message}`,
+                "NoteService",
                 e,
             );
+            // Non-fatal
         }
     }
 }

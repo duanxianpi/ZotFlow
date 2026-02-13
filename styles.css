@@ -1,3 +1,23 @@
+/* Notification Styles */
+.zotflow-notice-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.zotflow-notice-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1.5px; /* Visual alignment with text */
+}
+
+.zotflow-notice-message {
+    flex: 1;
+    word-break: break-word;
+}
+
 .zotflow-settings-title {
     font-size: var(--font-ui-medium);
     font-weight: var(--font-semibold);

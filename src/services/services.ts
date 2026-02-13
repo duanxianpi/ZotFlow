@@ -2,21 +2,27 @@ import { App } from "obsidian";
 
 import type { ZotFlowSettings } from "settings/types";
 import { IndexService } from "./index-service";
+import { LogService } from "./log-service";
+import { NotificationService } from "./notification-service";
 
 class ServiceLocator {
     private _app: App;
     private _settings: ZotFlowSettings;
 
     private _indexService: IndexService;
+    private _logService: LogService;
+    private _notificationService: NotificationService;
 
     initialize(app: App, settings: ZotFlowSettings) {
         this._app = app;
         this._settings = settings;
 
+        this._logService = new LogService();
+        this._notificationService = new NotificationService();
         this._indexService = new IndexService(app);
         this._indexService.load();
 
-        console.log("[ZotFlow] Services initialized.");
+        this._logService.info("Services initialized.", "System");
     }
 
     updateSettings(newSettings: ZotFlowSettings) {
@@ -33,6 +39,14 @@ class ServiceLocator {
 
     get indexService() {
         return this._indexService;
+    }
+
+    get logService() {
+        return this._logService;
+    }
+
+    get notificationService() {
+        return this._notificationService;
     }
 }
 

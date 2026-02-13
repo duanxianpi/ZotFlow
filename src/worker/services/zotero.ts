@@ -1,4 +1,5 @@
 import api from "zotero-api-client";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 import type { ZoteroKey } from "types/zotero";
 import type { ApiChain } from "zotero-api-client";
@@ -10,7 +11,7 @@ export class ZoteroAPIService {
         if (apiKey) {
             this._client = api.default(apiKey);
         } else {
-            // Placeholder, expected to be updated
+            // Placeholder, expected to be updated via updateCredentials
             this._client = api.default("");
         }
     }
@@ -25,18 +26,48 @@ export class ZoteroAPIService {
      */
     async verifyKey(apiKey: string): Promise<ZoteroKey> {
         if (!apiKey) {
-            throw new Error("API Key is required");
+            throw new ZotFlowError(
+                ZotFlowErrorCode.CONFIG_MISSING,
+                "ZoteroAPIService",
+                "API Key is required for verification",
+            );
         }
 
         try {
             const response = await api.default(apiKey).verifyKeyAccess().get();
             return response.getData() as ZoteroKey;
-        } catch (error) {
-            console.error("Failed to verify Zotero API key:", error);
-            throw new Error("Invalid API Key or Network Error");
+        } catch (e: any) {
+            const status = e.response ? e.response.status : 0;
+
+            if (status === 403 || status === 401) {
+                throw new ZotFlowError(
+                    ZotFlowErrorCode.AUTH_INVALID,
+                    "ZoteroAPIService",
+                    `Key verification failed: ${status}`,
+                    { api_key: apiKey },
+                );
+            }
+            if (status === 429) {
+                throw new ZotFlowError(
+                    ZotFlowErrorCode.API_LIMIT,
+                    "ZoteroAPIService",
+                    "Rate limit exceeded during verification",
+                );
+            }
+
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.NETWORK_ERROR,
+                "ZoteroAPIService",
+                "Verification failed",
+                { api_key: apiKey },
+            );
         }
     }
 
+    /**
+     * Fetch User Groups
+     */
     async getGroups(userID: number) {
         try {
             const response = await this._client
@@ -44,9 +75,22 @@ export class ZoteroAPIService {
                 .groups()
                 .get();
             return response.getData();
-        } catch (e) {
-            console.error("Failed to fetch groups", e);
-            throw e;
+        } catch (e: any) {
+            const status = e.response ? e.response.status : 0;
+            if (status === 403 || status === 401) {
+                throw new ZotFlowError(
+                    ZotFlowErrorCode.AUTH_INVALID,
+                    "ZoteroAPIService",
+                    `Fetch Groups 403: Invalid Permissions`,
+                );
+            }
+
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.NETWORK_ERROR,
+                "ZoteroAPIService",
+                "Failed to fetch groups",
+            );
         }
     }
 

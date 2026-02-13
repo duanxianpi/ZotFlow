@@ -2,6 +2,7 @@ import { db } from "db/db";
 import { ZoteroAPIService } from "./zotero";
 import { normalizeItem, normalizeCollection, toZoteroDate } from "db/normalize";
 import pLimit from "p-limit";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 import type { ZotFlowSettings } from "settings/types";
 import type { IParentProxy } from "bridge/types";
@@ -22,79 +23,136 @@ export class SyncService {
         this.settings = settings;
     }
 
+    /**
+     * Start the synchronization process.
+     * This is the main entry point for the worker sync task.
+     */
     async startSync() {
         if (this.syncing) {
-            this.parentHost.notify("info", "Sync is already running.");
+            this.parentHost.log(
+                "warn",
+                "Sync requested but already running.",
+                "SyncService",
+            );
             return;
         }
 
         if (!navigator.onLine) {
-            this.parentHost.notify("info", "You are offline. Sync skipped.");
-            return;
+            throw new ZotFlowError(
+                ZotFlowErrorCode.NETWORK_ERROR,
+                "SyncService",
+                "Device is offline",
+            );
         }
 
         const apiKey = this.settings.zoteroApiKey;
         const librariesConfig = this.settings.librariesConfig;
 
         if (!apiKey) {
-            this.parentHost.notify("error", "Zotero API key is missing.");
-            return;
+            throw new ZotFlowError(
+                ZotFlowErrorCode.CONFIG_MISSING,
+                "SyncService",
+                "API Key missing",
+            );
         }
 
-        const keyInfo = await db.keys.get(apiKey);
+        let keyInfo;
+        try {
+            keyInfo = await db.keys.get(apiKey);
+        } catch (e) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.DB_OPEN_FAILED,
+                "SyncService",
+                "Failed to query Key DB",
+            );
+        }
 
         if (!keyInfo) {
-            this.parentHost.notify(
-                "error",
-                "Invalid Zotero API key (not found in DB).",
+            throw new ZotFlowError(
+                ZotFlowErrorCode.AUTH_INVALID,
+                "SyncService",
+                "API Key not found in local DB",
             );
-            return;
         }
 
         const libraries = keyInfo.joinedGroups || [];
         libraries.unshift(keyInfo.userID);
 
         if (!librariesConfig) {
-            this.parentHost.notify("info", "No libraries configured for sync.");
-            this.syncing = false;
+            this.parentHost.log(
+                "warn",
+                "No libraries configured for sync.",
+                "SyncService",
+            );
             return;
         }
 
         this.syncing = true;
-        this.parentHost.updateProgress("Started syncing...");
-        console.log(`[ZotFlow] Start syncing`);
+        this.parentHost.log("debug", "Starting sync", "SyncService");
 
         try {
+            let successCount = 0;
+            let failCount = 0;
+
             for (const libKey of libraries) {
                 const libConfig = librariesConfig[libKey];
                 const lib = await db.libraries.get(libKey);
+
+                // Skip ignored or missing libraries
                 if (!lib || !libConfig || libConfig.mode === "ignored")
                     continue;
 
-                // this.parentHost.updateProgress(`Syncing Library ${libKey}...`);
-
                 try {
+                    // Logic: Pull Collections -> Pull Items -> Push Changes (if bidirectional)
                     await this.pullCollections(lib.type, libKey);
                     await this.pullItems(lib.type, libKey);
 
                     if (libConfig.mode === "bidirectional") {
                         await this.pushDirtyItems(lib.type, libKey);
                     }
+                    successCount++;
                 } catch (error: any) {
+                    failCount++;
+                    this.parentHost.log(
+                        "error",
+                        error.message,
+                        "SyncService",
+                        error,
+                    );
+
+                    // Specific notification for sub-tasks, but don't abort other libraries
+                    const msg = error.message;
+
                     this.parentHost.notify(
                         "error",
-                        `Sync Failed for ${libKey}: ${error.message}`,
+                        `Library ${libKey} Sync Failed: ${msg}`,
                     );
-                    throw error;
                 }
             }
-            this.parentHost.notify("success", "Sync completed successfully!");
+
+            if (failCount === 0) {
+                this.parentHost.notify(
+                    "success",
+                    "Sync completed successfully!",
+                );
+            } else {
+                this.parentHost.notify(
+                    "info",
+                    `Sync finished with ${failCount} errors.`,
+                );
+            }
         } catch (error: any) {
-            console.error("[ZotFlow] Sync failed:", error);
-            this.parentHost.notify("error", `Sync Failed: ${error.message}`);
+            // Catastrophic failure (e.g., DB crash)
+            this.parentHost.log("error", error.message, "SyncService", error);
+
+            this.parentHost.notify(
+                "error",
+                `Critical Sync Failure: ${error.message}`,
+            );
         } finally {
             this.syncing = false;
-            console.log("[ZotFlow] Sync finished.");
+            this.parentHost.log("info", "Sync finished.", "SyncService");
         }
     }
 
@@ -105,121 +163,155 @@ export class SyncService {
         libraryType: "user" | "group",
         libraryID: number,
     ) {
-        if (!this.zotero) return;
-        const libHandle = this.zotero.client.library(libraryType, libraryID);
-
-        // Get Local Version
-        const libState = await db.libraries.get(libraryID);
-        const localVersion = libState?.collectionVersion || 0;
-
-        console.log(`[ZotFlow] Pulling collections from v${localVersion}...`);
-
-        // Get Changed Versions
-        const response = await libHandle.collections().get({
-            format: "versions",
-            since: localVersion,
-            includeTrashed: true,
-        });
-
-        const versionsMap = await response.raw.json();
-        const serverHeaderVersion = response.getVersion() || 0;
-
-        // Early Return
-        if (serverHeaderVersion <= localVersion) {
-            console.log("[ZotFlow] Collections are up to date.");
-            return;
+        if (!this.zotero) {
+            throw new ZotFlowError(
+                ZotFlowErrorCode.UNKNOWN,
+                "SyncService",
+                "Zotero Service not initialized",
+            );
         }
 
-        const keysToFetch = Object.keys(versionsMap);
-        // Batch Fetch Data
-        if (keysToFetch.length > 0) {
-            const slices = this.chunkArray(keysToFetch, PULL_BULK_SIZE);
-            let processedCount = 0;
-            for (const slice of slices) {
-                const batchRes = await libHandle.collections().get({
-                    collectionKey: slice.join(","),
-                    includeTrashed: true,
-                });
-                const newCollections = batchRes.raw;
-                if (newCollections.length > 0) {
-                    // Check one by one
-                    await db.transaction("rw", db.collections, async () => {
-                        const promises = newCollections.map(
-                            async (remoteRaw: any) => {
-                                // Get local state
-                                const localCol = await db.collections.get([
-                                    libraryID,
-                                    remoteRaw.key,
-                                ]);
+        try {
+            const libHandle = this.zotero.client.library(
+                libraryType,
+                libraryID,
+            );
 
-                                // Conflict check
-                                if (localCol) {
-                                    switch (localCol.syncStatus) {
-                                        // Protect local unsynced data
-                                        case "created":
-                                        case "updated":
-                                        case "deleted":
-                                        case "conflict":
-                                            console.warn(
-                                                `[ZotFlow] Collection Conflict: ${localCol.name} (${localCol.key})`,
-                                            );
-                                            await db.collections.update(
-                                                [libraryID, localCol.key],
-                                                {
-                                                    syncStatus: "conflict",
-                                                    syncError:
-                                                        "Remote update conflict (Renamed or Moved).",
-                                                    version: remoteRaw.version, // Update version to avoid repeated pull
-                                                    serverCopyRaw: remoteRaw,
-                                                },
-                                            );
-                                            return; // Skip overwrite logic
+            // Get Local Version
+            const libState = await db.libraries.get(libraryID);
+            const localVersion = libState?.collectionVersion || 0;
 
-                                        // Continue with overwrite logic
-                                        case "synced":
-                                            break;
-                                    }
-                                }
-                                // Local is Clean or New
-                                const cleanCol = normalizeCollection(
-                                    remoteRaw,
-                                    libraryID,
-                                );
-                                cleanCol.syncStatus = "synced";
-                                await db.collections.put(cleanCol);
-                            },
-                        );
+            this.parentHost.log(
+                "debug",
+                `Pulling collections from v${localVersion}...`,
+                "SyncService",
+            );
 
-                        await Promise.all(promises);
+            // Get Changed Versions
+            const response = await libHandle.collections().get({
+                format: "versions",
+                since: localVersion,
+                includeTrashed: true,
+            });
+
+            const versionsMap = await response.raw.json();
+            const serverHeaderVersion = response.getVersion() || 0;
+
+            // Early Return
+            if (serverHeaderVersion <= localVersion) {
+                this.parentHost.log(
+                    "debug",
+                    "Collections are up to date.",
+                    "SyncService",
+                );
+                return;
+            }
+
+            const keysToFetch = Object.keys(versionsMap);
+
+            // Batch Fetch Data
+            if (keysToFetch.length > 0) {
+                const slices = this.chunkArray(keysToFetch, PULL_BULK_SIZE);
+                let processedCount = 0;
+
+                for (const slice of slices) {
+                    const batchRes = await libHandle.collections().get({
+                        collectionKey: slice.join(","),
+                        includeTrashed: true,
                     });
+                    const newCollections = batchRes.raw;
+
+                    if (newCollections.length > 0) {
+                        // Check one by one inside transaction
+                        await db.transaction("rw", db.collections, async () => {
+                            const promises = newCollections.map(
+                                async (remoteRaw: any) => {
+                                    // Get local state
+                                    const localCol = await db.collections.get([
+                                        libraryID,
+                                        remoteRaw.key,
+                                    ]);
+
+                                    // Conflict check logic (Preserved from original)
+                                    if (localCol) {
+                                        switch (localCol.syncStatus) {
+                                            case "created":
+                                            case "updated":
+                                            case "deleted":
+                                            case "conflict":
+                                                console.warn(
+                                                    `[ZotFlow] Collection Conflict: ${localCol.name} (${localCol.key})`,
+                                                );
+                                                await db.collections.update(
+                                                    [libraryID, localCol.key],
+                                                    {
+                                                        syncStatus: "conflict",
+                                                        syncError:
+                                                            "Remote update conflict (Renamed or Moved).",
+                                                        version:
+                                                            remoteRaw.version,
+                                                        serverCopyRaw:
+                                                            remoteRaw,
+                                                    },
+                                                );
+                                                return; // Skip overwrite
+
+                                            case "synced":
+                                                break;
+                                        }
+                                    }
+                                    // Local is Clean or New
+                                    const cleanCol = normalizeCollection(
+                                        remoteRaw,
+                                        libraryID,
+                                    );
+                                    cleanCol.syncStatus = "synced";
+                                    await db.collections.put(cleanCol);
+                                },
+                            );
+
+                            await Promise.all(promises);
+                        });
+                    }
+
+                    processedCount += newCollections.length;
+                    console.log(
+                        `[ZotFlow] Updated ${processedCount} collections in Library ${libraryID}...`,
+                    );
                 }
 
-                processedCount += newCollections.length;
-                console.log(
-                    `[ZotFlow] Updated ${processedCount} collections in Library ${libraryID}...`,
+                this.parentHost.log(
+                    "debug",
+                    `Updated ${keysToFetch.length} collections.`,
+                    "SyncService",
                 );
             }
 
-            console.log(`[ZotFlow] Updated ${keysToFetch.length} collections.`);
-        }
+            // Handle Deletions (Safe Cascade)
+            if (localVersion > 0) {
+                const delResponse = await libHandle.deleted(localVersion).get();
+                const deletedKeys = delResponse.getData().collections;
 
-        // Handle Deletions (Safe Cascade)
-        if (localVersion > 0) {
-            const delResponse = await libHandle.deleted(localVersion).get();
-            const deletedKeys = delResponse.getData().collections;
-
-            if (deletedKeys.length > 0) {
-                await this.handlePullCollectionDeletions(
-                    libraryID,
-                    deletedKeys,
-                );
+                if (deletedKeys.length > 0) {
+                    await this.handlePullCollectionDeletions(
+                        libraryID,
+                        deletedKeys,
+                    );
+                }
             }
-        }
 
-        // Update Version
-        await db.libraries.update(libraryID, {
-            collectionVersion: serverHeaderVersion,
-        });
+            // Update Version
+            await db.libraries.update(libraryID, {
+                collectionVersion: serverHeaderVersion,
+            });
+        } catch (e: any) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.NETWORK_ERROR,
+                "SyncService",
+                "Pull Collections failed",
+            );
+        }
     }
 
     // ========================================================================
@@ -274,8 +366,10 @@ export class SyncService {
                         keysToRemove.map((k) => [libraryID, k]),
                     );
 
-                    console.log(
-                        `[ZotFlow] Deleted Collection ${targetKey} and ${descendants.length} sub-collections.`,
+                    this.parentHost.log(
+                        "debug",
+                        `Deleted Collection ${targetKey} and ${descendants.length} sub-collections.`,
+                        "SyncService",
                     );
                 }
             }
@@ -313,109 +407,123 @@ export class SyncService {
     // ========================================================================
     private async pullItems(libraryType: "user" | "group", libraryID: number) {
         if (!this.zotero) return;
-        const libHandle = this.zotero.client.library(libraryType, libraryID);
 
-        const libState = await db.libraries.get(libraryID);
-        const localVersion = libState?.itemVersion || 0;
+        try {
+            const libHandle = this.zotero.client.library(
+                libraryType,
+                libraryID,
+            );
+            const libState = await db.libraries.get(libraryID);
+            const localVersion = libState?.itemVersion || 0;
 
-        console.log(`[ZotFlow] Pulling items from v${localVersion}...`);
+            this.parentHost.log(
+                "debug",
+                `Pulling items from v${localVersion}...`,
+                "SyncService",
+            );
 
-        const response = await libHandle.items().get({
-            format: "versions",
-            since: localVersion,
-            includeTrashed: true,
-        });
+            const response = await libHandle.items().get({
+                format: "versions",
+                since: localVersion,
+                includeTrashed: true,
+            });
 
-        const versionsMap = await response.raw.json();
-        const serverHeaderVersion = response.getVersion() || 0;
+            const versionsMap = await response.raw.json();
+            const serverHeaderVersion = response.getVersion() || 0;
 
-        if (serverHeaderVersion <= localVersion) {
-            console.log("[ZotFlow] Items are up to date.");
-            return;
-        }
+            if (serverHeaderVersion <= localVersion) {
+                console.log("[ZotFlow] Items are up to date.");
+                return;
+            }
 
-        const keysToFetch = Object.keys(versionsMap);
-        console.log(`[ZotFlow] Found ${keysToFetch.length} items to update.`);
-        // this.parentHost.notify(
-        //     "info",
-        //     `Found ${keysToFetch.length} items to update.`,
-        // );
+            const keysToFetch = Object.keys(versionsMap);
+            this.parentHost.log(
+                "debug",
+                `Found ${keysToFetch.length} items to update.`,
+                "SyncService",
+            );
 
-        // Batch Fetch Data & Upsert
-        if (keysToFetch.length > 0) {
-            const slices = this.chunkArray(keysToFetch, PULL_BULK_SIZE);
-            let processedCount = 0;
+            // Batch Fetch Data & Upsert
+            if (keysToFetch.length > 0) {
+                const slices = this.chunkArray(keysToFetch, PULL_BULK_SIZE);
+                let processedCount = 0;
 
-            for (const slice of slices) {
-                const batchRes = await libHandle.items().get({
-                    itemKey: slice.join(","),
-                    includeTrashed: true,
-                });
+                for (const slice of slices) {
+                    const batchRes = await libHandle.items().get({
+                        itemKey: slice.join(","),
+                        includeTrashed: true,
+                    });
 
-                const newItems = batchRes.raw;
+                    const newItems = batchRes.raw;
 
-                const collectionUpdate = Promise.all(
-                    newItems.map(async (newItem: any) => {
-                        const localItem = await db.items.get([
-                            libraryID,
-                            newItem.key,
-                        ]);
+                    const collectionUpdate = Promise.all(
+                        newItems.map(async (newItem: any) => {
+                            const localItem = await db.items.get([
+                                libraryID,
+                                newItem.key,
+                            ]);
 
-                        // Scenario A: Item exists locally
-                        if (localItem) {
-                            switch (localItem.syncStatus) {
-                                case "created":
-                                case "updated":
-                                case "deleted":
-                                case "conflict":
-                                    await db.items.update(
-                                        [libraryID, localItem.key],
-                                        {
-                                            serverCopyRaw: newItem,
-                                            syncStatus: "conflict",
-                                            syncError: "Remote update conflict",
-                                            version: newItem.version,
-                                        },
-                                    );
-                                    return; // Keep local changes
-                                case "synced":
-                                case "ignore":
-                                    break; // Continue with overwrite logic
+                            // Scenario A: Item exists locally
+                            if (localItem) {
+                                switch (localItem.syncStatus) {
+                                    case "created":
+                                    case "updated":
+                                    case "deleted":
+                                    case "conflict":
+                                        await db.items.update(
+                                            [libraryID, localItem.key],
+                                            {
+                                                serverCopyRaw: newItem,
+                                                syncStatus: "conflict",
+                                                syncError:
+                                                    "Remote update conflict",
+                                                version: newItem.version,
+                                            },
+                                        );
+                                        return; // Keep local changes
+                                    case "synced":
+                                    case "ignore":
+                                        break; // Continue with overwrite logic
+                                }
                             }
-                        }
 
-                        // Scenario B: Overwrite/Insert
-                        const cleanItem = normalizeItem(newItem, libraryID);
-                        cleanItem.syncStatus = "synced";
-                        await db.items.put(cleanItem);
-                    }),
-                );
+                            // Scenario B: Overwrite/Insert
+                            const cleanItem = normalizeItem(newItem, libraryID);
+                            cleanItem.syncStatus = "synced";
+                            await db.items.put(cleanItem);
+                        }),
+                    );
 
-                await collectionUpdate;
-                processedCount += newItems.length;
-                this.parentHost.updateProgress(
-                    `Syncing Library ${libraryID}: Synced ${processedCount} / ${keysToFetch.length} items...`,
-                );
+                    await collectionUpdate;
+                    processedCount += newItems.length;
+                }
+                console.log(`[ZotFlow] Synced ${processedCount} items.`);
             }
-            console.log(`[ZotFlow] Synced ${processedCount} items.`);
-        }
 
-        // Handle Deletions (Safe Cascade)
-        if (localVersion > 0) {
-            const delResponse = await libHandle.deleted(localVersion).get();
-            const deletedKeys = delResponse.getData().items;
+            // Handle Deletions
+            if (localVersion > 0) {
+                const delResponse = await libHandle.deleted(localVersion).get();
+                const deletedKeys = delResponse.getData().items;
 
-            if (deletedKeys && deletedKeys.length > 0) {
-                await this.handlePullDeletions(libraryID, deletedKeys);
+                if (deletedKeys && deletedKeys.length > 0) {
+                    await this.handlePullDeletions(libraryID, deletedKeys);
+                }
             }
-        }
 
-        await db.libraries.update(libraryID, {
-            itemVersion: serverHeaderVersion,
-        });
-        console.log(
-            `[ZotFlow] Item sync finished. New Version: ${serverHeaderVersion}`,
-        );
+            await db.libraries.update(libraryID, {
+                itemVersion: serverHeaderVersion,
+            });
+            console.log(
+                `[ZotFlow] Item sync finished. New Version: ${serverHeaderVersion}`,
+            );
+        } catch (e: any) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.NETWORK_ERROR,
+                "SyncService",
+                "Pull Items failed",
+            );
+        }
     }
 
     // ========================================================================
@@ -446,8 +554,10 @@ export class SyncService {
                 );
 
                 if (dirtyNode) {
-                    console.warn(
-                        `[ZotFlow] Prevented deletion of ${targetKey} due to local changes.`,
+                    this.parentHost.log(
+                        "warn",
+                        `Prevented deletion of ${targetKey} due to local changes.`,
+                        "SyncService",
                     );
                     await db.items.update([libraryID, targetKey], {
                         syncStatus: "conflict",
@@ -460,15 +570,16 @@ export class SyncService {
                     await db.items.bulkDelete(
                         keysToRemove.map((k) => [libraryID, k]),
                     );
-                    console.log(
-                        `[ZotFlow] Deleted ${targetKey} and ${descendants.length} descendants.`,
+                    this.parentHost.log(
+                        "debug",
+                        `Deleted ${targetKey} and ${descendants.length} descendants.`,
+                        "SyncService",
                     );
                 }
             }
         });
     }
 
-    // Recursively get all descendants
     private async getAllDescendants(
         libraryID: number,
         parentKey: string,
@@ -502,8 +613,11 @@ export class SyncService {
 
         const apiKey = this.settings.zoteroApiKey;
         if (!apiKey) {
-            console.error("[ZotFlow] No API key found for push.");
-            return;
+            throw new ZotFlowError(
+                ZotFlowErrorCode.CONFIG_MISSING,
+                "SyncService",
+                "No API key found for push.",
+            );
         }
 
         // Step 1: Fetch Dirty Items
@@ -524,10 +638,11 @@ export class SyncService {
         const upserts = dirtyItems.filter(
             (i) => i.syncStatus === "created" || i.syncStatus === "updated",
         );
-        console.log(upserts);
 
-        console.log(
-            `[ZotFlow] Pushing changes: ${deletions.length} deletions, ${upserts.length} upserts.`,
+        this.parentHost.log(
+            "debug",
+            `Pushing changes: ${deletions.length} deletions, ${upserts.length} upserts.`,
+            "SyncService",
         );
 
         // Step 2: Handle Deletions
@@ -543,16 +658,22 @@ export class SyncService {
                                 ifUnmodifiedSinceVersion: item.version,
                             });
                         await db.items.delete([libraryID, item.key]);
-                        console.log(
-                            `[ZotFlow] Successfully deleted: ${item.key}`,
+                        this.parentHost.log(
+                            "debug",
+                            `Successfully deleted: ${item.key}`,
+                            "SyncService",
                         );
-                    } catch (err: any) {
-                        const status = err.response
-                            ? err.response.status
-                            : err.code || 0;
+                    } catch (e: any) {
+                        // Error Handling logic preserved from original business logic
+                        const status = e.response
+                            ? e.response.status
+                            : e.code || 0;
+
                         if (status === 412) {
-                            console.warn(
-                                `[ZotFlow] Delete Conflict for ${item.key}`,
+                            this.parentHost.log(
+                                "warn",
+                                `Delete Conflict for ${item.key}`,
+                                "SyncService",
                             );
                             await db.items.update([libraryID, item.key], {
                                 syncStatus: "conflict",
@@ -562,10 +683,13 @@ export class SyncService {
                         } else if (status === 404) {
                             await db.items.delete([libraryID, item.key]);
                         } else {
-                            console.error(
-                                `[ZotFlow] Failed to delete ${item.key}:`,
-                                err.message,
+                            this.parentHost.log(
+                                "error",
+                                `Failed to delete ${item.key}:`,
+                                "SyncService",
+                                e.message,
                             );
+                            // We don't throw here to avoid stopping the batch
                         }
                     }
                 });
@@ -601,7 +725,6 @@ export class SyncService {
                 });
 
                 try {
-                    console.log(payload);
                     const response = await this.zotero.client
                         .library(libraryType, libraryID)
                         .items()
@@ -673,8 +796,10 @@ export class SyncService {
                             validUpdates.push(newItem);
                         } else if (failData) {
                             // If failed, update item with failure data
-                            console.warn(
-                                `[ZotFlow] Item failed ${item.key}:`,
+                            this.parentHost.log(
+                                "warn",
+                                `Item failed ${item.key}:`,
+                                "SyncService",
                                 failData,
                             );
                             validUpdates.push({
@@ -697,8 +822,14 @@ export class SyncService {
                             }
                         });
                     }
-                } catch (err) {
-                    console.error("[ZotFlow] Batch upload failed:", err);
+                } catch (e: any) {
+                    // Log but don't stop the whole sync for one batch failure
+                    this.parentHost.log(
+                        "error",
+                        "Batch upload failed:",
+                        "SyncService",
+                        e,
+                    );
                 }
             }
         }

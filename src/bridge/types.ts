@@ -1,6 +1,6 @@
 import type { TFileWithoutParentAndVault } from "types/zotflow";
-
-export type NotificationType = "info" | "success" | "warning" | "error";
+import type { NotificationType } from "services/notification-service";
+import type { LogLevel } from "services/log-service";
 
 export interface IRequestResponse {
     status: number;
@@ -10,20 +10,15 @@ export interface IRequestResponse {
     json?: any;
 }
 
-export interface IUIResponder {
+export interface IParentProxy {
     notify(type: NotificationType, message: string): void;
-    updateProgress(message: string): void;
-    updateStatusBar(text: string): void;
-}
-
-export interface INetworkFetcher {
-    // We cannot use RequestUrlParam from obsidian here directly if we want to isolate it,
-    // but we can define a compatible shape or import it as type only if we put this in a file that imports 'obsidian' as type?
-    // Better to define the shape needed.
+    log(
+        level: LogLevel,
+        message: string,
+        context?: string,
+        details?: any,
+    ): void;
     request(request: any): Promise<IRequestResponse>;
-}
-
-export interface IParentProxy extends IUIResponder, INetworkFetcher {
     readTextFile(path: string): Promise<string | null>;
     writeTextFile(path: string, content: string): Promise<void>;
     writeBinaryFile(path: string, buffer: ArrayBuffer): Promise<void>;

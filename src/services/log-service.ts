@@ -1,0 +1,88 @@
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+export interface LogEntry {
+    id: string;
+    timestamp: number;
+    level: LogLevel;
+    message: string;
+    context?: string;
+    error?: any;
+}
+
+export class LogService {
+    private _logs: LogEntry[] = [];
+    private readonly MAX_LOGS = 1000;
+
+    public get logs() {
+        return this._logs;
+    }
+
+    public debug(message: string, context?: string, details?: any) {
+        const prefix = this.getPrefix(context);
+        const args = [prefix, message];
+        if (details) args.push(details);
+
+        console.debug(...args);
+
+        this.addEntry("debug", message, context, details);
+    }
+
+    public info(message: string, context?: string, details?: any) {
+        const prefix = this.getPrefix(context);
+        const args = [prefix, message];
+        if (details) args.push(details);
+
+        console.log(...args);
+
+        this.addEntry("info", message, context, details);
+    }
+
+    public warn(message: string, context?: string, details?: any) {
+        const prefix = this.getPrefix(context);
+        const args = [prefix, message];
+        if (details) args.push(details);
+
+        console.warn(...args);
+
+        this.addEntry("warn", message, context, details);
+    }
+
+    public error(message: string, context?: string, error?: any) {
+        const prefix = this.getPrefix(context);
+        const args = [prefix, message];
+        if (error) args.push(error);
+
+        console.error(...args);
+
+        this.addEntry("error", message, context, error);
+    }
+
+    public clearLogs() {
+        this._logs = [];
+    }
+
+    private getPrefix(context?: string) {
+        return `[ZotFlow${context ? `:${context}` : ""}]`;
+    }
+
+    private addEntry(
+        level: LogLevel,
+        message: string,
+        context?: string,
+        error?: any,
+    ) {
+        const entry: LogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: Date.now(),
+            level,
+            message,
+            context,
+            error,
+        };
+
+        this._logs.unshift(entry);
+        if (this._logs.length > this.MAX_LOGS) {
+            this._logs.pop();
+        }
+    }
+}

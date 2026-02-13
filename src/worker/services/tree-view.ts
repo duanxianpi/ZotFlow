@@ -27,6 +27,7 @@ import type { AnyIDBZoteroItem, IDBZoteroCollection } from "types/db-schema";
 import type { ZotFlowSettings } from "settings/types";
 import type { IParentProxy } from "bridge/types";
 import { Zotero_Item_Types } from "types/zotero-item-const";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 export class TreeViewService {
     private treeTransferPayload: TreeTransferPayload | null;
@@ -34,7 +35,9 @@ export class TreeViewService {
     constructor(
         private settings: ZotFlowSettings,
         private parentHost: IParentProxy,
-    ) {}
+    ) {
+        this.treeTransferPayload = null;
+    }
 
     get tree() {
         return this.getOptimizedTree();
@@ -46,7 +49,7 @@ export class TreeViewService {
 
     public async refreshTree() {
         this.treeTransferPayload = null;
-        this.treeTransferPayload = await this.getOptimizedTree();
+        await this.getOptimizedTree();
     }
 
     public async getOptimizedTree(): Promise<TreeTransferPayload> {
@@ -54,244 +57,280 @@ export class TreeViewService {
             return this.treeTransferPayload;
         }
 
-        const keyInfo = await db.keys.get(this.settings.zoteroApiKey);
-        if (!keyInfo) {
-            this.parentHost.notify("error", "ZotFlow: Invalid Zotero API key.");
-            return {
-                entities: {},
-                topology: [],
-            };
+        if (!this.settings.zoteroApiKey) {
+            throw new ZotFlowError(
+                ZotFlowErrorCode.CONFIG_MISSING,
+                "TreeViewService",
+                "API Key is missing in settings",
+            );
         }
 
-        // Filter Library
-        const filteredLibraryIDs = keyInfo.joinedGroups
-            .concat([keyInfo.userID])
-            .filter(
-                (id) =>
-                    this.settings.librariesConfig[id]?.mode &&
-                    this.settings.librariesConfig[id]?.mode !== "ignored",
+        let keyInfo;
+        try {
+            keyInfo = await db.keys.get(this.settings.zoteroApiKey);
+        } catch (e) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.DB_OPEN_FAILED,
+                "TreeViewService",
+                "Failed to read Key DB",
+            );
+        }
+
+        if (!keyInfo) {
+            throw new ZotFlowError(
+                ZotFlowErrorCode.AUTH_INVALID,
+                "TreeViewService",
+                "Invalid Zotero API key (not found in DB).",
+                { api_key: this.settings.zoteroApiKey },
+            );
+        }
+
+        try {
+            const filteredLibraryIDs = keyInfo.joinedGroups
+                .concat([keyInfo.userID])
+                .filter(
+                    (id) =>
+                        this.settings.librariesConfig[id]?.mode &&
+                        this.settings.librariesConfig[id]?.mode !== "ignored",
+                );
+
+            // Valid Item Types
+            const validItemTypes = Zotero_Item_Types.filter(
+                (t) => t !== "annotation",
             );
 
-        // Valid Item Types
-        const validItemTypes = Zotero_Item_Types.filter(
-            (t) => t !== "annotation",
-        );
+            // Fetch all data (DB Operations)
+            const [libraries, allCollections, allItems] = await Promise.all([
+                db.libraries.where("id").anyOf(filteredLibraryIDs).toArray(),
+                db.collections
+                    .where(["libraryID", "trashed"])
+                    .anyOf(getCombinations([filteredLibraryIDs, [0]]))
+                    .toArray(),
+                db.items
+                    .where(["libraryID", "itemType", "trashed"])
+                    .anyOf(
+                        getCombinations([
+                            filteredLibraryIDs,
+                            validItemTypes,
+                            [0],
+                        ]),
+                    )
+                    .filter((i) => i.trashed === 0)
+                    .toArray(),
+            ]);
 
-        // Fetch all data
-        const [libraries, allCollections, allItems] = await Promise.all([
-            db.libraries.where("id").anyOf(filteredLibraryIDs).toArray(),
-            db.collections
-                .where(["libraryID", "trashed"])
-                .anyOf(getCombinations([filteredLibraryIDs, [0]]))
-                .toArray(),
-            db.items
-                .where(["libraryID", "itemType", "trashed"])
-                .anyOf(
-                    getCombinations([filteredLibraryIDs, validItemTypes, [0]]),
-                )
-                .filter((i) => i.trashed === 0)
-                .toArray(),
-        ]);
-
-        // Index Construction (CPU)
-        const collectionsByLib = new Map<number, IDBZoteroCollection[]>();
-        allCollections.forEach((c) => {
-            const list = collectionsByLib.get(c.libraryID) || [];
-            list.push(c);
-            collectionsByLib.set(c.libraryID, list);
-        });
-
-        // Group Items
-        const itemsByCollection = new Map<string, AnyIDBZoteroItem[]>();
-        const unfiledItemsByLib = new Map<number, AnyIDBZoteroItem[]>();
-        const subItemsByParent = new Map<string, AnyIDBZoteroItem[]>();
-
-        allItems.forEach((item) => {
-            // Handle Sub-items
-            if (["attachment", "note"].includes(item.itemType)) {
-                if (item.parentItem) {
-                    const list = subItemsByParent.get(item.parentItem) || [];
-                    list.push(item);
-                    subItemsByParent.set(item.parentItem, list);
-                    return; // It is a sub-item, not processed separately
-                }
-            }
-
-            // Handle Top-level Item
-            const isInCollection =
-                item.collections && item.collections.length > 0;
-
-            if (isInCollection) {
-                item.collections.forEach((colKey) => {
-                    const list = itemsByCollection.get(colKey) || [];
-                    list.push(item);
-                    itemsByCollection.set(colKey, list);
-                });
-            } else {
-                // Unfiled
-                const list = unfiledItemsByLib.get(item.libraryID) || [];
-                list.push(item);
-                unfiledItemsByLib.set(item.libraryID, list);
-            }
-        });
-
-        // Build Optimized Tree (Flattening & Separating)
-
-        const entities: EntityMap = {};
-        const topology: TopologyNode[] = [];
-
-        // Helper: Register Entity Data (De-duplication)
-        const registerEntity = (
-            key: string,
-            name: string,
-            itemType: string,
-            libraryID: number,
-            libraryName: string,
-            citationKey?: string,
-            contentType?: string,
-        ) => {
-            // Only register when the key is not registered
-            if (!entities[key]) {
-                entities[key] = {
-                    name,
-                    itemType,
-                    libraryID,
-                    libraryName,
-                    citationKey,
-                    contentType,
-                };
-            }
-        };
-
-        // Recursive function: Process Item (and its attachments)
-        const processItem = (item: AnyIDBZoteroItem, parentId: string) => {
-            const itemId = `${parentId}-i-${item.key}`; // Construct unique UI ID
-            const attachments = subItemsByParent.get(item.key) || [];
-
-            // Register data
-            // Add contentType for attachments
-            const libName = libraries.find(
-                (lib) => lib.id === item.libraryID,
-            )!.name;
-
-            if (item.itemType === "attachment") {
-                registerEntity(
-                    item.key,
-                    item.title,
-                    item.itemType,
-                    item.libraryID,
-                    libName,
-                    item.raw.data.contentType,
-                );
-            } else {
-                registerEntity(
-                    item.key,
-                    item.title,
-                    item.itemType,
-                    item.libraryID,
-                    libName,
-                    item.citationKey,
-                );
-            }
-
-            // Push skeleton
-            topology.push({
-                id: itemId,
-                key: item.key,
-                parentId: parentId,
-                nodeType: "item",
+            // Index Construction (CPU Intensive)
+            const collectionsByLib = new Map<number, IDBZoteroCollection[]>();
+            allCollections.forEach((c) => {
+                const list = collectionsByLib.get(c.libraryID) || [];
+                list.push(c);
+                collectionsByLib.set(c.libraryID, list);
             });
 
-            // Process attachments
-            attachments.forEach((att) => {
-                const attId = `${itemId}-att-${att.key}`;
-                // Attachment name logic
-                let attName = att.title;
-                let attContentType;
-                if (att.itemType === "attachment") {
-                    attContentType = att.raw.data.contentType;
+            // Group Items
+            const itemsByCollection = new Map<string, AnyIDBZoteroItem[]>();
+            const unfiledItemsByLib = new Map<number, AnyIDBZoteroItem[]>();
+            const subItemsByParent = new Map<string, AnyIDBZoteroItem[]>();
+
+            allItems.forEach((item) => {
+                // Handle Sub-items
+                if (["attachment", "note"].includes(item.itemType)) {
+                    if (item.parentItem) {
+                        const list =
+                            subItemsByParent.get(item.parentItem) || [];
+                        list.push(item);
+                        subItemsByParent.set(item.parentItem, list);
+                        return; // It is a sub-item, not processed separately
+                    }
                 }
 
+                // Handle Top-level Item
+                const isInCollection =
+                    item.collections && item.collections.length > 0;
+
+                if (isInCollection) {
+                    item.collections.forEach((colKey) => {
+                        const list = itemsByCollection.get(colKey) || [];
+                        list.push(item);
+                        itemsByCollection.set(colKey, list);
+                    });
+                } else {
+                    // Unfiled
+                    const list = unfiledItemsByLib.get(item.libraryID) || [];
+                    list.push(item);
+                    unfiledItemsByLib.set(item.libraryID, list);
+                }
+            });
+
+            // Build Optimized Tree
+
+            const entities: EntityMap = {};
+            const topology: TopologyNode[] = [];
+
+            // Helper: Register Entity Data (De-duplication)
+            const registerEntity = (
+                key: string,
+                name: string,
+                itemType: string,
+                libraryID: number,
+                libraryName: string,
+                citationKey?: string,
+                contentType?: string,
+            ) => {
+                // Only register when the key is not registered
+                if (!entities[key]) {
+                    entities[key] = {
+                        name,
+                        itemType,
+                        libraryID,
+                        libraryName,
+                        citationKey,
+                        contentType,
+                    };
+                }
+            };
+
+            // Recursive function: Process Item (and its attachments)
+            const processItem = (item: AnyIDBZoteroItem, parentId: string) => {
+                const itemId = `${parentId}-i-${item.key}`; // Construct unique UI ID
+                const attachments = subItemsByParent.get(item.key) || [];
+
+                // Find lib name - Potential crash point if DB is inconsistent
+                const libObj = libraries.find(
+                    (lib) => lib.id === item.libraryID,
+                );
+                const libName = libObj ? libObj.name : "Unknown Library";
+
+                if (item.itemType === "attachment") {
+                    registerEntity(
+                        item.key,
+                        item.title,
+                        item.itemType,
+                        item.libraryID,
+                        libName,
+                        item.raw.data.contentType,
+                    );
+                } else {
+                    registerEntity(
+                        item.key,
+                        item.title,
+                        item.itemType,
+                        item.libraryID,
+                        libName,
+                        item.citationKey,
+                    );
+                }
+
+                // Push skeleton
+                topology.push({
+                    id: itemId,
+                    key: item.key,
+                    parentId: parentId,
+                    nodeType: "item",
+                });
+
+                // Process attachments
+                attachments.forEach((att) => {
+                    const attId = `${itemId}-att-${att.key}`;
+                    // Attachment name logic
+                    let attName = att.title;
+                    let attContentType;
+                    if (att.itemType === "attachment") {
+                        attContentType = att.raw.data.contentType;
+                    }
+
+                    registerEntity(
+                        att.key,
+                        attName || "Untitled",
+                        att.itemType,
+                        att.libraryID,
+                        libName,
+                        "",
+                        attContentType,
+                    );
+
+                    topology.push({
+                        id: attId,
+                        key: att.key,
+                        parentId: itemId,
+                        nodeType: "item",
+                    });
+                });
+            };
+
+            // Recursive function: Process Collection
+            const processCollection = (
+                col: IDBZoteroCollection,
+                parentId: string,
+                libCols: IDBZoteroCollection[],
+            ) => {
+                const colId = `col-${col.key}`;
+                const childCols = libCols.filter(
+                    (c) => c.parentCollection === col.key,
+                );
+                const childItems = itemsByCollection.get(col.key) || [];
+
+                const libObj = libraries.find(
+                    (lib) => lib.id === col.libraryID,
+                );
+                const libName = libObj ? libObj.name : "Unknown Library";
+
                 registerEntity(
-                    att.key,
-                    attName || "Untitled",
-                    att.itemType,
-                    att.libraryID,
+                    col.key,
+                    col.name,
+                    "collection",
+                    col.libraryID,
                     libName,
-                    "",
-                    attContentType,
                 );
 
                 topology.push({
-                    id: attId,
-                    key: att.key,
-                    parentId: itemId,
-                    nodeType: "item",
+                    id: colId,
+                    key: col.key,
+                    parentId: parentId,
+                    nodeType: "collection",
                 });
-            });
-        };
 
-        // Recursive function: Process Collection
-        const processCollection = (
-            col: IDBZoteroCollection,
-            parentId: string,
-            libCols: IDBZoteroCollection[],
-        ) => {
-            const colId = `col-${col.key}`;
-            const childCols = libCols.filter(
-                (c) => c.parentCollection === col.key,
-            );
-            const childItems = itemsByCollection.get(col.key) || [];
-            const libName = libraries.find(
-                (lib) => lib.id === col.libraryID,
-            )!.name;
-            registerEntity(
-                col.key,
-                col.name,
-                "collection",
-                col.libraryID,
-                libName,
-            );
+                // Recursive call (Pre-order)
+                childCols.forEach((c) => processCollection(c, colId, libCols));
+                childItems.forEach((i) => processItem(i, colId));
+            };
 
-            topology.push({
-                id: colId,
-                key: col.key,
-                parentId: parentId,
-                nodeType: "collection",
-            });
+            // Entry: Iterate Libraries
+            libraries.forEach((lib) => {
+                const libId = `lib-${lib.id}`;
+                const libCols = collectionsByLib.get(lib.id) || [];
+                const topCols = libCols.filter((c) => !c.parentCollection);
+                const unfiled = unfiledItemsByLib.get(lib.id) || [];
 
-            // Recursive call (Pre-order)
-            childCols.forEach((c) => processCollection(c, colId, libCols));
-            childItems.forEach((i) => processItem(i, colId));
-        };
+                registerEntity(
+                    lib.id.toString(),
+                    lib.name,
+                    "library",
+                    lib.id,
+                    lib.name,
+                );
 
-        // Entry: Iterate Libraries
-        libraries.forEach((lib) => {
-            const libId = `lib-${lib.id}`;
-            const libCols = collectionsByLib.get(lib.id) || [];
-            const topCols = libCols.filter((c) => !c.parentCollection);
-            const unfiled = unfiledItemsByLib.get(lib.id) || [];
+                topology.push({
+                    id: libId,
+                    key: lib.id.toString(),
+                    parentId: null,
+                    nodeType: "library",
+                });
 
-            registerEntity(
-                lib.id.toString(),
-                lib.name,
-                "library",
-                lib.id,
-                lib.name,
-            );
-
-            topology.push({
-                id: libId,
-                key: lib.id.toString(),
-                parentId: null,
-                nodeType: "library",
+                topCols.forEach((c) => processCollection(c, libId, libCols));
+                unfiled.forEach((i) => processItem(i, libId));
             });
 
-            topCols.forEach((c) => processCollection(c, libId, libCols));
-            unfiled.forEach((i) => processItem(i, libId));
-        });
-
-        this.treeTransferPayload = { entities, topology };
-        return this.treeTransferPayload;
+            this.treeTransferPayload = { entities, topology };
+            return this.treeTransferPayload;
+        } catch (e) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.PARSE_ERROR,
+                "TreeViewService",
+                "Failed to build library tree",
+            );
+        }
     }
 }

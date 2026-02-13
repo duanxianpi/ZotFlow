@@ -14,6 +14,7 @@ import type {
     NoteData,
 } from "types/zotero-item";
 import type { ZotFlowSettings } from "settings/types";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 const DEFAULT_ITEM_TEMPLATE = `---
 citationKey: {{ item.citationKey | json }}
@@ -123,9 +124,8 @@ export class TemplateService {
         templateContent: string | null,
         originalFrontmatter: Record<string, any> = {},
     ): Promise<string> {
-        const context = await this.prepareItemContext(item);
-
         try {
+            const context = await this.prepareItemContext(item);
             const template = templateContent || DEFAULT_ITEM_TEMPLATE;
 
             // Separate Frontmatter and Body
@@ -158,7 +158,12 @@ export class TemplateService {
                         renderedFrontmatterRaw,
                     );
                 } catch (e) {
-                    console.error("Failed to parse template frontmatter", e);
+                    // We don't throw here, just proceed with empty frontmatter from template
+                    this.parentHost.log(
+                        "error",
+                        "Failed to parse template frontmatter",
+                        "TemplateService",
+                    );
                 }
             }
 
@@ -185,9 +190,13 @@ export class TemplateService {
             );
 
             return `---\n${frontmatterString}---\n${renderedBody}`;
-        } catch (err) {
-            console.error("ZotFlow: Template rendering error", err);
-            throw err;
+        } catch (e) {
+            throw ZotFlowError.wrap(
+                e,
+                ZotFlowErrorCode.PARSE_ERROR,
+                "TemplateService",
+                "Template rendering failed",
+            );
         }
     }
 

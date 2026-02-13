@@ -3,11 +3,14 @@ import type { TFileWithoutParentAndVault } from "types/zotflow";
 import type { ZotFlowSettings } from "settings/types";
 import type { AnnotationJSON } from "types/zotero-reader";
 import type { IParentProxy } from "bridge/types";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 export const DEFAULT_LOCAL_NOTE_TEMPLATE = `---
 zotflow-locked: true
 zotflow-local-attachment: [[{{ path }}]]
 ---
+{%- capture quote_string %}{{ newline }}> {% endcapture -%}
+{%- capture quote_string_2 %}{{ newline }}> >{% endcapture -%}
 # {{ item.basename }}
 {%- if item.annotations.length > 0 -%}
 ## Annotations
@@ -49,16 +52,23 @@ export class LocalTemplateService {
                 newline: "\n",
             },
         });
+
         this.engine.registerFilter("process_nav_info", (input: string) => {
             const navInfo = {
                 annotationID: input,
             };
             return encodeURIComponent(JSON.stringify(navInfo));
         });
+
         this.engine.registerFilter("process_raw_anno_json", (input: string) => {
-            const anno = JSON.parse(input);
-            anno.image = "";
-            return encodeURIComponent(JSON.stringify(anno));
+            try {
+                const anno =
+                    typeof input === "string" ? JSON.parse(input) : input;
+                if (anno.image) anno.image = "";
+                return encodeURIComponent(JSON.stringify(anno));
+            } catch (e) {
+                return "";
+            }
         });
     }
 
@@ -66,18 +76,21 @@ export class LocalTemplateService {
         this.settings = newSettings;
     }
 
+    /**
+     * Render the local note content using LiquidJS
+     */
     async renderLocalNote(
         localAttachment: TFileWithoutParentAndVault,
         annotations: AnnotationJSON[],
         templateContent: string | null,
         originalFrontmatter: Record<string, any> = {},
     ): Promise<string> {
-        const context = await this.prepareLocalAttachmentContext(
-            localAttachment,
-            annotations,
-        );
-
         try {
+            const context = await this.prepareLocalAttachmentContext(
+                localAttachment,
+                annotations,
+            );
+
             const template = templateContent || DEFAULT_LOCAL_NOTE_TEMPLATE;
 
             // Separate Frontmatter and Body
@@ -90,32 +103,36 @@ export class LocalTemplateService {
             if (match) {
                 templateFrontmatterRaw = match[1] || "";
                 body = template.substring(match[0].length);
-            } else {
-                body = template;
             }
 
             // Parse Template Frontmatter
             let templateFrontmatter: any = {};
             if (templateFrontmatterRaw.trim()) {
                 try {
-                    // Render the frontmatter raw string first (as it may contain liquid tags)
+                    // Render the frontmatter raw string first (allow liquid tags in frontmatter)
                     const renderedFrontmatterRaw =
                         await this.engine.parseAndRender(
                             templateFrontmatterRaw,
                             context,
                         );
 
-                    // Then parse the rendered string as YAML
+                    // Then parse the rendered string as YAML via Main Thread
                     templateFrontmatter = await this.parentHost.parseYaml(
                         renderedFrontmatterRaw,
                     );
                 } catch (e) {
-                    console.error("Failed to parse template frontmatter", e);
+                    this.parentHost.log(
+                        "error",
+                        "Failed to parse template frontmatter",
+                        "LocalTemplateService",
+                        e,
+                    );
+                    // Continue execution, just without template frontmatter
                 }
             }
 
             // Merge Frontmatter (Original + Rendered Template)
-            // Merge = Original + Template. Template keys overwrite Original keys.
+            // Template keys overwrite Original keys
             const finalFrontmatter = {
                 ...originalFrontmatter,
                 ...templateFrontmatter,
@@ -126,7 +143,7 @@ export class LocalTemplateService {
             finalFrontmatter["zotflow-local-attachment"] =
                 `[[${localAttachment.path}]]`;
 
-            // Stringify Frontmatter
+            // Stringify Frontmatter via Main Thread
             const frontmatterString =
                 await this.parentHost.stringifyYaml(finalFrontmatter);
 
@@ -135,17 +152,22 @@ export class LocalTemplateService {
                 body,
                 context,
             );
+
             return `---\n${frontmatterString}---\n${renderedBody}`;
         } catch (err) {
-            console.error("ZotFlow: Template rendering error", err);
-            throw err;
+            throw ZotFlowError.wrap(
+                err,
+                ZotFlowErrorCode.PARSE_ERROR,
+                "LocalTemplateService",
+                `Failed to render note template: ${(err as Error).message}`,
+            );
         }
     }
 
     private sanitizeQuotesString(str: string | null | undefined): string {
         if (!str) return "";
-        // Escape >, < into \>, \<
-        return str.replace(/>/g, "\\>").replace(/</g, "\\<");
+        // Escape > into \> to prevent breaking blockquotes structure in Markdown
+        return str.replace(/>/g, "\\>");
     }
 
     public async prepareLocalAttachmentContext(
@@ -155,7 +177,7 @@ export class LocalTemplateService {
         const processedAnnotations = annotations.map((annotation) => {
             return {
                 key: annotation.id,
-                libraryID: 0,
+                libraryID: 0, // Local files imply simplified library context
                 type: annotation.type,
                 authorName: annotation.authorName,
                 text: this.sanitizeQuotesString(annotation.text),
@@ -163,17 +185,17 @@ export class LocalTemplateService {
                 color: annotation.color,
                 pageLabel: annotation.pageLabel,
                 tags:
-                    annotation.tags.map((tag: any) => {
-                        return {
-                            tag: tag.tag,
-                            type: tag.type,
-                        };
-                    }) || [],
+                    annotation.tags?.map((tag: any) => ({
+                        tag: tag.tag,
+                        type: tag.type,
+                    })) || [],
                 dateCreated: annotation.dateCreated,
                 dateModified: annotation.dateModified,
-                raw: JSON.stringify(annotation),
+                // Provide raw object for filter usage, ensuring it's an object, not string
+                raw: annotation,
             };
         });
+
         const item = {
             name: localAttachment.name,
             path: localAttachment.path,
