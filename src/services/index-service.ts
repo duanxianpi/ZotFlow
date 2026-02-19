@@ -1,4 +1,7 @@
-import { TFile, App, Notice } from "obsidian";
+import { TFile, App } from "obsidian";
+import { services } from "services/services";
+import type { LogService } from "./log-service";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 /**
  * IndexService is a service that indexes all markdown files in the vault.
@@ -15,16 +18,15 @@ export class IndexService {
     });
     private resolve: (() => void) | null = null;
 
-    constructor(app: App) {
+    constructor(
+        app: App,
+        private _logService: LogService,
+    ) {
         this.app = app;
     }
 
     get initializePromise(): Promise<void> {
         return this._initializePromise;
-    }
-
-    get initialized(): boolean {
-        return this._initialized;
     }
 
     // Initialize
@@ -66,8 +68,10 @@ export class IndexService {
             this.indexFile(file);
         });
 
-        console.log(
-            `ZotFlow: Index built. Found ${this.keyToFileMap.size} linked files.`,
+        this._logService.log(
+            "info",
+            `Index built. Found ${this.keyToFileMap.size} linked files.`,
+            "IndexService",
         );
     }
 
@@ -94,11 +98,16 @@ export class IndexService {
     // Public query API
     public getFileByKey(key: string): TFile | undefined {
         if (!this._initialized) {
-            new Notice(
-                "ZotFlow: Index not initialized. Please wait for the layout to be ready.",
+            services.notificationService.notify(
+                "warning",
+                "Index not initialized. Please wait for the layout to be ready.",
             );
 
-            throw new Error("ZotFlow: Index not initialized.");
+            throw new ZotFlowError(
+                ZotFlowErrorCode.RESOURCE_MISSING,
+                "IndexService",
+                "Index not initialized. Please wait for the layout to be ready.",
+            );
         }
         return this.keyToFileMap.get(key);
     }

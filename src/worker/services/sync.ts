@@ -27,7 +27,10 @@ export class SyncService {
      * Start the synchronization process.
      * This is the main entry point for the worker sync task.
      */
-    async startSync() {
+    async startSync(
+        signal?: AbortSignal,
+        onProgress?: (completed: number, total: number, message: string) => void,
+    ) {
         if (this.syncing) {
             this.parentHost.log(
                 "warn",
@@ -91,17 +94,32 @@ export class SyncService {
         this.syncing = true;
         this.parentHost.log("debug", "Starting sync", "SyncService");
 
+        // Build the active library list for progress reporting
+        const activeLibraries: number[] = [];
+        for (const libKey of libraries) {
+            const libConfig = librariesConfig[libKey];
+            const lib = await db.libraries.get(libKey);
+            if (lib && libConfig && libConfig.mode !== "ignored") {
+                activeLibraries.push(libKey);
+            }
+        }
+
         try {
             let successCount = 0;
             let failCount = 0;
+            const totalLibs = activeLibraries.length;
 
-            for (const libKey of libraries) {
+            for (let i = 0; i < activeLibraries.length; i++) {
+                const libKey = activeLibraries[i]!;
+                if (signal?.aborted) throw new Error("Aborted");
                 const libConfig = librariesConfig[libKey];
                 const lib = await db.libraries.get(libKey);
 
-                // Skip ignored or missing libraries
+                // Skip ignored or missing libraries (defensive, already filtered)
                 if (!lib || !libConfig || libConfig.mode === "ignored")
                     continue;
+
+                onProgress?.(i, totalLibs, `Syncing library: ${lib.name}`);
 
                 try {
                     // Logic: Pull Collections -> Pull Items -> Push Changes (if bidirectional)
@@ -112,24 +130,25 @@ export class SyncService {
                         await this.pushDirtyItems(lib.type, libKey);
                     }
                     successCount++;
-                } catch (error: any) {
+                } catch (error: unknown) {
                     failCount++;
+                    const msg = error instanceof Error ? error.message : String(error);
                     this.parentHost.log(
                         "error",
-                        error.message,
+                        msg,
                         "SyncService",
                         error,
                     );
 
                     // Specific notification for sub-tasks, but don't abort other libraries
-                    const msg = error.message;
-
                     this.parentHost.notify(
                         "error",
                         `Library ${libKey} Sync Failed: ${msg}`,
                     );
                 }
             }
+
+            onProgress?.(totalLibs, totalLibs, "Sync completed");
 
             if (failCount === 0) {
                 this.parentHost.notify(

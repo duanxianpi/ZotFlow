@@ -7,7 +7,6 @@ import {
     MarkdownRenderer,
     MarkdownView,
     Modal,
-    Notice,
     Plugin,
     TFile,
     WorkspaceLeaf,
@@ -17,6 +16,12 @@ import {
 import { ZotFlowSettingTab } from "./settings/settings";
 import { DEFAULT_SETTINGS } from "./settings/types";
 import { workerBridge } from "./bridge";
+import { revokeBlobUrls } from "bundle-assets/inline-assets";
+import {
+    saveCredentials,
+    loadCredentials,
+    stripCredentials,
+} from "utils/credentials";
 import { ZOTERO_READER_VIEW_TYPE, ZoteroReaderView } from "./ui/reader/view";
 import { TREE_VIEW_TYPE, ZotFlowTreeView } from "./ui/tree-view/view";
 import { services } from "./services/services";
@@ -53,7 +58,10 @@ export default class ZotFlow extends Plugin {
                 "Main",
                 e,
             );
-            new Notice("ZotFlow: Failed to start background service.");
+            services.notificationService.notify(
+                "error",
+                "Failed to start background service.",
+            );
         }
 
         // Add Icons
@@ -101,10 +109,9 @@ export default class ZotFlow extends Plugin {
                     LOCAL_ZOTERO_READER_VIEW_TYPE,
                 );
             } catch {
-                const message = `[ZotFlow]: Could not unregister extension: '${SUPPORTED_EXTENSIONS}'`;
-                new Notice(message);
-
-                console.error(message);
+                const message = `Could not unregister extension: '${SUPPORTED_EXTENSIONS}'`;
+                services.logService.error(message, "Main");
+                services.notificationService.notify("error", message);
             }
         } else {
             for (const extension of SUPPORTED_EXTENSIONS) {
@@ -114,10 +121,9 @@ export default class ZotFlow extends Plugin {
                         LOCAL_ZOTERO_READER_VIEW_TYPE,
                     );
                 } catch {
-                    const message = `[ZotFlow]: Could not register extension: '${extension}'`;
-                    new Notice(message);
-
-                    console.error(message);
+                    const message = `Could not register extension: '${extension}'`;
+                    services.logService.error(message, "Main");
+                    services.notificationService.notify("error", message);
                 }
             }
         }
@@ -147,10 +153,38 @@ export default class ZotFlow extends Plugin {
             },
         });
 
+        this.addCommand({
+            id: "trigger-test-task",
+            name: "Trigger Test Task",
+            callback: async () => {
+                try {
+                    const taskId =
+                        await workerBridge.tasks.createTestTask(5000);
+                    services.notificationService.notify(
+                        "info",
+                        `Test Task Started: ${taskId}`,
+                    );
+                } catch (e) {
+                    services.notificationService.notify(
+                        "error",
+                        `Failed to start task: ${e}`,
+                    );
+                    services.logService.error(
+                        "Failed to start test task",
+                        "Main",
+                        e,
+                    );
+                }
+            },
+        });
+
         this.addSettingTab(new ZotFlowSettingTab(this.app, this));
     }
 
-    onunload() {}
+    onunload() {
+        workerBridge.terminate();
+        revokeBlobUrls();
+    }
 
     addIcons() {
         // Add Icons
@@ -221,10 +255,15 @@ export default class ZotFlow extends Plugin {
             DEFAULT_SETTINGS,
             (await this.loadData()) as Partial<ZotFlowSettings>,
         );
+        // Load sensitive credentials from SecretStorage (cross-platform safe)
+        loadCredentials(this.settings, this.app.secretStorage);
     }
 
     async saveSettings() {
-        await this.saveData(this.settings);
+        // Store sensitive credentials in SecretStorage (cross-platform safe)
+        saveCredentials(this.settings, this.app.secretStorage);
+        // Persist settings without sensitive fields to data.json
+        await this.saveData(stripCredentials(this.settings));
         workerBridge.updateSettings(this.settings);
         services.updateSettings(this.settings);
     }
@@ -239,13 +278,25 @@ export default class ZotFlow extends Plugin {
             const { type, libraryID, key, navigation } = params;
 
             if (!type || !libraryID || !key) {
-                new Notice("ZotFlow: Missing parameters for protocol call");
+                services.logService.log(
+                    "warn",
+                    "Missing parameters for protocol call",
+                    "Main",
+                );
+                services.notificationService.notify(
+                    "warning",
+                    "Missing parameters for protocol call",
+                );
                 return;
             }
 
             const libID = parseInt(libraryID);
             if (isNaN(libID)) {
-                new Notice("ZotFlow: Invalid library ID");
+                services.logService.log("warn", "Invalid library ID", "Main");
+                services.notificationService.notify(
+                    "warning",
+                    "Invalid library ID",
+                );
                 return;
             }
 
@@ -254,18 +305,28 @@ export default class ZotFlow extends Plugin {
             } else if (type === "open-attachment") {
                 await openAttachment(libID, key, this.app, navigation);
             } else {
-                new Notice(`ZotFlow: Unknown action type: ${type}`);
+                services.logService.log(
+                    "warn",
+                    `Unknown action type: ${type}`,
+                    "Main",
+                );
+                services.notificationService.notify(
+                    "warning",
+                    `Unknown action type: ${type}`,
+                );
             }
         } catch (error: any) {
-            services.logService.error(
+            services.logService.log(
+                "error",
                 "Error handling zotflow protocol call",
                 "Main",
                 error,
             );
 
             // Handle typed errors from Worker
-            new Notice(
-                `ZotFlow Protocol Error: ${error.message || "Unknown error"}`,
+            services.notificationService.notify(
+                "error",
+                `Protocol Error: ${error.message || "Unknown error"}`,
             );
         }
     }

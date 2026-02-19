@@ -100,3 +100,19 @@ export function getBlobUrls(): Record<string, string> {
 
 	return _cachedBlobMapPromise;
 }
+
+/**
+ * Revoke all blob URLs and clear the cache.
+ * Call this on plugin unload to prevent memory leaks.
+ */
+export function revokeBlobUrls(): void {
+	if (!_cachedBlobMapPromise) return;
+	for (const url of Object.values(_cachedBlobMapPromise)) {
+		try {
+			URL.revokeObjectURL(url);
+		} catch {
+			// Ignore revocation errors
+		}
+	}
+	_cachedBlobMapPromise = null;
+}

@@ -18,6 +18,8 @@
     word-break: break-word;
 }
 
+/* Settings */
+
 .zotflow-settings-title {
     font-size: var(--font-ui-medium);
     font-weight: var(--font-semibold);
@@ -36,6 +38,101 @@
     flex: 1;
     overflow: auto;
     padding-top: var(--size-4-4);
+}
+
+.zotflow-settings-lib-table-wrapper {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.zotflow-settings-lib-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.zotflow-settings-lib-table thead {
+    background-color: var(--background-secondary);
+}
+
+.zotflow-settings-lib-table th {
+    padding: 10px;
+    text-align: left;
+    font-size: var(--font-ui-medium);
+    font-weight: var(--font-semibold);
+}
+
+.zotflow-settings-lib-table td {
+    padding: 10px;
+    font-size: var(--font-ui-small);
+}
+
+.zotflow-settings-lib-table tbody tr + tr {
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.zotflow-settings-lib-type-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zotflow-settings-access-badge {
+    font-size: var(--font-ui-small);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.zotflow-settings-access-badge--rw {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.zotflow-settings-access-badge--ro {
+    background-color: var(--background-modifier-border);
+}
+
+.zotflow-settings-lib-select {
+    width: 100%;
+}
+
+.zotflow-settings-cache-usage {
+    display: block;
+    padding-top: 0;
+}
+
+.zotflow-settings-cache-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+}
+
+.zotflow-settings-cache-progress-bg {
+    width: 100%;
+    height: 10px;
+    background-color: var(--background-modifier-border);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.zotflow-settings-cache-progress-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.zotflow-settings-btn-container {
+    margin-top: 1rem;
+}
+
+.zotflow-settings-table-btn-container {
+    margin-top: 0.5rem;
+}
+
+.zotflow-settings-danger-btn {
+    color: var(--text-error);
 }
 
 .workspace-leaf-content[data-type="zotflow-tree-view"] .view-content {
@@ -343,4 +440,116 @@
     display: flex;
     flex-direction: column;
     gap: var(--size-4-3);
+}
+
+/* Activity Center: Tasks View */
+
+.zotflow-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-4-2);
+}
+
+.zotflow-tasks-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--size-4-8) 0;
+    color: var(--text-muted);
+    gap: var(--size-4-2);
+}
+
+.zotflow-task-item {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    padding: var(--size-4-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-4-1);
+}
+
+.zotflow-task-header {
+    display: flex;
+    align-items: center;
+    gap: var(--size-4-2);
+}
+
+.zotflow-task-icon {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+}
+
+.zotflow-task-label {
+    flex: 1;
+    font-weight: var(--font-semibold);
+    font-size: var(--font-ui-small);
+}
+
+.zotflow-task-status-icon {
+    display: flex;
+    align-items: center;
+}
+
+.zotflow-task-running .zotflow-task-status-icon {
+    color: var(--interactive-accent);
+}
+
+.zotflow-task-completed .zotflow-task-status-icon {
+    color: var(--text-success);
+}
+
+.zotflow-task-failed .zotflow-task-status-icon {
+    color: var(--text-error);
+}
+
+.zotflow-task-cancelled .zotflow-task-status-icon {
+    color: var(--text-muted);
+}
+
+.zotflow-task-cancel-btn {
+    display: flex;
+    align-items: center;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.zotflow-task-cancel-btn:hover {
+    color: var(--text-error);
+}
+
+.zotflow-task-progress-bar {
+    width: 100%;
+    height: 4px;
+    background-color: var(--background-modifier-border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.zotflow-task-progress-fill {
+    height: 100%;
+    background-color: var(--interactive-accent);
+    transition: width 0.3s ease;
+}
+
+.zotflow-task-message {
+    font-size: var(--font-ui-smaller);
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zotflow-task-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-faint);
+}
+
+.zotflow-task-error {
+    font-size: var(--font-ui-smaller);
+    color: var(--text-error);
+    margin-top: var(--size-4-1);
 }

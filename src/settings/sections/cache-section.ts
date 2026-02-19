@@ -1,7 +1,8 @@
-import { Setting, Notice, SettingGroup } from "obsidian";
+import { Setting, SettingGroup } from "obsidian";
 
 import { db } from "db/db";
 import { DEFAULT_SETTINGS } from "settings/types";
+import { services } from "services/services";
 
 import type ZotFlow from "main";
 
@@ -45,7 +46,10 @@ export class CacheSection {
                     ).toString(),
                 ).onChange(async (value) => {
                     if (value && !/^[0-9]+$/.test(value)) {
-                        new Notice("Must be a positive number");
+                        services.notificationService.notify(
+                            "warning",
+                            "Must be a positive number",
+                        );
                         return;
                     }
                     const newLimit = parseInt(value);
@@ -69,32 +73,23 @@ export class CacheSection {
                 console.error("Cache stats error", e);
             }
 
-            const usageContainer = cacheConfigContainer!.createDiv();
-            usageContainer.style.display = "block";
-            usageContainer.style.paddingTop = "0";
+            const usageContainer = cacheConfigContainer!.createDiv({
+                cls: "zotflow-settings-cache-usage",
+            });
 
-            // Labels
-            const infoDiv = usageContainer.createDiv();
-            infoDiv.style.display = "flex";
-            infoDiv.style.justifyContent = "space-between";
-            infoDiv.style.marginBottom = "6px";
-            infoDiv.style.fontSize = "var(--font-ui-smaller)";
-            infoDiv.style.color = "var(--text-muted)";
+            const infoDiv = usageContainer.createDiv({
+                cls: "zotflow-settings-cache-info",
+            });
             infoDiv.createSpan({ text: "Current Usage" });
             const usageTextEl = infoDiv.createSpan({ text: "Calculating..." });
 
-            // Bar
-            const progressBg = usageContainer.createDiv();
-            progressBg.style.width = "100%";
-            progressBg.style.height = "10px";
-            progressBg.style.backgroundColor =
-                "var(--background-modifier-border)";
-            progressBg.style.borderRadius = "5px";
-            progressBg.style.overflow = "hidden";
+            const progressBg = usageContainer.createDiv({
+                cls: "zotflow-settings-cache-progress-bg",
+            });
 
-            const progressFillEl = progressBg.createDiv();
-            progressFillEl.style.height = "100%";
-            progressFillEl.style.transition = "width 0.3s ease";
+            const progressFillEl = progressBg.createDiv({
+                cls: "zotflow-settings-cache-progress-fill",
+            });
 
             // Logic to update bar
             const updateProgressBar = (limitMB: number) => {
@@ -121,9 +116,9 @@ export class CacheSection {
             updateProgressBar(this.plugin.settings.maxCacheSizeMB);
 
             // Clear Cache Button
-            // Using a similar style to SyncSection (dedicated container with top margin)
-            const btnContainer = cacheConfigContainer!.createDiv();
-            btnContainer.style.marginTop = "1rem";
+            const btnContainer = cacheConfigContainer!.createDiv({
+                cls: "zotflow-settings-btn-container",
+            });
 
             new Setting(btnContainer).addButton((btn) =>
                 btn
@@ -132,14 +127,27 @@ export class CacheSection {
                     .onClick(async () => {
                         try {
                             await db.files.clear();
-                            new Notice("Cache purged successfully.");
+                            services.notificationService.notify(
+                                "success",
+                                "Cache purged successfully.",
+                            );
+                            services.logService.info(
+                                "Cache purged successfully.",
+                                "Settings",
+                            );
                             totalSizeBytes = 0;
                             updateProgressBar(
                                 this.plugin.settings.maxCacheSizeMB,
                             );
                         } catch (error) {
-                            new Notice("Failed to purge cache: " + error);
-                            console.error(error);
+                            services.notificationService.notify(
+                                "error",
+                                "Failed to purge cache: " + error,
+                            );
+                            services.logService.error(
+                                "Failed to purge cache: " + error,
+                                "Settings",
+                            );
                         }
                     }),
             );

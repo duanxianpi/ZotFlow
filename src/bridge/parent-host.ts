@@ -24,6 +24,7 @@ import type { RequestUrlParam } from "obsidian";
 import type { TFileWithoutParentAndVault } from "types/zotflow";
 import type { NotificationType } from "services/notification-service";
 import type { LogLevel } from "services/log-service";
+import type { ITaskInfo } from "types/tasks";
 
 export class ParentHost implements IParentProxy {
     constructor(private app: App) {}
@@ -38,20 +39,7 @@ export class ParentHost implements IParentProxy {
         context?: string,
         details?: any,
     ) {
-        switch (level) {
-            case "debug":
-                services.logService.debug(message, context, details);
-                break;
-            case "info":
-                services.logService.info(message, context);
-                break;
-            case "warn":
-                services.logService.warn(message, context, details);
-                break;
-            case "error":
-                services.logService.error(message, context, details);
-                break;
-        }
+        services.logService.log(level, message, context, details);
     }
 
     public async request(request: RequestUrlParam): Promise<IRequestResponse> {
@@ -149,5 +137,9 @@ export class ParentHost implements IParentProxy {
         file: TFileWithoutParentAndVault,
     ): Promise<TFileWithoutParentAndVault | null> {
         return getLinkedSourceNote(this.app, file);
+    }
+
+    public onTaskUpdate(taskId: string, info: ITaskInfo): void {
+        services.taskMonitor.onTaskUpdate(taskId, info);
     }
 }

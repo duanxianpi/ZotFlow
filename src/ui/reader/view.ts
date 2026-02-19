@@ -1,5 +1,4 @@
-import * as Comlink from "comlink";
-import { ItemView, WorkspaceLeaf, Notice } from "obsidian";
+import { ItemView, WorkspaceLeaf } from "obsidian";
 import { workerBridge } from "bridge";
 import { IframeReaderBridge } from "./bridge";
 import { db, getCombinations } from "db/db";
@@ -15,7 +14,7 @@ import type {
     AnnotationJSON,
     ColorScheme,
 } from "types/zotero-reader";
-import { saveBinaryFile } from "utils/file";
+import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 export const ZOTERO_READER_VIEW_TYPE = "zotflow-zotero-reader-view";
 
@@ -95,20 +94,28 @@ export class ZoteroReaderView extends ItemView {
         const loadingEl = container.createDiv({ cls: "zotflow-loading" });
         loadingEl.setText(`Downloading/Loading ${this.attachmentItem.key}...`);
 
-        try {
-            // Try force update the source note
-            workerBridge.note.triggerUpdate(
+        // Try force update the source note
+        workerBridge.note
+            .triggerUpdate(
                 this.attachmentItem.libraryID,
                 this.attachmentItem.parentItem !== ""
                     ? this.attachmentItem.parentItem
                     : this.attachmentItem.key,
-            );
+            )
+            .catch((e) => {
+                services.logService.error(
+                    "Failed to trigger source note update",
+                    "ZoteroReaderView",
+                    e,
+                );
 
-            this.renderReader();
-        } catch (e) {
-            console.error(e);
-            new Notice("Error loading document");
-        }
+                services.notificationService.notify(
+                    "warning",
+                    "Failed to auto-update source note",
+                );
+            });
+
+        this.renderReader();
     }
 
     private async renderReader() {
@@ -186,14 +193,31 @@ export class ZoteroReaderView extends ItemView {
             // Connect Bridge & Get File concurrently
             const [_, fileBlob] = await Promise.all([
                 this.bridge.connect(),
-                workerBridge.attachment.getFileBlob(this.attachmentItem),
+                workerBridge
+                    .downloadAttachment(this.attachmentItem)
+                    .catch((e) => {
+                        services.logService.error(
+                            "Failed to download attachment",
+                            "ZoteroReaderView",
+                            e,
+                        );
+                        services.notificationService.notify(
+                            "error",
+                            "Failed to download attachment",
+                        );
+                        return null;
+                    }),
             ]);
 
             if (!fileBlob) {
-                console.error(
-                    `[ZotFlow] Failed to get file blob for ${this.attachmentItem.key}`,
+                throw new ZotFlowError(
+                    ZotFlowErrorCode.RESOURCE_MISSING,
+                    "File not found or failed to download",
+                    "ZoteroReaderView",
+                    {
+                        attachmentItem: this.attachmentItem,
+                    },
                 );
-                throw new Error("File not found or failed to download");
             }
 
             // Get Annotations
@@ -223,8 +247,18 @@ export class ZoteroReaderView extends ItemView {
                         type = "snapshot";
                         break;
                     default:
-                        console.error(`Unknown content type: ${contentType}`);
-                        throw new Error(`Unknown content type: ${contentType}`);
+                        services.logService.error(
+                            `Unknown content type: ${contentType}`,
+                            "ZoteroReaderView",
+                        );
+                        throw new ZotFlowError(
+                            ZotFlowErrorCode.UNKNOWN,
+                            `Unknown content type: ${contentType}`,
+                            "ZoteroReaderView",
+                            {
+                                attachmentItem: this.attachmentItem,
+                            },
+                        );
                 }
 
                 const authorName =
@@ -244,10 +278,14 @@ export class ZoteroReaderView extends ItemView {
                 });
 
                 // Extract external annotations
-                this.extractExternalAnnotation(fileBlob);
+                this.extractExternalAnnotation();
             }
         } catch (e: any) {
-            console.error("Error loading Zotero Reader view:", e);
+            services.logService.error(
+                "Error loading Zotero Reader view",
+                "ZoteroReaderView",
+                e,
+            );
             container.empty();
             const errorMessage = container.createDiv({
                 cls: "error-message",
@@ -282,71 +320,55 @@ export class ZoteroReaderView extends ItemView {
         }
     }
 
-    private async extractExternalAnnotation(fileBlob: Blob) {
+    private async extractExternalAnnotation() {
+        const isPDF =
+            this.attachmentItem.raw.data.contentType === "application/pdf";
+        if (!isPDF) return;
+
         const currentMD5 = this.attachmentItem.raw.data.md5;
         const lastExtractionMD5 =
             this.attachmentItem.externalAnnotationExtractionFileMD5;
-        // Only extract for PDFs
-        const isPDF =
-            this.attachmentItem.raw.data.contentType === "application/pdf";
 
-        if (isPDF) {
-            if (currentMD5 && currentMD5 === lastExtractionMD5) {
-                console.log(
-                    "[ZotFlow] Skipping annotation extraction (MD5 match)",
-                );
-            } else {
-                console.log(
-                    "[ZotFlow] MD5 mismatch or missing. Extracting annotations...",
-                );
+        if (currentMD5 && currentMD5 === lastExtractionMD5) {
+            services.logService.log(
+                "debug",
+                "Skipping annotation extraction (MD5 match)",
+                "ZoteroReaderView",
+            );
+            return;
+        }
 
-                // Delete existing external annotations for this item
-                await db.items
-                    .where({
-                        libraryID: this.attachmentItem.libraryID,
-                        parentItem: this.attachmentItem.key,
-                    })
-                    .filter(
-                        (i) =>
-                            (i as IDBZoteroItem<AnnotationData>).raw.data
-                                .annotationIsExternal === true,
-                    )
-                    .delete();
+        try {
+            const annotations = await workerBridge.extractExternalAnnotations([
+                this.attachmentItem,
+            ]);
 
-                const buffer = await fileBlob.arrayBuffer();
-                const externalAnnotationsRaw =
-                    await workerBridge.pdfProcessWorker.import(
-                        Comlink.transfer(buffer, [buffer]),
-                        true,
-                    );
-
-                const externalAnnotations = externalAnnotationsRaw.map(
-                    this.handleExternalAnnotation,
-                );
-
-                // Push to Reader
-                await Promise.all(
-                    externalAnnotations.map((annotation) => {
-                        this.bridge!.addAnnotation(annotation);
-                    }),
-                );
-
-                // Update Extraction MD5
-                if (currentMD5) {
-                    await db.items.update(
-                        [
-                            this.attachmentItem.libraryID,
-                            this.attachmentItem.key,
-                        ],
-                        {
-                            externalAnnotationExtractionFileMD5: currentMD5,
-                        },
-                    );
-                    this.attachmentItem.externalAnnotationExtractionFileMD5 =
-                        currentMD5;
-                }
-                console.log("[ZotFlow] Annotations extracted successfully");
+            // Push extracted annotations to the reader iframe
+            for (const annotation of annotations) {
+                this.bridge!.addAnnotation(annotation);
             }
+
+            // Update local cache of the MD5
+            if (currentMD5) {
+                this.attachmentItem.externalAnnotationExtractionFileMD5 =
+                    currentMD5;
+            }
+
+            services.logService.log(
+                "debug",
+                `External annotations extracted: ${annotations.length}`,
+                "ZoteroReaderView",
+            );
+        } catch (e) {
+            services.logService.error(
+                "Failed to extract external annotations",
+                "ZoteroReaderView",
+                e,
+            );
+            services.notificationService.notify(
+                "error",
+                "Failed to extract external annotations",
+            );
         }
     }
 
@@ -407,7 +429,19 @@ export class ZoteroReaderView extends ItemView {
                 annotationData.annotationType === "image" ||
                 annotationData.annotationType === "ink";
             if (isVisual && json.image) {
-                workerBridge.note.saveBase64Image(json.image, key);
+                workerBridge.note
+                    .saveBase64Image(json.image, key)
+                    .catch((e) => {
+                        services.logService.error(
+                            `Failed to save annotation image for ${key}`,
+                            "ZoteroReaderView",
+                            e,
+                        );
+                        services.notificationService.notify(
+                            "error",
+                            `Failed to save annotation image for ${key}`,
+                        );
+                    });
             }
 
             if (existing) {
@@ -505,16 +539,32 @@ export class ZoteroReaderView extends ItemView {
 
         // Debounce Update Source Note
         if (hasChanges) {
-            console.log("[ZotFlow] Triggering update for note:", paperKey);
-            workerBridge.note.triggerUpdate(
-                libraryID,
-                paperKey !== "" ? paperKey : attachmentKey,
-                {
-                    forceUpdateContent: true,
-                    forceUpdateImages: false,
-                },
-                true,
+            services.logService.log(
+                "debug",
+                `Triggering update for note: ${paperKey}`,
+                "ZoteroReaderView",
             );
+            workerBridge.note
+                .triggerUpdate(
+                    libraryID,
+                    paperKey !== "" ? paperKey : attachmentKey,
+                    {
+                        forceUpdateContent: true,
+                        forceUpdateImages: false,
+                    },
+                    true,
+                )
+                .catch((e) => {
+                    services.logService.error(
+                        "Failed to trigger note update after annotation save",
+                        "ZoteroReaderView",
+                        e,
+                    );
+                    services.notificationService.notify(
+                        "error",
+                        "Failed to trigger note update after annotation save",
+                    );
+                });
         }
     }
 
@@ -523,7 +573,11 @@ export class ZoteroReaderView extends ItemView {
      * Optimization: Batch processing
      */
     private async handleAnnotationsDeleted(ids: string[]) {
-        console.log("[ZotFlow] Handling deleted annotations:", ids);
+        services.logService.log(
+            "debug",
+            `Handling deleted annotations: ${ids.join(", ")}`,
+            "ZoteroReaderView",
+        );
         const { libraryID } = this.attachmentItem;
         const paperKey = this.attachmentItem.parentItem;
 
@@ -539,7 +593,11 @@ export class ZoteroReaderView extends ItemView {
             .anyOf(getCombinations([[libraryID], ids]))
             .toArray()) as IDBZoteroItem<AnnotationData>[];
 
-        console.log("[ZotFlow] Found annotations to delete:", items);
+        services.logService.log(
+            "debug",
+            `Found ${items.length} annotations to delete`,
+            "ZoteroReaderView",
+        );
 
         // Iterate and handle delete logic
         for (const existing of items) {
@@ -549,7 +607,19 @@ export class ZoteroReaderView extends ItemView {
 
             // Only delete physical images if it's a visual annotation
             if (isVisual) {
-                await workerBridge.note.deleteAnnotationImage(existing.key);
+                workerBridge.note
+                    .deleteAnnotationImage(existing.key)
+                    .catch((e) => {
+                        services.logService.error(
+                            `Failed to delete annotation image for ${existing.key}`,
+                            "ZoteroReaderView",
+                            e,
+                        );
+                        services.notificationService.notify(
+                            "error",
+                            `Failed to delete annotation image for ${existing.key}`,
+                        );
+                    });
             }
 
             if (existing.syncStatus === "created") {
@@ -583,30 +653,23 @@ export class ZoteroReaderView extends ItemView {
         }
 
         // Trigger note update
-        workerBridge.note.triggerUpdate(
-            libraryID,
-            paperKey !== "" ? paperKey : this.attachmentItem.key,
-            { forceUpdateContent: true },
-            true,
-        );
-    }
-
-    private handleExternalAnnotation(annotation: any): AnnotationJSON {
-        return {
-            id: annotation.key,
-            type: annotation.annotationType,
-            isExternal: true,
-            authorName: annotation.annotationAuthorName,
-            readOnly: true,
-            text: annotation.annotationText,
-            comment: annotation.annotationComment,
-            pageLabel: annotation.annotationPageLabel,
-            color: annotation.annotationColor,
-            sortIndex: annotation.annotationSortIndex,
-            position: JSON.parse(annotation.annotationPosition),
-            tags: annotation.tags,
-            dateModified: "",
-            dateCreated: "",
-        };
+        workerBridge.note
+            .triggerUpdate(
+                libraryID,
+                paperKey !== "" ? paperKey : this.attachmentItem.key,
+                { forceUpdateContent: true },
+                true,
+            )
+            .catch((e) => {
+                services.logService.error(
+                    "Failed to trigger note update after annotation delete",
+                    "ZoteroReaderView",
+                    e,
+                );
+                services.notificationService.notify(
+                    "error",
+                    "Failed to trigger note update after annotation delete",
+                );
+            });
     }
 }

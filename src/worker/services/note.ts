@@ -22,7 +22,7 @@ export interface UpdateOptions {
 
 export class NoteService {
     // Debounce map for update operations
-    private debouncers: Map<string, NodeJS.Timeout> = new Map();
+    private debouncers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
     constructor(
         private settings: ZotFlowSettings,
@@ -35,6 +35,16 @@ export class NoteService {
     updateSettings(newSettings: ZotFlowSettings) {
         this.settings = newSettings;
         this.templateService.updateSettings(newSettings);
+    }
+
+    /**
+     * Clear all pending debounced operations.
+     */
+    dispose() {
+        for (const timer of this.debouncers.values()) {
+            clearTimeout(timer);
+        }
+        this.debouncers.clear();
     }
 
     /**
@@ -370,9 +380,10 @@ export class NoteService {
     }
 
     /**
-     * Extract images from PDF annotations
+     * Extract images from PDF annotations.
+     * Public to allow usage from batch tasks.
      */
-    private async extractAnnotationImages(
+    async extractAnnotationImages(
         item: AnyIDBZoteroItem,
         forceUpdateAnnotationImage: boolean,
     ) {
@@ -478,13 +489,12 @@ export class NoteService {
                 console.log(`[ZotFlow] Deleted orphaned image: ${path}`);
             }
         } catch (e) {
-            this.parentHost.log(
-                "error",
-                `Failed to delete image ${annotationKey}: ${(e as Error).message}`,
-                "NoteService",
+            throw ZotFlowError.wrap(
                 e,
+                ZotFlowErrorCode.FILE_WRITE_FAILED,
+                "NoteService",
+                `Failed to delete image ${annotationKey}: ${(e as Error).message}`,
             );
-            // Non-fatal
         }
     }
 }

@@ -1,12 +1,7 @@
-import {
-    Setting,
-    Notice,
-    ButtonComponent,
-    setIcon,
-    SettingGroup,
-} from "obsidian";
+import { Setting, ButtonComponent, setIcon, SettingGroup } from "obsidian";
 import { db } from "db/db";
 import { workerBridge } from "bridge";
+import { services } from "services/services";
 
 import type ZotFlow from "main";
 import type { ZoteroGroup } from "types/zotero";
@@ -88,10 +83,13 @@ export class SyncSection {
 
                         await this.plugin.saveSettings();
 
-                        new Notice("Disconnected.");
+                        services.notificationService.notify(
+                            "info",
+                            "Disconnected.",
+                        );
                         this.refreshUI();
                     });
-                btn.extraSettingsEl.style.color = "var(--text-error)";
+                btn.extraSettingsEl.addClass("zotflow-settings-danger-btn");
             });
         });
 
@@ -137,79 +135,45 @@ export class SyncSection {
         }
         if (dirty) await this.plugin.saveSettings();
 
-        // Render Table
-        const tableWrapper = containerEl.createDiv();
-        tableWrapper.style.border =
-            "1px solid var(--background-modifier-border)";
-        tableWrapper.style.borderRadius = "6px";
-        tableWrapper.style.overflow = "hidden";
-        tableWrapper.style.marginTop = "0.5rem";
-
-        const table = tableWrapper.createEl("table");
-        table.style.width = "100%";
-        table.style.borderCollapse = "collapse";
-
-        // Header
-        const thead = table.createEl("thead");
-        thead.style.backgroundColor = "var(--background-secondary)";
-        const hRow = thead.createEl("tr");
-        ["Type", "Name", "Access", "Sync Mode"].forEach((h) => {
-            const th = hRow.createEl("th", { text: h });
-            th.style.padding = "10px";
-            th.style.textAlign = "left";
-            th.style.fontSize = "var(--font-ui-medium)";
-            th.style.fontWeight = "var(--font-semibold)";
+        const tableWrapper = containerEl.createDiv({
+            cls: "zotflow-settings-lib-table-wrapper",
         });
 
-        // Body
+        const table = tableWrapper.createEl("table", {
+            cls: "zotflow-settings-lib-table",
+        });
+
+        const thead = table.createEl("thead");
+        const hRow = thead.createEl("tr");
+        ["Type", "Name", "Access", "Sync Mode"].forEach((h) => {
+            hRow.createEl("th", { text: h });
+        });
+
         const tbody = table.createEl("tbody");
         libraryItems.forEach((lib) => {
             const row = tbody.createEl("tr");
-            row.style.borderTop = "1px solid var(--background-modifier-border)";
 
-            // Type
-            const typeCell = row.createEl("td");
-            typeCell.style.padding = "10px";
-            typeCell.style.fontSize = "var(--font-ui-small)";
-            typeCell.style.display = "flex";
-            typeCell.style.alignItems = "center";
-            typeCell.style.gap = "6px";
+            const typeCell = row.createEl("td", {
+                cls: "zotflow-settings-lib-type-cell",
+            });
             setIcon(typeCell, lib.type === "user" ? "user" : "users");
             typeCell.createSpan({
                 text: lib.type === "user" ? " Personal" : " Group",
             });
 
-            // Name
             const nameCell = row.createEl("td", { text: lib.name });
-            nameCell.style.padding = "10px";
             nameCell.title = `ID: ${lib.id}`;
-            nameCell.style.fontSize = "var(--font-ui-small)";
 
-            // Access
             const accessCell = row.createEl("td");
-            accessCell.style.padding = "10px";
-            const badge = accessCell.createSpan({ cls: "nav-text" });
-            badge.style.fontSize = "0.8rem";
-            badge.style.padding = "2px 6px";
-            badge.style.borderRadius = "4px";
-            badge.style.fontSize = "var(--font-ui-small)";
+            const badgeCls = lib.canWrite
+                ? "zotflow-settings-access-badge zotflow-settings-access-badge--rw"
+                : "zotflow-settings-access-badge zotflow-settings-access-badge--ro";
+            const badge = accessCell.createSpan({ cls: badgeCls });
+            badge.setText(lib.canWrite ? "Read/Write" : "Read Only");
 
-            if (lib.canWrite) {
-                badge.setText("Read/Write");
-                badge.style.backgroundColor = "var(--interactive-accent)";
-                badge.style.color = "var(--text-on-accent)";
-            } else {
-                badge.setText("Read Only");
-                badge.style.backgroundColor =
-                    "var(--background-modifier-border)";
-            }
-
-            // Selector
             const actionCell = row.createEl("td");
-            actionCell.style.padding = "10px";
             const select = actionCell.createEl("select");
-            select.className = "dropdown";
-            select.style.width = "100%";
+            select.className = "dropdown zotflow-settings-lib-select";
 
             const modeLabels: Record<string, string> = {
                 bidirectional: "Bidirectional",
@@ -231,9 +195,9 @@ export class SyncSection {
             });
         });
 
-        // Refresh Button
-        const btnContainer = containerEl.createDiv();
-        btnContainer.style.marginTop = "0.5rem";
+        const btnContainer = containerEl.createDiv({
+            cls: "zotflow-settings-table-btn-container",
+        });
         new Setting(btnContainer).addButton(
             (btn) =>
                 (btn
@@ -315,7 +279,10 @@ export class SyncSection {
     ) {
         const apiKey = this.plugin.settings.zoteroApiKey;
         if (!apiKey) {
-            new Notice("Enter API Key first.");
+            services.notificationService.notify(
+                "warning",
+                "Enter API Key first.",
+            );
             return;
         }
 
@@ -355,24 +322,28 @@ export class SyncSection {
                 });
             }
 
-            groups.forEach(async (group) => {
-                const libState = await db.libraries.get(group.id);
-                if (!libState) {
-                    await db.libraries.add({
-                        id: group.id,
-                        type: "group",
-                        name: group.name,
-                        collectionVersion: 0,
-                        itemVersion: 0,
-                        syncedAt: new Date().toISOString().split(".")[0] + "Z",
-                    });
-                } else if (libState.name !== group.name) {
-                    libState.name = group.name;
-                    await db.libraries.put(libState);
-                }
-            });
+            await Promise.all(
+                groups.map(async (group) => {
+                    const libState = await db.libraries.get(group.id);
+                    if (!libState) {
+                        await db.libraries.add({
+                            id: group.id,
+                            type: "group",
+                            name: group.name,
+                            collectionVersion: 0,
+                            itemVersion: 0,
+                            syncedAt:
+                                new Date().toISOString().split(".")[0] + "Z",
+                        });
+                    } else if (libState.name !== group.name) {
+                        libState.name = group.name;
+                        await db.libraries.put(libState);
+                    }
+                }),
+            );
 
-            new Notice(
+            services.notificationService.notify(
+                "success",
                 mode === "verify"
                     ? `Verified as ${verifiedKeyInfo.username}`
                     : "Libraries refreshed.",
@@ -381,7 +352,15 @@ export class SyncSection {
 
             this.refreshUI();
         } catch (error: any) {
-            new Notice(`Error: ${error.message}`);
+            services.logService.error(
+                `Zotero API ${mode} failed`,
+                "Settings",
+                error,
+            );
+            services.notificationService.notify(
+                "error",
+                `Error: ${error.message}`,
+            );
             if (mode === "verify") {
                 this.plugin.settings.librariesConfig = {};
                 // Even on failure, refresh to unlock inputs if needed

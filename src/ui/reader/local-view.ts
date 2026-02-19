@@ -1,4 +1,4 @@
-import { FileView, WorkspaceLeaf, Notice, TFile, ItemView } from "obsidian";
+import { FileView, WorkspaceLeaf, TFile, ItemView } from "obsidian";
 import { workerBridge } from "bridge";
 import { IframeReaderBridge } from "./bridge";
 import { LocalAnnotationManager } from "./local-anno-manager";
@@ -73,8 +73,15 @@ export class LocalReaderView extends ItemView {
         try {
             this.renderReader(file);
         } catch (e) {
-            console.error(e);
-            new Notice("Error loading document");
+            services.logService.error(
+                "Error loading document",
+                "LocalReaderView",
+                e,
+            );
+            services.notificationService.notify(
+                "error",
+                "Error loading document",
+            );
         }
     }
 
@@ -258,10 +265,15 @@ export class LocalReaderView extends ItemView {
                 const isVisual =
                     annotation.type === "image" || annotation.type === "ink";
                 if (isVisual && annotation.image) {
-                    workerBridge.localNote.saveBase64Image(
-                        annotation.image,
-                        annotation.id,
-                    );
+                    workerBridge.localNote
+                        .saveBase64Image(annotation.image, annotation.id)
+                        .catch((e) =>
+                            services.logService.error(
+                                "Failed to save annotation image",
+                                "LocalReaderView",
+                                e,
+                            ),
+                        );
                 }
                 await this.annotationManager.save(annotation);
             }
@@ -281,7 +293,15 @@ export class LocalReaderView extends ItemView {
                         annotation.type === "image" ||
                         annotation.type === "ink";
                     if (isVisual) {
-                        workerBridge.localNote.deleteAnnotationImage(id);
+                        workerBridge.localNote
+                            .deleteAnnotationImage(id)
+                            .catch((e) =>
+                                services.logService.error(
+                                    "Failed to delete annotation image",
+                                    "LocalReaderView",
+                                    e,
+                                ),
+                            );
                     }
                 }
                 await this.annotationManager.delete(id);

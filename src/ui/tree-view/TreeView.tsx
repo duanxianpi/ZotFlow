@@ -9,6 +9,7 @@ import { NodeApi, Tree } from "react-arborist";
 import { workerBridge } from "bridge";
 import { ObsidianIcon } from "../ObsidianIcon";
 import { NodeItem, INDENT_SIZE } from "./Node";
+import { services } from "services/services";
 
 import type { TreeTransferPayload } from "worker/services/tree-view";
 
@@ -131,7 +132,11 @@ export const ZotFlowTree = () => {
                 const flat = await workerBridge.treeView.getOptimizedTree();
                 setRawData(flat);
             } catch (err) {
-                console.error("Failed to load tree", err);
+                services.logService.error(
+                    "Failed to load tree",
+                    "TreeView",
+                    err,
+                );
             } finally {
                 setLoading(false);
             }
@@ -150,7 +155,11 @@ export const ZotFlowTree = () => {
             const flat = await workerBridge.treeView.getOptimizedTree();
             setRawData(flat);
         } catch (err) {
-            console.error("Failed to refresh tree", err);
+            services.logService.error(
+                "Failed to refresh tree",
+                "TreeView",
+                err,
+            );
         } finally {
             setLoading(false);
         }

@@ -6,10 +6,7 @@ import type { TFileWithoutParentAndVault } from "types/zotflow";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 export class LocalNoteService {
-    private settings: ZotFlowSettings;
-    private parentHost: IParentProxy;
-    private templateService: LocalTemplateService;
-    private debouncers: Map<string, NodeJS.Timeout> = new Map();
+    private debouncers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
     // Regex for parsing legacy OZRP annotations
     private readonly OZRP_REGEX =
@@ -20,18 +17,24 @@ export class LocalNoteService {
         /%% ZOTFLOW_ANNO_(\w+)_BEG\s*([\s\S]*?)\s*%%[\s\S]*?%% ZOTFLOW_ANNO_\1_END %%/g;
 
     constructor(
-        settings: ZotFlowSettings,
-        parentHost: IParentProxy,
-        templateService: LocalTemplateService,
-    ) {
-        this.settings = settings;
-        this.parentHost = parentHost;
-        this.templateService = templateService;
-    }
+        private settings: ZotFlowSettings,
+        private parentHost: IParentProxy,
+        private templateService: LocalTemplateService,
+    ) {}
 
     public updateSettings(settings: ZotFlowSettings) {
         this.settings = settings;
         this.templateService.updateSettings(settings);
+    }
+
+    /**
+     * Clear all pending debounced operations.
+     */
+    public dispose() {
+        for (const timer of this.debouncers.values()) {
+            clearTimeout(timer);
+        }
+        this.debouncers.clear();
     }
 
     /**
@@ -169,12 +172,12 @@ export class LocalNoteService {
                 await this.parentHost.deleteFile(path);
                 console.log(`[ZotFlow] Deleted orphaned image: ${path}`);
             }
-        } catch (e) {
-            this.parentHost.log(
-                "error",
-                `Failed to delete image ${annotationKey}: ${(e as Error).message}`,
-                "LocalNoteService",
+        } catch (e: any) {
+            throw ZotFlowError.wrap(
                 e,
+                ZotFlowErrorCode.FILE_WRITE_FAILED,
+                "LocalNoteService",
+                `Failed to delete image ${annotationKey}: ${e.message}`,
             );
         }
     }

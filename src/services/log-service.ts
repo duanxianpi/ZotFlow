@@ -57,6 +57,28 @@ export class LogService {
         this.addEntry("error", message, context, error);
     }
 
+    public log(
+        level: LogLevel,
+        message: string,
+        context?: string,
+        details?: any,
+    ) {
+        switch (level) {
+            case "debug":
+                this.debug(message, context, details);
+                break;
+            case "info":
+                this.info(message, context, details);
+                break;
+            case "warn":
+                this.warn(message, context, details);
+                break;
+            case "error":
+                this.error(message, context, details);
+                break;
+        }
+    }
+
     public clearLogs() {
         this._logs = [];
     }

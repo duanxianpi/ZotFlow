@@ -150,7 +150,7 @@ export async function getAnnotationJson(
 
         processedTags.sort((a, b) => {
             if (!a.color && !b.color) {
-                return a.name.localeCompare(b.name, {
+                return a.name.localeCompare(b.name, undefined, {
                     sensitivity: "accent",
                 });
             }

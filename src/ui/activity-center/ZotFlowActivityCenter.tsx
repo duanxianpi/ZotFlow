@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { ObsidianIcon } from "../ObsidianIcon";
 import { SyncView } from "./SyncView";
-// import { TasksView } from "./TasksView";
-// import { TelemetryView } from "./TelemetryView";
+import { TasksView } from "./TasksView";
 
 export const ZotFlowActivityCenter: React.FC = () => {
     const [activeTab, setActiveTab] = useState("sync");
@@ -38,7 +37,7 @@ export const ZotFlowActivityCenter: React.FC = () => {
 
             <div className="zotflow-ac-content">
                 {activeTab === "sync" && <SyncView />}
-                {/* {activeTab === "tasks" && <TasksView />} */}
+                {activeTab === "tasks" && <TasksView />}
                 {/* {activeTab === "telemetry" && <TelemetryView />} */}
             </div>
         </>

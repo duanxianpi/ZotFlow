@@ -1,5 +1,5 @@
 import type { NodeRendererProps } from "react-arborist";
-import { Menu, Notice, setIcon } from "obsidian";
+import { Menu, setIcon } from "obsidian";
 import type { ViewNode } from "./TreeView";
 import { ObsidianIcon } from "../ObsidianIcon";
 import { getAttachmentFileIcon, getItemTypeIcon } from "ui/icons";
@@ -95,8 +95,27 @@ export const NodeItem = ({
                 item.setTitle("Create source note for all items")
                     .setIcon("file-plus")
                     .onClick(async () => {
-                        new Notice("Batch creation not fully implemented yet.");
-                        // await services.note.batchCreateNotes([]);
+                        try {
+                            const taskId =
+                                await workerBridge.createBatchNoteTask(
+                                    {
+                                        libraryIDs: [node.data.libraryID],
+                                    },
+                                    {},
+                                    false,
+                                );
+                            services.notificationService.notify(
+                                "success",
+                                `Batch note creation started (task ${taskId.slice(0, 8)})`,
+                            );
+                        } catch (err) {
+                            services.logService.error(
+                                "Failed to start batch note task",
+                                "TreeView",
+                                err,
+                            );
+                            services.notificationService.notify("error", "Failed to start batch note creation.");
+                        }
                     });
             });
         } else if (isTopLevelItem && node.data.itemType !== "note") {
@@ -114,7 +133,12 @@ export const NodeItem = ({
                                 },
                             );
                         } catch (err) {
-                            console.error("Failed to create/open note", err);
+                            services.logService.error(
+                                "Failed to create/open note",
+                                "TreeView",
+                                err,
+                            );
+                            services.notificationService.notify("error", "Failed to open source note.");
                         }
                     });
             });
@@ -123,16 +147,35 @@ export const NodeItem = ({
                     .setIcon("image")
                     .onClick(async () => {
                         try {
-                            await workerBridge.note.openNote(
+                            // Open/update the note file (foreground)
+                            workerBridge.note.openNote(
                                 node.data.libraryID,
                                 node.data.key,
                                 {
                                     forceUpdateContent: true,
-                                    forceUpdateImages: true,
+                                    forceUpdateImages: false,
                                 },
                             );
+                            // Extract images as a background task
+                            const taskId =
+                                await workerBridge.createBatchExtractImagesTask(
+                                    {
+                                        libraryIDs: [node.data.libraryID],
+                                        itemKeys: [node.data.key],
+                                        forceUpdate: true,
+                                    },
+                                );
+                            services.notificationService.notify(
+                                "success",
+                                `Image extraction started (task ${taskId.slice(0, 8)})`,
+                            );
                         } catch (err) {
-                            console.error("Failed to update note", err);
+                            services.logService.error(
+                                "Failed to start image extraction",
+                                "TreeView",
+                                err,
+                            );
+                            services.notificationService.notify("error", "Failed to start image extraction.");
                         }
                     });
             });
@@ -156,7 +199,15 @@ export const NodeItem = ({
             dragText = node.data.name;
         } else if (nodeType === "item" && node.data.itemType !== "attachment") {
             // Try force update the source note
-            workerBridge.note.triggerUpdate(node.data.libraryID, node.data.key);
+            workerBridge.note
+                .triggerUpdate(node.data.libraryID, node.data.key)
+                .catch((e) =>
+                    services.logService.error(
+                        "Failed to trigger note update on drag",
+                        "TreeView",
+                        e,
+                    ),
+                );
 
             const file = services.indexService.getFileByKey(node.data.key);
             if (file) {

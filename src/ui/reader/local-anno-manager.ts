@@ -1,4 +1,4 @@
-import { TFile, Notice } from "obsidian";
+import { TFile } from "obsidian";
 import { workerBridge } from "bridge";
 import { services } from "services/services";
 import type { AnnotationJSON } from "types/zotero-reader";
@@ -35,8 +35,15 @@ export class LocalAnnotationManager {
 
                 return annotations;
             } catch (error) {
-                console.error("[ZotFlow] Failed to load annotations:", error);
-                new Notice("ZotFlow: Could not parse annotations.");
+                services.logService.error(
+                    "Failed to load annotations",
+                    "LocalAnnotationManager",
+                    error,
+                );
+                services.notificationService.notify(
+                    "error",
+                    "Could not parse annotations.",
+                );
                 return [];
             }
         }
@@ -84,8 +91,9 @@ export class LocalAnnotationManager {
         workerBridge.localNote
             .triggerUpdate(localAttachment, allAnnotations)
             .catch((err) => {
-                console.error(
-                    "[ZotFlow] Failed to trigger worker update:",
+                services.logService.error(
+                    "Failed to trigger worker update",
+                    "LocalAnnotationManager",
                     err,
                 );
             });

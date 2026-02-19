@@ -1,5 +1,6 @@
-import { Setting, Notice, setIcon, SettingGroup } from "obsidian";
+import { Setting, setIcon, SettingGroup } from "obsidian";
 import { workerBridge } from "bridge";
+import { services } from "services/services";
 
 import type ZotFlow from "main";
 
@@ -74,8 +75,9 @@ export class WebDavSection {
                 if (isVerified) text.setDisabled(true);
             });
 
-            const btnContainer = setting.settingEl.parentElement!.createDiv();
-            btnContainer.style.marginTop = "1rem";
+            const btnContainer = setting.settingEl.parentElement!.createDiv({
+                cls: "zotflow-settings-btn-container",
+            });
 
             if (isVerified) {
                 new Setting(btnContainer).addButton((button) =>
@@ -88,7 +90,10 @@ export class WebDavSection {
                             this.plugin.settings.webDavUser = "";
                             this.plugin.settings.webDavPassword = "";
                             await this.plugin.saveSettings();
-                            new Notice("WebDAV disconnected.");
+                            services.notificationService.notify(
+                                "info",
+                                "WebDAV disconnected.",
+                            );
                             this.refreshUI();
                         }),
                 );
@@ -99,7 +104,10 @@ export class WebDavSection {
                         .setCta()
                         .onClick(async () => {
                             if (!tempUrl || !tempUser || !tempPassword) {
-                                new Notice("Please fill in all fields.");
+                                services.notificationService.notify(
+                                    "warning",
+                                    "Please fill in all fields.",
+                                );
                                 return;
                             }
                             button
@@ -112,7 +120,10 @@ export class WebDavSection {
                                     tempUser,
                                     tempPassword,
                                 );
-                                new Notice("WebDAV Connected!");
+                                services.notificationService.notify(
+                                    "success",
+                                    "WebDAV Connected!",
+                                );
 
                                 this.plugin.settings.webDavUrl = tempUrl;
                                 this.plugin.settings.webDavUser = tempUser;
@@ -123,7 +134,13 @@ export class WebDavSection {
 
                                 this.refreshUI();
                             } catch (error: any) {
-                                new Notice(
+                                services.logService.error(
+                                    "WebDAV verification failed",
+                                    "Settings",
+                                    error,
+                                );
+                                services.notificationService.notify(
+                                    "error",
                                     `Connection failed: ${error.message}`,
                                 );
                                 button

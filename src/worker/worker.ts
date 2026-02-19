@@ -9,10 +9,18 @@ import { NoteService } from "./services/note";
 import { PDFProcessWorker } from "./services/pdf-processor";
 import { LocalNoteService } from "./services/local-note";
 import { LocalTemplateService } from "./services/local-template";
+import { TaskManager } from "./tasks/manager";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 import type { ZotFlowSettings } from "settings/types";
 import type { IParentProxy } from "bridge/types";
+import type { UpdateOptions } from "./services/note";
+import type { BatchNoteInput } from "./tasks/impl/batch-note-task";
+import type { BatchExtractImagesInput } from "./tasks/impl/batch-extract-images-task";
+import type { BatchExtractExternalAnnotationsInput } from "./tasks/impl/batch-extract-external-annotations-task";
+import type { IDBZoteroItem } from "types/db-schema";
+import type { AttachmentData } from "types/zotero-item";
+import type { AnnotationJSON } from "types/zotero-reader";
 
 /**
  * Worker API definition
@@ -24,6 +32,7 @@ export interface WorkerAPI {
         parentHost: IParentProxy,
         blobUrls: Record<string, string>,
     ): void;
+    dispose(): void;
     zotero: ZoteroAPIService;
     sync: SyncService;
     attachment: AttachmentService;
@@ -33,7 +42,26 @@ export interface WorkerAPI {
 
     localNote: LocalNoteService;
     pdfProcessor: PDFProcessWorker;
+    tasks: TaskManager;
     updateSettings(settings: ZotFlowSettings): void;
+
+    // Task factory methods
+    createSyncTask(): Promise<string>;
+    createBatchNoteTask(
+        input: BatchNoteInput,
+        options: UpdateOptions,
+        isUpdate: boolean,
+    ): Promise<string>;
+    createBatchExtractImagesTask(
+        input: BatchExtractImagesInput,
+    ): Promise<string>;
+    downloadAttachment(
+        attachmentItem: IDBZoteroItem<AttachmentData>,
+    ): Promise<Blob>;
+    extractExternalAnnotations(
+        attachmentItems: IDBZoteroItem<AttachmentData>[],
+    ): Promise<AnnotationJSON[]>;
+    cancelTask(taskId: string): void;
 }
 
 // Service instances (Lazy initialized)
@@ -48,6 +76,31 @@ let _note: NoteService | undefined;
 let _localNote: LocalNoteService | undefined;
 let _localTemplate: LocalTemplateService | undefined;
 let _pdfProcessor: PDFProcessWorker | undefined;
+let _taskManager: TaskManager | undefined;
+let _currentSettings: ZotFlowSettings | undefined;
+
+function assertInitialized() {
+    if (
+        !_zotero ||
+        !_webdav ||
+        !_attachment ||
+        !_sync ||
+        !_treeView ||
+        !_template ||
+        !_note ||
+        !_pdfProcessor ||
+        !_localNote ||
+        !_localTemplate ||
+        !_taskManager ||
+        !_currentSettings
+    ) {
+        throw new ZotFlowError(
+            ZotFlowErrorCode.RESOURCE_MISSING,
+            "Worker",
+            "Worker not initialized",
+        );
+    }
+}
 
 const exposedApi: WorkerAPI = {
     init: (
@@ -124,6 +177,10 @@ const exposedApi: WorkerAPI = {
                 parentHost,
                 _localTemplate,
             );
+
+            _taskManager = new TaskManager(parentHost);
+
+            _currentSettings = settings;
 
             // Initialize PDF Worker
             _pdfProcessor._init();
@@ -221,38 +278,96 @@ const exposedApi: WorkerAPI = {
         return Comlink.proxy(_pdfProcessor);
     },
 
-    updateSettings: (settings: ZotFlowSettings) => {
-        if (
-            !_zotero ||
-            !_webdav ||
-            !_attachment ||
-            !_sync ||
-            !_treeView ||
-            !_template ||
-            !_note ||
-            !_pdfProcessor ||
-            !_localNote ||
-            !_localTemplate
-        ) {
+    get tasks() {
+        if (!_taskManager)
             throw new ZotFlowError(
                 ZotFlowErrorCode.UNKNOWN,
                 "Worker",
                 "Worker not initialized",
             );
-        }
+        return Comlink.proxy(_taskManager);
+    },
+
+    dispose: () => {
+        _note?.dispose();
+        _localNote?.dispose();
+    },
+
+    // ================================================================
+    // Task factory methods
+    // ================================================================
+
+    createSyncTask: async () => {
+        assertInitialized();
+        return _taskManager!.createSyncTask(_sync!);
+    },
+
+    createBatchNoteTask: async (
+        input: BatchNoteInput,
+        options: UpdateOptions,
+        isUpdate: boolean,
+    ) => {
+        assertInitialized();
+        return _taskManager!.createBatchNoteTask(
+            _note!,
+            input,
+            options,
+            isUpdate,
+        );
+    },
+
+    createBatchExtractImagesTask: async (input: BatchExtractImagesInput) => {
+        assertInitialized();
+        return _taskManager!.createBatchExtractImagesTask(
+            _attachment!,
+            _pdfProcessor!,
+            _currentSettings!,
+            input,
+        );
+    },
+
+    downloadAttachment: async (
+        attachmentItem: IDBZoteroItem<AttachmentData>,
+    ) => {
+        assertInitialized();
+        return _taskManager!.createDownloadAttachmentTask(
+            _attachment!,
+            attachmentItem,
+        );
+    },
+
+    extractExternalAnnotations: async (
+        attachmentItems: IDBZoteroItem<AttachmentData>[],
+    ) => {
+        assertInitialized();
+        return _taskManager!.createBatchExtractExternalAnnotationsTask(
+            _attachment!,
+            _pdfProcessor!,
+            { attachmentItems },
+        );
+    },
+
+    cancelTask: (taskId: string) => {
+        assertInitialized();
+        _taskManager!.cancelTask(taskId);
+    },
+
+    updateSettings: (settings: ZotFlowSettings) => {
+        assertInitialized();
 
         // Safe updates
-        _zotero.updateCredentials(settings.zoteroApiKey);
-        _webdav.updateSettings(settings);
-        _attachment.updateSettings(settings);
-        _sync.updateSettings(settings);
-        _treeView.updateSettings(settings);
-        _template.updateSettings(settings);
-        _note.updateSettings(settings);
+        _zotero!.updateCredentials(settings.zoteroApiKey);
+        _webdav!.updateSettings(settings);
+        _attachment!.updateSettings(settings);
+        _sync!.updateSettings(settings);
+        _treeView!.updateSettings(settings);
+        _template!.updateSettings(settings);
+        _note!.updateSettings(settings);
 
-        _localNote.updateSettings(settings);
-        _localTemplate.updateSettings(settings);
-        _pdfProcessor.updateSettings(settings);
+        _localNote!.updateSettings(settings);
+        _localTemplate!.updateSettings(settings);
+        _pdfProcessor!.updateSettings(settings);
+        _currentSettings = settings;
     },
 };
 
