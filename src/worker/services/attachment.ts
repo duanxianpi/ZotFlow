@@ -334,7 +334,7 @@ export class AttachmentService {
                 `https://api.zotero.org/${item.raw.library.type}s/${item.libraryID}/items/${item.key}/file`,
                 {
                     headers: {
-                        "Zotero-API-Key": this.settings.zoteroApiKey,
+                        "Zotero-API-Key": this.settings.zoteroapikey,
                     },
                 },
             );

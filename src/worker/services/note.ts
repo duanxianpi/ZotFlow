@@ -326,8 +326,6 @@ export class NoteService {
         );
 
         await this.parentHost.writeTextFile(notePath, content);
-
-        console.log(`[ZotFlow] Created note: ${notePath}`);
     }
 
     /**
@@ -356,9 +354,10 @@ export class NoteService {
                 fileCheck.frontmatter || {},
             );
 
-            await this.parentHost.writeTextFile(fileCheck.path, content);
-            console.log(
-                `[ZotFlow] Updated note: ${fileCheck.path} (v${currentVersion} -> v${newVersion})`,
+            this.parentHost.log(
+                "debug",
+                `Updated note: ${fileCheck.path} (v${currentVersion} -> v${newVersion})`,
+                "NoteService",
             );
 
             // Extract images (if setting is enabled)
@@ -410,7 +409,7 @@ export class NoteService {
             try {
                 const annotations = await getAnnotationJson(
                     attachment,
-                    this.settings.zoteroApiKey,
+                    this.settings.zoteroapikey,
                     (a) => {
                         const isImage =
                             a.raw.data.annotationType === "image" ||
@@ -486,7 +485,6 @@ export class NoteService {
             const exists = await this.parentHost.checkFile(path);
             if (exists.exists) {
                 await this.parentHost.deleteFile(path);
-                console.log(`[ZotFlow] Deleted orphaned image: ${path}`);
             }
         } catch (e) {
             throw ZotFlowError.wrap(

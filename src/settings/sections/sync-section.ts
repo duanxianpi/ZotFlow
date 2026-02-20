@@ -19,7 +19,7 @@ export class SyncSection {
         settingGroup.setHeading("Synchronization");
 
         // Retrieve cached key info
-        const keyInfo = await db.keys.get(this.plugin.settings.zoteroApiKey);
+        const keyInfo = await db.keys.get(this.plugin.settings.zoteroapikey);
 
         // Description
         const apiDescContainer = new DocumentFragment();
@@ -45,9 +45,9 @@ export class SyncSection {
                 .setDesc(apiDescContainer)
                 .addText((text) => {
                     text.setPlaceholder("Enter API Key")
-                        .setValue(this.plugin.settings.zoteroApiKey)
+                        .setValue(this.plugin.settings.zoteroapikey)
                         .onChange(async (value) => {
-                            this.plugin.settings.zoteroApiKey = value.trim();
+                            this.plugin.settings.zoteroapikey = value.trim();
                         });
 
                     if (keyInfo) {
@@ -76,8 +76,8 @@ export class SyncSection {
                 btn.setIcon("trash")
                     .setTooltip("Disconnect & Clear Key")
                     .onClick(async () => {
-                        const oldKey = this.plugin.settings.zoteroApiKey;
-                        this.plugin.settings.zoteroApiKey = "";
+                        const oldKey = this.plugin.settings.zoteroapikey;
+                        this.plugin.settings.zoteroapikey = "";
                         this.plugin.settings.librariesConfig = {};
                         if (oldKey) await db.keys.delete(oldKey);
 
@@ -104,7 +104,7 @@ export class SyncSection {
     }
 
     private async renderLibrariesTable(containerEl: HTMLElement) {
-        const keyInfo = await db.keys.get(this.plugin.settings.zoteroApiKey);
+        const keyInfo = await db.keys.get(this.plugin.settings.zoteroapikey);
         if (!keyInfo) return;
 
         // Prepare Data
@@ -277,7 +277,7 @@ export class SyncSection {
         btn: ButtonComponent,
         mode: "verify" | "refresh",
     ) {
-        const apiKey = this.plugin.settings.zoteroApiKey;
+        const apiKey = this.plugin.settings.zoteroapikey;
         if (!apiKey) {
             services.notificationService.notify(
                 "warning",

@@ -13,10 +13,10 @@ export class IndexService {
     private app: App;
 
     private _initialized: boolean = false;
+    private resolve!: () => void;
     private _initializePromise: Promise<void> = new Promise((resolve) => {
         this.resolve = resolve;
     });
-    private resolve: (() => void) | null = null;
 
     constructor(
         app: App,
@@ -33,7 +33,11 @@ export class IndexService {
     public load() {
         // Wait for Obsidian layout to be ready before the first scan
         this.app.workspace.onLayoutReady(() => {
-            console.log("ZotFlow: Layout ready, building index...");
+            this._logService.log(
+                "debug",
+                "Layout ready, building index...",
+                "IndexService",
+            );
             this.rebuildIndex();
             this.registerEvents();
             this._initialized = true;

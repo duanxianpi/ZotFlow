@@ -22,7 +22,7 @@ export class LogService {
         const args = [prefix, message];
         if (details) args.push(details);
 
-        console.debug(...args);
+        // console.debug(...args);
 
         this.addEntry("debug", message, context, details);
     }
@@ -32,7 +32,7 @@ export class LogService {
         const args = [prefix, message];
         if (details) args.push(details);
 
-        console.log(...args);
+        // console.log(...args);
 
         this.addEntry("info", message, context, details);
     }
@@ -42,7 +42,7 @@ export class LogService {
         const args = [prefix, message];
         if (details) args.push(details);
 
-        console.warn(...args);
+        // console.warn(...args);
 
         this.addEntry("warn", message, context, details);
     }

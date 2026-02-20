@@ -36,12 +36,7 @@ export class LocalReaderView extends ItemView {
         return "book-open";
     }
 
-    async onOpen() {
-        // add action to trigger update
-        this.addAction("dice", "Trigger Update", () => {
-            console.log(this.file);
-        });
-    }
+    async onOpen() {}
 
     async setState(state: any, result: any) {
         if (state.file) {

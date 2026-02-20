@@ -170,7 +170,6 @@ export class LocalNoteService {
             const exists = await this.parentHost.checkFile(path);
             if (exists.exists) {
                 await this.parentHost.deleteFile(path);
-                console.log(`[ZotFlow] Deleted orphaned image: ${path}`);
             }
         } catch (e: any) {
             throw ZotFlowError.wrap(
@@ -295,7 +294,12 @@ export class LocalNoteService {
         );
 
         await this.parentHost.writeTextFile(fileCheck.path, content);
-        console.log(`[LocalNoteService] Updated note: ${fileCheck.path}`);
+
+        this.parentHost.log(
+            "info",
+            `Updated note: ${fileCheck.path}`,
+            "LocalNoteService",
+        );
     }
 
     /**
@@ -357,8 +361,10 @@ export class LocalNoteService {
 
                     annotations.push(ann);
                 } catch (e) {
-                    console.warn(
-                        "[LocalNoteService] Failed to parse OZRP annotation",
+                    this.parentHost.log(
+                        "warn",
+                        "Failed to parse OZRP annotation",
+                        "LocalNoteService",
                         e,
                     );
                 }

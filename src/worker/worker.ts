@@ -16,8 +16,10 @@ import type { ZotFlowSettings } from "settings/types";
 import type { IParentProxy } from "bridge/types";
 import type { UpdateOptions } from "./services/note";
 import type { BatchNoteInput } from "./tasks/impl/batch-note-task";
-import type { BatchExtractImagesInput } from "./tasks/impl/batch-extract-images-task";
-import type { BatchExtractExternalAnnotationsInput } from "./tasks/impl/batch-extract-external-annotations-task";
+import type {
+    BatchExtractImagesInput,
+    ItemIdentifier,
+} from "./tasks/impl/batch-extract-images-task";
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 import type { AnnotationJSON } from "types/zotero-reader";
@@ -59,7 +61,7 @@ export interface WorkerAPI {
         attachmentItem: IDBZoteroItem<AttachmentData>,
     ): Promise<Blob>;
     extractExternalAnnotations(
-        attachmentItems: IDBZoteroItem<AttachmentData>[],
+        items: ItemIdentifier[],
     ): Promise<AnnotationJSON[]>;
     cancelTask(taskId: string): void;
 }
@@ -145,7 +147,7 @@ const exposedApi: WorkerAPI = {
         };
 
         try {
-            _zotero = new ZoteroAPIService(settings.zoteroApiKey);
+            _zotero = new ZoteroAPIService(settings.zoteroapikey);
             _webdav = new WebDavService(settings, parentHost);
             _attachment = new AttachmentService(
                 _webdav,
@@ -336,14 +338,12 @@ const exposedApi: WorkerAPI = {
         );
     },
 
-    extractExternalAnnotations: async (
-        attachmentItems: IDBZoteroItem<AttachmentData>[],
-    ) => {
+    extractExternalAnnotations: async (items: ItemIdentifier[]) => {
         assertInitialized();
         return _taskManager!.createBatchExtractExternalAnnotationsTask(
             _attachment!,
             _pdfProcessor!,
-            { attachmentItems },
+            { items },
         );
     },
 
@@ -356,7 +356,7 @@ const exposedApi: WorkerAPI = {
         assertInitialized();
 
         // Safe updates
-        _zotero!.updateCredentials(settings.zoteroApiKey);
+        _zotero!.updateCredentials(settings.zoteroapikey);
         _webdav!.updateSettings(settings);
         _attachment!.updateSettings(settings);
         _sync!.updateSettings(settings);

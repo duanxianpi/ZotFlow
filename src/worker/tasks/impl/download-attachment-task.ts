@@ -2,6 +2,7 @@ import { BaseTask } from "../base";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 import type { AttachmentService } from "worker/services/attachment";
+import type { TaskStatus } from "types/tasks";
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 
@@ -28,13 +29,20 @@ export class DownloadAttachmentTask extends BaseTask {
         private attachmentItem: IDBZoteroItem<AttachmentData>,
     ) {
         super("download-attachment");
+        const filename =
+            this.attachmentItem.raw.data.filename || this.attachmentItem.key;
+        this.displayText = `Downloading Attachment`;
+        this.taskInput = {
+            libraryID: this.attachmentItem.libraryID,
+            item: this.attachmentItem.key,
+        };
     }
 
     protected async run(signal: AbortSignal): Promise<void> {
         const filename =
             this.attachmentItem.raw.data.filename || this.attachmentItem.key;
 
-        this.reportProgress(0, 2, `Downloading ${filename}...`);
+        this.reportProgress(0, 1, `Downloading ${filename}...`);
 
         if (signal.aborted) throw new Error("Aborted");
 
@@ -54,13 +62,30 @@ export class DownloadAttachmentTask extends BaseTask {
             }
 
             this.blob = blob;
-            this.reportProgress(2, 2, `Downloaded ${filename}`);
-            this.result = { successCount: 1, failCount: 0 };
+            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+            this.reportProgress(1, 1, `Downloaded ${filename}`);
+            this.result = {
+                successCount: 1,
+                failCount: 0,
+                details: { file: filename, size: `${sizeMB} MB` },
+            };
         } catch (e) {
             if (signal.aborted) throw new Error("Aborted");
-            this.result = { successCount: 0, failCount: 1 };
+            this.result = {
+                successCount: 0,
+                failCount: 1,
+                details: { file: filename, downloaded: 0 },
+            };
             throw e;
         }
+    }
+
+    protected getTerminalDisplayText(status: TaskStatus): string {
+        const filename =
+            this.attachmentItem.raw.data.filename || this.attachmentItem.key;
+        if (status === "cancelled") return `Download — Cancelled: ${filename}`;
+        if (status === "failed") return `Download — Failed: ${filename}`;
+        return `Downloaded: ${filename}`;
     }
 
     /**

@@ -225,14 +225,12 @@ export const ZotFlowTree = () => {
             <div className="zotflow-tree-view-header">
                 <div className="search-input-container global-search-input-container">
                     <input
-                        className="zotflow-search-input"
                         placeholder="Search..."
                         type="search"
                         value={term}
                         onChange={(e) => setTerm(e.target.value)}
                     />
                     <div
-                        className="search-input-clear-button"
                         aria-label="Clear search"
                         onClick={() => setTerm("")}
                     ></div>

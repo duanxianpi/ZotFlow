@@ -6,14 +6,14 @@ export interface LibraryConfig {
 }
 
 export interface ZotFlowSettings {
-    zoteroApiKey: string;
+    zoteroapikey: string;
     librariesConfig: Record<string, LibraryConfig>;
     syncInterval: number; // in minutes
     autoSync: boolean;
     useWebDav: boolean;
     webDavUrl?: string;
     webDavUser?: string;
-    webDavPassword?: string;
+    webdavpassword?: string;
     useCache: boolean;
     maxCacheSizeMB: number;
     sourceNoteTemplatePath: string;
@@ -26,7 +26,7 @@ export interface ZotFlowSettings {
 }
 
 export const DEFAULT_SETTINGS: ZotFlowSettings = {
-    zoteroApiKey: "",
+    zoteroapikey: "",
     librariesConfig: {},
     syncInterval: 30, // Default 30 minutes
     autoSync: false,

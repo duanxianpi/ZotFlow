@@ -5,16 +5,6 @@ import { services } from "services/services";
 
 import type { ITaskInfo, TaskType } from "types/tasks";
 
-const TASK_TYPE_LABELS: Record<TaskType, string> = {
-    sync: "Sync",
-    "batch-create-notes": "Batch Create Notes",
-    "batch-update-notes": "Batch Update Notes",
-    "batch-extract-images": "Extract Images",
-    "batch-extract-external-annotations": "Extract External Annotations",
-    "download-attachment": "Download Attachment",
-    "test-task": "Test Task",
-};
-
 const TASK_TYPE_ICONS: Record<TaskType, string> = {
     sync: "refresh-cw",
     "batch-create-notes": "file-plus",
@@ -25,38 +15,6 @@ const TASK_TYPE_ICONS: Record<TaskType, string> = {
     "test-task": "flask-conical",
 };
 
-function getStatusIcon(status: string): string {
-    switch (status) {
-        case "running":
-            return "loader";
-        case "completed":
-            return "check-circle";
-        case "failed":
-            return "x-circle";
-        case "cancelled":
-            return "ban";
-        case "pending":
-        default:
-            return "clock";
-    }
-}
-
-function getStatusClass(status: string): string {
-    switch (status) {
-        case "running":
-            return "zotflow-task-running";
-        case "completed":
-            return "zotflow-task-completed";
-        case "failed":
-            return "zotflow-task-failed";
-        case "cancelled":
-            return "zotflow-task-cancelled";
-        case "pending":
-        default:
-            return "zotflow-task-pending";
-    }
-}
-
 function formatDuration(start?: number, end?: number): string {
     if (!start) return "";
     const elapsed = (end ?? Date.now()) - start;
@@ -65,115 +23,288 @@ function formatDuration(start?: number, end?: number): string {
     return `${Math.floor(elapsed / 60_000)}m ${Math.floor((elapsed % 60_000) / 1000)}s`;
 }
 
-const TaskItem: React.FC<{ task: ITaskInfo }> = ({ task }) => {
-    const label = TASK_TYPE_LABELS[task.type] ?? task.type;
-    const icon = TASK_TYPE_ICONS[task.type] ?? "list";
-    const statusIcon = getStatusIcon(task.status);
-    const statusClass = getStatusClass(task.status);
+function formatTime(ts?: number): string {
+    if (!ts) return "";
+    return new Date(ts).toLocaleTimeString("en-US", { hour12: false });
+}
 
+/** Build a JSON-style detail string from a record */
+function formatDetailsJson(
+    details?: Record<string, string | number>,
+): string | null {
+    if (!details || Object.keys(details).length === 0) return null;
+    return JSON.stringify(details);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Active Task Card (expandable)                                      */
+/* ------------------------------------------------------------------ */
+
+const ActiveTaskCard: React.FC<{
+    task: ITaskInfo;
+    expanded: boolean;
+    onToggle: () => void;
+}> = ({ task, expanded, onToggle }) => {
+    const icon = TASK_TYPE_ICONS[task.type] ?? "list";
+    const isIndeterminate =
+        task.status === "running" && task.progress.total <= 1;
     const progressPercent =
         task.progress.total > 0
-            ? Math.round(
-                  (task.progress.completed / task.progress.total) * 100,
-              )
+            ? Math.round((task.progress.completed / task.progress.total) * 100)
             : 0;
 
-    const handleCancel = useCallback(() => {
-        workerBridge.cancelTask(task.id);
-    }, [task.id]);
+    const handleCancel = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            workerBridge.cancelTask(task.id);
+        },
+        [task.id],
+    );
+
+    const inputJson = formatDetailsJson(task.input);
 
     return (
-        <div className={`zotflow-task-item ${statusClass}`}>
-            <div className="zotflow-task-header">
-                <span className="zotflow-task-icon">
+        <div
+            className={`zotflow-task-card ${expanded ? "is-expanded" : ""}`}
+            onClick={onToggle}
+        >
+            <div className="zotflow-task-card-row">
+                <div className="zotflow-task-card-icon">
                     <ObsidianIcon
                         icon={icon}
-                        style={{ width: 16, height: 16 }}
+                        className={isIndeterminate ? "zotflow-spinning" : ""}
                     />
-                </span>
-                <span className="zotflow-task-label">{label}</span>
-                <span className="zotflow-task-status-icon">
-                    <ObsidianIcon
-                        icon={statusIcon}
-                        style={{ width: 14, height: 14 }}
-                    />
-                </span>
+                </div>
+                <div className="zotflow-task-card-body">
+                    <div className="zotflow-task-card-title">
+                        {`${task.displayText} (${task.progress.message && task.progress.message})`}
+                    </div>
+                    {task.status === "running" && (
+                        <div
+                            className={`zotflow-task-progress-bar ${isIndeterminate ? "is-indeterminate" : ""}`}
+                        >
+                            <div
+                                className="zotflow-task-progress-fill"
+                                style={
+                                    isIndeterminate
+                                        ? undefined
+                                        : { width: `${progressPercent}%` }
+                                }
+                            />
+                        </div>
+                    )}
+                </div>
                 {task.canCancel && (
                     <button
-                        className="zotflow-task-cancel-btn clickable-icon"
+                        className="zotflow-task-card-cancel clickable-icon"
                         onClick={handleCancel}
                         aria-label="Cancel task"
                     >
-                        <ObsidianIcon
-                            icon="x"
-                            style={{ width: 14, height: 14 }}
-                        />
+                        <ObsidianIcon icon="x" />
                     </button>
                 )}
             </div>
-
-            {/* Progress bar */}
-            {task.status === "running" && task.progress.total > 0 && (
-                <div className="zotflow-task-progress-bar">
-                    <div
-                        className="zotflow-task-progress-fill"
-                        style={{ width: `${progressPercent}%` }}
-                    />
+            {expanded && (
+                <div className="zotflow-task-card-details">
+                    {task.startTime && (
+                        <div className="zotflow-task-detail-row">
+                            <span className="zotflow-task-detail-label">
+                                Elapsed
+                            </span>
+                            <span>{formatDuration(task.startTime)}</span>
+                        </div>
+                    )}
+                    {inputJson && (
+                        <div className="zotflow-task-detail-row">
+                            <span className="zotflow-task-detail-label">
+                                Input
+                            </span>
+                            <code>{inputJson}</code>
+                        </div>
+                    )}
                 </div>
-            )}
-
-            {/* Message */}
-            <div className="zotflow-task-message">{task.progress.message}</div>
-
-            {/* Footer: duration + result */}
-            <div className="zotflow-task-footer">
-                {task.startTime && (
-                    <span className="zotflow-task-duration">
-                        {formatDuration(task.startTime, task.endTime)}
-                    </span>
-                )}
-                {task.result && (
-                    <span className="zotflow-task-result">
-                        {task.result.successCount} ok
-                        {task.result.failCount > 0 &&
-                            `, ${task.result.failCount} failed`}
-                    </span>
-                )}
-            </div>
-
-            {/* Error */}
-            {task.error && (
-                <div className="zotflow-task-error">{task.error}</div>
             )}
         </div>
     );
 };
 
+/* ------------------------------------------------------------------ */
+/*  History Item                                                       */
+/* ------------------------------------------------------------------ */
+
+const HistoryItem: React.FC<{
+    task: ITaskInfo;
+    expanded: boolean;
+    onToggle: () => void;
+}> = ({ task, expanded, onToggle }) => {
+    const statusIcon =
+        task.status === "completed"
+            ? "check-circle"
+            : task.status === "failed"
+              ? "x-circle"
+              : "ban";
+
+    const statusClass =
+        task.status === "completed"
+            ? task.result && task.result.failCount > 0
+                ? "zotflow-status-warning"
+                : "zotflow-status-success"
+            : task.status === "failed"
+              ? "zotflow-status-error"
+              : "zotflow-status-muted";
+
+    // Use warning icon for partial failures
+    const displayIcon =
+        task.status === "completed" && task.result && task.result.failCount > 0
+            ? "alert-triangle"
+            : statusIcon;
+
+    const message = task.displayText;
+    const resultJson = formatDetailsJson(task.result?.details);
+    const inputJson = formatDetailsJson(task.input);
+
+    return (
+        <div
+            className={`zotflow-history-item ${expanded ? "is-expanded" : ""}`}
+            onClick={onToggle}
+        >
+            <div className="zotflow-history-header">
+                <span className={`zotflow-history-status ${statusClass}`}>
+                    <ObsidianIcon icon={displayIcon} />
+                </span>
+                <span className="zotflow-history-time">
+                    {formatTime(task.endTime)}
+                </span>
+                <span className="zotflow-history-msg">{message}</span>
+            </div>
+            {expanded && (
+                <div className="zotflow-history-details">
+                    {inputJson && (
+                        <div className="zotflow-task-detail-row">
+                            <span className="zotflow-task-detail-label">
+                                Input:
+                            </span>{" "}
+                            <div className="zotflow-history-json zotflow-history-json-input">
+                                <code>{inputJson}</code>
+                            </div>
+                        </div>
+                    )}
+                    {resultJson && (
+                        <div className="zotflow-task-detail-row">
+                            <span className="zotflow-task-detail-label">
+                                Result:
+                            </span>{" "}
+                            <div className="zotflow-history-json">
+                                <code>{resultJson}</code>
+                            </div>
+                        </div>
+                    )}
+                    {task.error && task.status === "failed" && (
+                        <div className="zotflow-task-detail-row">
+                            <span className="zotflow-task-detail-label">
+                                Error:
+                            </span>{" "}
+                            <div className="zotflow-history-json zotflow-history-json-error">
+                                <code>
+                                    {formatDetailsJson(task.error as any)}
+                                </code>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Tasks View                                                         */
+/* ------------------------------------------------------------------ */
+
 export const TasksView: React.FC = () => {
     const [tasks, setTasks] = useState<ITaskInfo[]>([]);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     useEffect(() => {
         const unsubscribe = services.taskMonitor.subscribe(setTasks);
         return unsubscribe;
     }, []);
 
-    if (tasks.length === 0) {
-        return (
-            <div className="zotflow-tasks-empty">
-                <ObsidianIcon
-                    icon="list"
-                    style={{ width: 32, height: 32, opacity: 0.4 }}
-                />
-                <p>No tasks yet</p>
-            </div>
-        );
-    }
+    const activeTasks = tasks.filter(
+        (t) => t.status === "running" || t.status === "pending",
+    );
+    const historyTasks = tasks.filter(
+        (t) =>
+            t.status === "completed" ||
+            t.status === "failed" ||
+            t.status === "cancelled",
+    );
 
     return (
-        <div className="zotflow-tasks-list">
-            {tasks.map((task) => (
-                <TaskItem key={task.id} task={task} />
-            ))}
+        <div className="zotflow-tasks-view">
+            {/* Active Process */}
+            <div className="zotflow-tasks-section">
+                <span className="zotflow-tasks-section-header">
+                    Active Tasks
+                </span>
+                {activeTasks.length === 0 ? (
+                    <div className="zotflow-tasks-empty">
+                        <ObsidianIcon
+                            icon="check-circle"
+                            containerStyle={{ opacity: 0.4 }}
+                            iconStyle={{ width: "32px", height: "32px" }}
+                        />
+                        <p>All systems go. No active tasks.</p>
+                    </div>
+                ) : (
+                    <div className="zotflow-task-cards">
+                        {activeTasks.map((task) => (
+                            <ActiveTaskCard
+                                key={task.id}
+                                task={task}
+                                expanded={expandedId === task.id}
+                                onToggle={() =>
+                                    setExpandedId(
+                                        expandedId === task.id ? null : task.id,
+                                    )
+                                }
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Session History */}
+            <div className="zotflow-tasks-section zotflow-tasks-history-section">
+                <span className="zotflow-tasks-section-header">
+                    Tasks History
+                </span>
+                {historyTasks.length === 0 ? (
+                    <div className="zotflow-tasks-empty">
+                        <ObsidianIcon
+                            icon="clock"
+                            containerStyle={{ opacity: 0.4 }}
+                            iconStyle={{ width: "32px", height: "32px" }}
+                        />
+                        <p>No completed tasks yet</p>
+                    </div>
+                ) : (
+                    <div className="zotflow-history-list">
+                        {historyTasks.map((task) => (
+                            <HistoryItem
+                                key={task.id}
+                                task={task}
+                                expanded={expandedId === task.id}
+                                onToggle={() =>
+                                    setExpandedId(
+                                        expandedId === task.id ? null : task.id,
+                                    )
+                                }
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

@@ -9,7 +9,7 @@
 
 import type { SecretStorage } from "obsidian";
 
-const CREDENTIAL_KEYS = ["webDavPassword"] as const;
+const CREDENTIAL_KEYS = ["webdavpassword", "zoteroapikey"] as const;
 
 type CredentialKey = (typeof CREDENTIAL_KEYS)[number];
 

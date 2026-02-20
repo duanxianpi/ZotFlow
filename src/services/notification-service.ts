@@ -10,14 +10,14 @@ export class NotificationService {
      */
     public notify(type: NotificationType, message: string) {
         let duration = 2000;
-        let iconId = "info";
-        let colorVar = "var(--text-normal)";
+        let iconId;
+        let colorVar;
 
         switch (type) {
             case "info":
                 duration = 2000;
-                iconId = "info";
-                colorVar = "var(--text-muted)";
+                // iconId = "info";
+                // colorVar = "#FAFAFA";
                 break;
             case "success":
                 duration = 2000;
@@ -41,11 +41,15 @@ export class NotificationService {
             cls: "zotflow-notice-container",
         });
 
-        const iconEl = container.createEl("span", {
-            cls: "zotflow-notice-icon",
-        });
-        setIcon(iconEl, iconId);
-        iconEl.style.color = colorVar;
+        if (iconId) {
+            const iconEl = container.createEl("span", {
+                cls: "zotflow-notice-icon",
+            });
+            setIcon(iconEl, iconId);
+            if (colorVar) {
+                iconEl.style.color = colorVar;
+            }
+        }
 
         container.createEl("span", {
             text: message,

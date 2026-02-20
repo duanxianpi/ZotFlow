@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ObsidianIcon } from "../ObsidianIcon";
 import { SyncView } from "./SyncView";
 import { TasksView } from "./TasksView";
+import { TelemetryView } from "./TelemetryView";
 
 export const ZotFlowActivityCenter: React.FC = () => {
     const [activeTab, setActiveTab] = useState("sync");
@@ -24,10 +25,7 @@ export const ZotFlowActivityCenter: React.FC = () => {
                             onClick={() => setActiveTab(tab.id)}
                         >
                             <span className="nav-icon">
-                                <ObsidianIcon
-                                    icon={tab.icon}
-                                    style={{ width: 16, height: 16 }}
-                                />
+                                <ObsidianIcon icon={tab.icon} />
                             </span>
                             <span>{tab.label}</span>
                         </div>
@@ -38,7 +36,7 @@ export const ZotFlowActivityCenter: React.FC = () => {
             <div className="zotflow-ac-content">
                 {activeTab === "sync" && <SyncView />}
                 {activeTab === "tasks" && <TasksView />}
-                {/* {activeTab === "telemetry" && <TelemetryView />} */}
+                {activeTab === "telemetry" && <TelemetryView />}
             </div>
         </>
     );

@@ -23,7 +23,7 @@ export class WebDavService {
         if (
             !this.settings.webDavUrl ||
             !this.settings.webDavUser ||
-            !this.settings.webDavPassword
+            !this.settings.webdavpassword
         ) {
             throw new ZotFlowError(
                 ZotFlowErrorCode.CONFIG_MISSING,
@@ -40,7 +40,7 @@ export class WebDavService {
         const fullUrl = baseUrl + remotePath.replace(/^\//, ""); // Ensure single slash join
 
         const credentials = btoa(
-            `${this.settings.webDavUser}:${this.settings.webDavPassword}`,
+            `${this.settings.webDavUser}:${this.settings.webdavpassword}`,
         );
 
         try {

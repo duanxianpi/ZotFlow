@@ -30,6 +30,5 @@ export function getNotePath({
     const extension = "md";
 
     let path = `${folder}/${libraryName}/${filename}.${extension}`;
-    console.log(`[ZotFlow] Generated note path: ${path}`);
     return path.replace(/\/+/g, "/");
 }

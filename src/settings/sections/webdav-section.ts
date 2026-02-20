@@ -29,7 +29,7 @@ export class WebDavSection {
                             if (!value) {
                                 this.plugin.settings.webDavUrl = "";
                                 this.plugin.settings.webDavUser = "";
-                                this.plugin.settings.webDavPassword = "";
+                                this.plugin.settings.webdavpassword = "";
                             }
                             await this.plugin.saveSettings();
                             this.refreshUI();
@@ -42,7 +42,7 @@ export class WebDavSection {
         const isVerified = !!this.plugin.settings.webDavUrl;
         let tempUrl = this.plugin.settings.webDavUrl || "";
         let tempUser = this.plugin.settings.webDavUser || "";
-        let tempPassword = this.plugin.settings.webDavPassword || "";
+        let tempPassword = this.plugin.settings.webdavpassword || "";
 
         settingGroup.addSetting((setting) => {
             setting
@@ -88,7 +88,7 @@ export class WebDavSection {
                         .onClick(async () => {
                             this.plugin.settings.webDavUrl = "";
                             this.plugin.settings.webDavUser = "";
-                            this.plugin.settings.webDavPassword = "";
+                            this.plugin.settings.webdavpassword = "";
                             await this.plugin.saveSettings();
                             services.notificationService.notify(
                                 "info",
@@ -127,7 +127,7 @@ export class WebDavSection {
 
                                 this.plugin.settings.webDavUrl = tempUrl;
                                 this.plugin.settings.webDavUser = tempUser;
-                                this.plugin.settings.webDavPassword =
+                                this.plugin.settings.webdavpassword =
                                     tempPassword;
 
                                 await this.plugin.saveSettings();

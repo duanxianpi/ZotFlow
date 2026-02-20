@@ -12,6 +12,10 @@ export abstract class BaseTask {
     protected progress = { completed: 0, total: 0, message: "Pending..." };
     protected result?: ITaskResult;
     protected error?: string;
+    /** Human-readable title for display in Activity Center */
+    protected displayText: string;
+    /** Captured input context for display in expanded details */
+    protected taskInput?: Record<string, string | number>;
 
     protected startTime?: number;
     protected endTime?: number;
@@ -36,6 +40,7 @@ export abstract class BaseTask {
         this.id = id || uuidv4();
         this.type = type;
         this.createdTime = Date.now();
+        this.displayText = type; // Default, overridden by subclasses
     }
 
     public async execute(signal: AbortSignal): Promise<void> {
@@ -61,11 +66,23 @@ export abstract class BaseTask {
             }
         } finally {
             this.endTime = Date.now();
+            this.displayText = this.getTerminalDisplayText(this.status);
             this.emitUpdate();
         }
     }
 
     protected abstract run(signal: AbortSignal): Promise<void>;
+
+    /**
+     * Build a display text string for a terminal state (completed / failed / cancelled).
+     * Subclasses should override to include result counts or context.
+     * The base implementation appends the status to the current displayText.
+     */
+    protected getTerminalDisplayText(status: TaskStatus): string {
+        if (status === "completed") return `${this.displayText} — Done`;
+        if (status === "cancelled") return `${this.displayText} — Cancelled`;
+        return `${this.displayText} — Failed`;
+    }
 
     protected reportProgress(
         completed: number,
@@ -87,8 +104,10 @@ export abstract class BaseTask {
             id: this.id,
             type: this.type,
             status: this.status,
+            displayText: this.displayText,
             progress: this.progress,
             result: this.result,
+            input: this.taskInput,
             createdTime: this.createdTime,
             startTime: this.startTime,
             endTime: this.endTime,

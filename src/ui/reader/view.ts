@@ -53,22 +53,24 @@ export class ZoteroReaderView extends ItemView {
         state: ReaderViewState,
         result: ViewStateResult,
     ): Promise<void> {
-        const _keyInfo = await db.keys.get(services.settings.zoteroApiKey);
+        const _keyInfo = await db.keys.get(services.settings.zoteroapikey);
 
         if (!_keyInfo) {
-            console.error(
-                `[ZotFlow] Key ${services.settings.zoteroApiKey} doesn't exist`,
+            services.logService.error(
+                `Key ${services.settings.zoteroapikey} doesn't exist`,
+                "ZoteroReaderView",
             );
             throw new Error(
-                `Key ${services.settings.zoteroApiKey} doesn't exist`,
+                `Key ${services.settings.zoteroapikey} doesn't exist`,
             );
         }
 
         if (state.itemKey) {
             const _item = await db.items.get([state.libraryID, state.itemKey]);
             if (!_item || _item.itemType !== "attachment") {
-                console.error(
-                    `[ZotFlow] Item ${state.itemKey} doesn't exist or is not an attachment`,
+                services.logService.error(
+                    `Item ${state.itemKey} doesn't exist or is not an attachment`,
+                    "ZoteroReaderView",
                 );
                 throw new Error(
                     `Item ${state.itemKey} doesn't exist or is not an attachment`,
@@ -223,7 +225,7 @@ export class ZoteroReaderView extends ItemView {
             // Get Annotations
             const annotationJson = await getAnnotationJson(
                 this.attachmentItem,
-                services.settings.zoteroApiKey,
+                services.settings.zoteroapikey,
                 (item) => item.syncStatus !== "deleted",
             );
             // Initialize Reader if ready
@@ -340,7 +342,10 @@ export class ZoteroReaderView extends ItemView {
 
         try {
             const annotations = await workerBridge.extractExternalAnnotations([
-                this.attachmentItem,
+                {
+                    libraryID: this.attachmentItem.libraryID,
+                    itemKey: this.attachmentItem.key,
+                },
             ]);
 
             // Push extracted annotations to the reader iframe

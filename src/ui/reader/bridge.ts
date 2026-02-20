@@ -153,12 +153,15 @@ export class IframeReaderBridge {
                 fromText: boolean,
             ) => {
                 if (this.isLocal && this.localAttachment) {
-                    console.log("Handle Local Attachment");
+                    services.logService.debug(
+                        "Handling setDataTransfer for local attachment",
+                        "IframeReaderBridge",
+                    );
                     const note = getLinkedSourceNote(
                         services.app,
                         this.localAttachment,
                     );
-                    console.log(note, annotations);
+
                     if (note) {
                         const content = annotations.reduce((acc, anno) => {
                             return acc + `![[${note.path}#^${anno.id}]]\n\n`;
@@ -167,13 +170,15 @@ export class IframeReaderBridge {
                         return;
                     }
                 } else if (!this.isLocal && this.attachmentItem) {
-                    console.log("Handle Remote Attachment");
+                    services.logService.debug(
+                        "Handling setDataTransfer for remote attachment",
+                        "IframeReaderBridge",
+                    );
                     const note = services.indexService.getFileByKey(
                         this.attachmentItem.parentItem === ""
                             ? this.attachmentItem.key
                             : this.attachmentItem.parentItem,
                     );
-                    console.log(note);
                     if (note) {
                         const content = annotations.reduce((acc, anno) => {
                             return acc + `![[${note.path}#^${anno.id}]]\n\n`;
@@ -246,8 +251,9 @@ export class IframeReaderBridge {
             ) {
                 // It was loaded before, but it was loaded again somehow
                 // We need to reconnect but avoid infinite loop
-                console.warn(
+                services.logService.warn(
                     "Iframe reloaded unexpectedly, triggering reconnection",
+                    "IframeReaderBridge",
                 );
                 // Use setTimeout to avoid potential stack overflow
                 setTimeout(() => this.reconnect(), 0);
@@ -339,7 +345,7 @@ export class IframeReaderBridge {
             if (!this.isLocal && this.attachmentItem) {
                 newAnnotationJson = await getAnnotationJson(
                     this.attachmentItem,
-                    services.settings.zoteroApiKey,
+                    services.settings.zoteroapikey,
                     (item) => item.syncStatus !== "deleted",
                 );
             } else if (this.isLocal && this.localAnnoManager) {

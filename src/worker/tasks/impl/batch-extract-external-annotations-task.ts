@@ -5,16 +5,18 @@ import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 import type { AttachmentService } from "worker/services/attachment";
 import type { PDFProcessWorker } from "worker/services/pdf-processor";
+import type { TaskStatus } from "types/tasks";
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData, AnnotationData } from "types/zotero-item";
 import type { AnnotationJSON } from "types/zotero-reader";
+import type { ItemIdentifier } from "./batch-extract-images-task";
 
 /**
  * Input descriptor for batch external annotation extraction.
  */
 export interface BatchExtractExternalAnnotationsInput {
-    /** Attachment items to extract from. */
-    attachmentItems: IDBZoteroItem<AttachmentData>[];
+    /** Attachment items to extract from, identified by libraryID + itemKey. */
+    items: ItemIdentifier[];
 }
 
 /**
@@ -50,10 +52,22 @@ export class BatchExtractExternalAnnotationsTask extends BaseTask {
         private input: BatchExtractExternalAnnotationsInput,
     ) {
         super("batch-extract-external-annotations");
+        const count = input.items.length;
+        this.displayText = `Extracting External Annotations (${count} file${count !== 1 ? "s" : ""})`;
+        this.taskInput = { attachments: count };
     }
 
     protected async run(signal: AbortSignal): Promise<void> {
-        const items = this.input.attachmentItems.filter(
+        // Resolve items from DB
+        const resolvedItems: IDBZoteroItem<AttachmentData>[] = [];
+        for (const { libraryID, itemKey } of this.input.items) {
+            const item = await db.items.get([libraryID, itemKey]);
+            if (item && item.itemType === "attachment") {
+                resolvedItems.push(item as IDBZoteroItem<AttachmentData>);
+            }
+        }
+
+        const items = resolvedItems.filter(
             (a) => a.raw.data.contentType === "application/pdf",
         );
 
@@ -93,7 +107,15 @@ export class BatchExtractExternalAnnotationsTask extends BaseTask {
             }
         }
 
-        this.result = { successCount, failCount };
+        this.result = {
+            successCount,
+            failCount,
+            details: {
+                attachments: total,
+                annotations: this.extractedAnnotations.length,
+                failed: failCount,
+            },
+        };
         this.reportProgress(
             total,
             total,
@@ -101,6 +123,18 @@ export class BatchExtractExternalAnnotationsTask extends BaseTask {
                 ? `Done: ${successCount} success, ${failCount} failed`
                 : `Extracted ${this.extractedAnnotations.length} annotations`,
         );
+    }
+
+    protected getTerminalDisplayText(status: TaskStatus): string {
+        if (status === "cancelled")
+            return "Extract External Annotations — Cancelled";
+        if (status === "failed") return "Extract External Annotations — Failed";
+        const r = this.result;
+        const count = (r?.details?.["annotations"] as number | undefined) ?? 0;
+        if (r && r.failCount > 0) {
+            return `Extracted ${count} annotations (${r.failCount} failed)`;
+        }
+        return `Extracted ${count} external annotations`;
     }
 
     /**

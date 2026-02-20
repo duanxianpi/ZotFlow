@@ -100,7 +100,8 @@ export function ZotFlowCommentExtension(): Extension {
             },
 
             ".cm-zotflow-container-anno:not(.cm-active)": {
-                display: "inline-flex !important",
+                display: "flex !important",
+                width: "auto",
                 maxWidth: "100%",
                 flexDirection: "row",
                 alignItems: "baseline",

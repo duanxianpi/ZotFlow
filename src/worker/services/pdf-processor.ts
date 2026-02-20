@@ -142,8 +142,16 @@ export class PDFProcessWorker {
     _init() {
         if (this._worker) return;
         if (!this.config.pdfWorkerURL) {
-            console.error("PdfWorkerService: No worker URL available");
-            return;
+            this.parentHost.log(
+                "error",
+                "PDF Worker URL not configured",
+                "PDFProcessWorker",
+            );
+            throw new ZotFlowError(
+                ZotFlowErrorCode.RESOURCE_MISSING,
+                "PDFProcessWorker",
+                "PDF Worker URL not configured",
+            );
         }
         this._worker = new Worker(this.config.pdfWorkerURL);
         this._worker.addEventListener(
@@ -229,7 +237,6 @@ export class PDFProcessWorker {
                                     `pdf/web/standard_fonts/${message.data}`
                                 ];
                             if (fontUrl) {
-                                console.log(`fontUrl: ${fontUrl}`);
                                 const response = await (
                                     globalThis as any
                                 ).originalFetch(fontUrl);

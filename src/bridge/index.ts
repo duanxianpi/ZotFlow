@@ -16,8 +16,10 @@ import type { TreeViewService } from "worker/services/tree-view";
 import type { NoteService, UpdateOptions } from "worker/services/note";
 import type { LocalNoteService } from "worker/services/local-note";
 import type { BatchNoteInput } from "worker/tasks/impl/batch-note-task";
-import type { BatchExtractImagesInput } from "worker/tasks/impl/batch-extract-images-task";
-import type { BatchExtractExternalAnnotationsInput } from "worker/tasks/impl/batch-extract-external-annotations-task";
+import type {
+    BatchExtractImagesInput,
+    ItemIdentifier,
+} from "worker/tasks/impl/batch-extract-images-task";
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 import type { AnnotationJSON } from "types/zotero-reader";
@@ -167,10 +169,10 @@ export class WorkerBridge {
     }
 
     async extractExternalAnnotations(
-        attachmentItems: IDBZoteroItem<AttachmentData>[],
+        items: ItemIdentifier[],
     ): Promise<AnnotationJSON[]> {
         this.assertInitialized();
-        return this._api.extractExternalAnnotations(attachmentItems);
+        return this._api.extractExternalAnnotations(items);
     }
 
     cancelTask(taskId: string): void {

@@ -29,7 +29,7 @@
 //     async getSuggestions(query: string): Promise<SuggestionItem[]> {
 //         const isValidTopLevel = (type: string) =>
 //             !["note", "annotation"].includes(type);
-//         const keyInfo = await db.keys.get(this.settings.zoteroApiKey);
+//         const keyInfo = await db.keys.get(this.settings.zoteroapikey);
 
 //         if (!keyInfo) {
 //             new Notice("ZotFlow: Invalid Zotero API key.");

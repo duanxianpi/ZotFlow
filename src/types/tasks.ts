@@ -23,14 +23,20 @@ export interface ITaskProgress {
 export interface ITaskResult {
     successCount: number;
     failCount: number;
+    /** Structured details for display in the Activity Center (e.g. { items: 50, updated: 3 }) */
+    details?: Record<string, string | number>;
 }
 
 export interface ITaskInfo {
     id: string;
     type: TaskType;
     status: TaskStatus;
+    /** Human-readable title shown in both active and history views */
+    displayText: string;
     progress: ITaskProgress;
     result?: ITaskResult;
+    /** Captured input context for display in expanded details */
+    input?: Record<string, string | number>;
     createdTime: number;
     startTime?: number;
     endTime?: number;

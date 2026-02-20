@@ -88,19 +88,39 @@ export const NodeItem = ({
         node.select();
 
         const menu = new Menu();
-        console.log("node", node);
 
         if (nodeType === "collection" || nodeType === "library") {
             menu.addItem((item) => {
-                item.setTitle("Create source note for all items")
+                item.setTitle("Create source note for all child items")
                     .setIcon("file-plus")
                     .onClick(async () => {
                         try {
+                            const items: {
+                                libraryID: number;
+                                itemKey: string;
+                            }[] = [];
+                            const collectItems = (n: ViewNode) => {
+                                if (
+                                    n.nodeType === "item" &&
+                                    n.itemType !== "note"
+                                ) {
+                                    items.push({
+                                        libraryID: n.libraryID,
+                                        itemKey: n.key,
+                                    });
+                                }
+                                if (
+                                    n.nodeType === "collection" ||
+                                    n.nodeType === "library"
+                                ) {
+                                    n.children.forEach(collectItems);
+                                }
+                            };
+                            node.data.children.forEach(collectItems);
+
                             const taskId =
                                 await workerBridge.createBatchNoteTask(
-                                    {
-                                        libraryIDs: [node.data.libraryID],
-                                    },
+                                    { items },
                                     {},
                                     false,
                                 );
@@ -114,7 +134,62 @@ export const NodeItem = ({
                                 "TreeView",
                                 err,
                             );
-                            services.notificationService.notify("error", "Failed to start batch note creation.");
+                            services.notificationService.notify(
+                                "error",
+                                "Failed to start batch note creation.",
+                            );
+                        }
+                    });
+            });
+
+            menu.addItem((item) => {
+                item.setTitle("Extract anno images for all child items")
+                    .setIcon("image")
+                    .onClick(async () => {
+                        try {
+                            const items: {
+                                libraryID: number;
+                                itemKey: string;
+                            }[] = [];
+                            const collectItems = (n: ViewNode) => {
+                                if (
+                                    n.nodeType === "item" &&
+                                    n.itemType !== "note"
+                                ) {
+                                    items.push({
+                                        libraryID: n.libraryID,
+                                        itemKey: n.key,
+                                    });
+                                }
+                                if (
+                                    n.nodeType === "collection" ||
+                                    n.nodeType === "library"
+                                ) {
+                                    n.children.forEach(collectItems);
+                                }
+                            };
+                            node.data.children.forEach(collectItems);
+                            const taskId =
+                                await workerBridge.createBatchExtractImagesTask(
+                                    {
+                                        items,
+                                        forceUpdate: true,
+                                    },
+                                );
+                            services.notificationService.notify(
+                                "success",
+                                `Batch image extraction started (task ${taskId.slice(0, 8)})`,
+                            );
+                        } catch (err) {
+                            services.logService.error(
+                                "Failed to start batch image extraction task",
+                                "TreeView",
+                                err,
+                            );
+                            services.notificationService.notify(
+                                "error",
+                                "Failed to start batch image extraction.",
+                            );
                         }
                     });
             });
@@ -138,7 +213,10 @@ export const NodeItem = ({
                                 "TreeView",
                                 err,
                             );
-                            services.notificationService.notify("error", "Failed to open source note.");
+                            services.notificationService.notify(
+                                "error",
+                                "Failed to open source note.",
+                            );
                         }
                     });
             });
@@ -160,8 +238,12 @@ export const NodeItem = ({
                             const taskId =
                                 await workerBridge.createBatchExtractImagesTask(
                                     {
-                                        libraryIDs: [node.data.libraryID],
-                                        itemKeys: [node.data.key],
+                                        items: [
+                                            {
+                                                libraryID: node.data.libraryID,
+                                                itemKey: node.data.key,
+                                            },
+                                        ],
                                         forceUpdate: true,
                                     },
                                 );
@@ -175,7 +257,10 @@ export const NodeItem = ({
                                 "TreeView",
                                 err,
                             );
-                            services.notificationService.notify("error", "Failed to start image extraction.");
+                            services.notificationService.notify(
+                                "error",
+                                "Failed to start image extraction.",
+                            );
                         }
                     });
             });
@@ -220,13 +305,6 @@ export const NodeItem = ({
                 dragText = file.name;
             } else {
                 const path = getNotePath({
-                    citationKey: node.data.citationKey,
-                    title: node.data.name,
-                    key: node.data.key,
-                    sourceNoteFolder: services.settings.sourceNoteFolder,
-                    libraryName: node.data.libraryName,
-                });
-                console.log({
                     citationKey: node.data.citationKey,
                     title: node.data.name,
                     key: node.data.key,
@@ -305,7 +383,7 @@ export const NodeItem = ({
             <div className="zotflow-arrow-box">
                 <ObsidianIcon
                     icon={node.isOpen ? "chevron-down" : "chevron-right"}
-                    style={{
+                    containerStyle={{
                         visibility: isFolder ? "visible" : "hidden",
                     }}
                 />

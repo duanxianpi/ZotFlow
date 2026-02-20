@@ -159,7 +159,7 @@ export default class ZotFlow extends Plugin {
             callback: async () => {
                 try {
                     const taskId =
-                        await workerBridge.tasks.createTestTask(5000);
+                        await workerBridge.tasks.createTestTask(50000);
                     services.notificationService.notify(
                         "info",
                         `Test Task Started: ${taskId}`,

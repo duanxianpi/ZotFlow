@@ -1,23 +1,29 @@
 import { BaseTask } from "../base";
 import { db } from "db/db";
 import { getAnnotationJson } from "db/annotation";
-import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 import type { NoteService } from "worker/services/note";
 import type { AttachmentService } from "worker/services/attachment";
 import type { PDFProcessWorker } from "worker/services/pdf-processor";
 import type { ZotFlowSettings } from "settings/types";
+import type { TaskStatus } from "types/tasks";
 import type { IDBZoteroItem, AnyIDBZoteroItem } from "types/db-schema";
 import type { AttachmentData, AnnotationData } from "types/zotero-item";
+
+/**
+ * Identifies a single Zotero item by library + key.
+ */
+export interface ItemIdentifier {
+    libraryID: number;
+    itemKey: string;
+}
 
 /**
  * Input descriptor for batch image extraction.
  */
 export interface BatchExtractImagesInput {
-    /** Library IDs to include. If empty, all synced libraries are used. */
-    libraryIDs?: number[];
-    /** Specific parent item keys. If provided, only extract images for these items. */
-    itemKeys?: string[];
+    /** Specific items to process. If empty, all synced items are used. */
+    items?: ItemIdentifier[];
     /** Force re-render even if annotationImageVersion matches. */
     forceUpdate?: boolean;
 }
@@ -40,6 +46,14 @@ export class BatchExtractImagesTask extends BaseTask {
         private input: BatchExtractImagesInput,
     ) {
         super("batch-extract-images");
+        this.displayText = "Extracting Annotation Images";
+        this.taskInput = {};
+        if (input.items?.length) {
+            this.taskInput.items = input.items.length;
+        }
+        if (input.forceUpdate) {
+            this.taskInput.forceUpdate = 1;
+        }
     }
 
     protected async run(signal: AbortSignal): Promise<void> {
@@ -83,7 +97,15 @@ export class BatchExtractImagesTask extends BaseTask {
             }
         }
 
-        this.result = { successCount, failCount };
+        this.result = {
+            successCount,
+            failCount,
+            details: {
+                items: total,
+                extracted: successCount,
+                failed: failCount,
+            },
+        };
 
         if (failCount > 0) {
             this.reportProgress(
@@ -94,6 +116,16 @@ export class BatchExtractImagesTask extends BaseTask {
         } else {
             this.reportProgress(total, total, "All images extracted");
         }
+    }
+
+    protected getTerminalDisplayText(status: TaskStatus): string {
+        if (status === "cancelled") return "Extract Images — Cancelled";
+        if (status === "failed") return "Extract Images — Failed";
+        const r = this.result;
+        if (r && r.failCount > 0) {
+            return `Extracted images for ${r.successCount} items (${r.failCount} failed)`;
+        }
+        return `Extracted images for ${r?.successCount ?? 0} items`;
     }
 
     /**
@@ -123,7 +155,7 @@ export class BatchExtractImagesTask extends BaseTask {
         for (const attachment of attachments) {
             const annotations = await getAnnotationJson(
                 attachment,
-                this.settings.zoteroApiKey,
+                this.settings.zoteroapikey,
                 (a: IDBZoteroItem<AnnotationData>) => {
                     const isImage =
                         a.raw.data.annotationType === "image" ||
@@ -156,53 +188,17 @@ export class BatchExtractImagesTask extends BaseTask {
      * Resolve items from database based on input descriptor.
      */
     private async resolveItems(): Promise<AnyIDBZoteroItem[]> {
-        // If specific keys are provided, fetch those directly
-        if (this.input.itemKeys && this.input.itemKeys.length > 0) {
-            const libraryIDs = this.input.libraryIDs;
-            if (!libraryIDs || libraryIDs.length === 0) {
-                throw new ZotFlowError(
-                    ZotFlowErrorCode.CONFIG_MISSING,
-                    "BatchExtractImagesTask",
-                    "libraryIDs required when itemKeys specified",
-                );
-            }
-
+        // If specific items are provided, fetch those directly
+        if (this.input.items && this.input.items.length > 0) {
             const items: AnyIDBZoteroItem[] = [];
-            for (const key of this.input.itemKeys) {
-                for (const libID of libraryIDs) {
-                    const item = await db.items.get([libID, key]);
-                    if (item) {
-                        items.push(item);
-                        break;
-                    }
+            for (const { libraryID, itemKey } of this.input.items) {
+                const item = await db.items.get([libraryID, itemKey]);
+                if (item) {
+                    items.push(item);
                 }
             }
             return items;
         }
-
-        // Otherwise, fetch all top-level items from specified libraries
-        const libraryIDs =
-            this.input.libraryIDs && this.input.libraryIDs.length > 0
-                ? this.input.libraryIDs
-                : (await db.libraries.toArray()).map((l) => l.id);
-
-        const results: AnyIDBZoteroItem[] = [];
-        for (const libID of libraryIDs) {
-            const allTopLevel = await db.items
-                .where("[libraryID+parentItem+itemType+trashed]")
-                .between([libID, "", "", 0], [libID, "", "\uffff", 0])
-                .toArray();
-
-            // Only include items that could have PDF attachments
-            const filtered = allTopLevel.filter(
-                (item) =>
-                    item.itemType !== "attachment" &&
-                    item.itemType !== "annotation" &&
-                    item.itemType !== "note",
-            );
-            results.push(...filtered);
-        }
-
-        return results;
+        return [];
     }
 }

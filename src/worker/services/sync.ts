@@ -29,15 +29,19 @@ export class SyncService {
      */
     async startSync(
         signal?: AbortSignal,
-        onProgress?: (completed: number, total: number, message: string) => void,
-    ) {
+        onProgress?: (
+            completed: number,
+            total: number,
+            message: string,
+        ) => void,
+    ): Promise<{ successCount: number; failCount: number }> {
         if (this.syncing) {
             this.parentHost.log(
                 "warn",
                 "Sync requested but already running.",
                 "SyncService",
             );
-            return;
+            return { successCount: 0, failCount: 0 };
         }
 
         if (!navigator.onLine) {
@@ -48,7 +52,7 @@ export class SyncService {
             );
         }
 
-        const apiKey = this.settings.zoteroApiKey;
+        const apiKey = this.settings.zoteroapikey;
         const librariesConfig = this.settings.librariesConfig;
 
         if (!apiKey) {
@@ -88,7 +92,7 @@ export class SyncService {
                 "No libraries configured for sync.",
                 "SyncService",
             );
-            return;
+            return { successCount: 0, failCount: 0 };
         }
 
         this.syncing = true;
@@ -104,9 +108,10 @@ export class SyncService {
             }
         }
 
+        let successCount = 0;
+        let failCount = 0;
+
         try {
-            let successCount = 0;
-            let failCount = 0;
             const totalLibs = activeLibraries.length;
 
             for (let i = 0; i < activeLibraries.length; i++) {
@@ -132,13 +137,9 @@ export class SyncService {
                     successCount++;
                 } catch (error: unknown) {
                     failCount++;
-                    const msg = error instanceof Error ? error.message : String(error);
-                    this.parentHost.log(
-                        "error",
-                        msg,
-                        "SyncService",
-                        error,
-                    );
+                    const msg =
+                        error instanceof Error ? error.message : String(error);
+                    this.parentHost.log("error", msg, "SyncService", error);
 
                     // Specific notification for sub-tasks, but don't abort other libraries
                     this.parentHost.notify(
@@ -161,6 +162,8 @@ export class SyncService {
                     `Sync finished with ${failCount} errors.`,
                 );
             }
+
+            return { successCount, failCount };
         } catch (error: any) {
             // Catastrophic failure (e.g., DB crash)
             this.parentHost.log("error", error.message, "SyncService", error);
@@ -169,6 +172,7 @@ export class SyncService {
                 "error",
                 `Critical Sync Failure: ${error.message}`,
             );
+            throw error; // Re-throw so TaskLayer can track it as failed
         } finally {
             this.syncing = false;
             this.parentHost.log("info", "Sync finished.", "SyncService");
@@ -258,9 +262,12 @@ export class SyncService {
                                             case "updated":
                                             case "deleted":
                                             case "conflict":
-                                                console.warn(
-                                                    `[ZotFlow] Collection Conflict: ${localCol.name} (${localCol.key})`,
+                                                this.parentHost.log(
+                                                    "warn",
+                                                    `Collection Conflict: ${localCol.name} (${localCol.key})`,
+                                                    "SyncService",
                                                 );
+
                                                 await db.collections.update(
                                                     [libraryID, localCol.key],
                                                     {
@@ -294,8 +301,11 @@ export class SyncService {
                     }
 
                     processedCount += newCollections.length;
-                    console.log(
-                        `[ZotFlow] Updated ${processedCount} collections in Library ${libraryID}...`,
+
+                    this.parentHost.log(
+                        "debug",
+                        `Updated ${processedCount} collections in Library ${libraryID}...`,
+                        "SyncService",
                     );
                 }
 
@@ -366,8 +376,10 @@ export class SyncService {
 
                 if (dirtyNode) {
                     // Prevent deletion
-                    console.warn(
-                        `[ZotFlow] Prevented deletion of Collection ${targetKey}. Reason: Local changes in ${dirtyNode.key}.`,
+                    this.parentHost.log(
+                        "warn",
+                        `Prevented deletion of Collection ${targetKey}. Reason: Local changes in ${dirtyNode.key}.`,
+                        "SyncService",
                     );
 
                     // Mark as conflict
@@ -451,7 +463,11 @@ export class SyncService {
             const serverHeaderVersion = response.getVersion() || 0;
 
             if (serverHeaderVersion <= localVersion) {
-                console.log("[ZotFlow] Items are up to date.");
+                this.parentHost.log(
+                    "debug",
+                    "Items are up to date.",
+                    "SyncService",
+                );
                 return;
             }
 
@@ -516,7 +532,11 @@ export class SyncService {
                     await collectionUpdate;
                     processedCount += newItems.length;
                 }
-                console.log(`[ZotFlow] Synced ${processedCount} items.`);
+                this.parentHost.log(
+                    "debug",
+                    `Updated ${processedCount} items in Library ${libraryID}...`,
+                    "SyncService",
+                );
             }
 
             // Handle Deletions
@@ -532,8 +552,10 @@ export class SyncService {
             await db.libraries.update(libraryID, {
                 itemVersion: serverHeaderVersion,
             });
-            console.log(
-                `[ZotFlow] Item sync finished. New Version: ${serverHeaderVersion}`,
+            this.parentHost.log(
+                "debug",
+                `Item sync finished. New Version: ${serverHeaderVersion}`,
+                "SyncService",
             );
         } catch (e: any) {
             throw ZotFlowError.wrap(
@@ -630,7 +652,7 @@ export class SyncService {
     ): Promise<void> {
         if (!this.zotero) return;
 
-        const apiKey = this.settings.zoteroApiKey;
+        const apiKey = this.settings.zoteroapikey;
         if (!apiKey) {
             throw new ZotFlowError(
                 ZotFlowErrorCode.CONFIG_MISSING,

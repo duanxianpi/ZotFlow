@@ -57,7 +57,7 @@ export class TreeViewService {
             return this.treeTransferPayload;
         }
 
-        if (!this.settings.zoteroApiKey) {
+        if (!this.settings.zoteroapikey) {
             throw new ZotFlowError(
                 ZotFlowErrorCode.CONFIG_MISSING,
                 "TreeViewService",
@@ -67,7 +67,7 @@ export class TreeViewService {
 
         let keyInfo;
         try {
-            keyInfo = await db.keys.get(this.settings.zoteroApiKey);
+            keyInfo = await db.keys.get(this.settings.zoteroapikey);
         } catch (e) {
             throw ZotFlowError.wrap(
                 e,
@@ -82,7 +82,7 @@ export class TreeViewService {
                 ZotFlowErrorCode.AUTH_INVALID,
                 "TreeViewService",
                 "Invalid Zotero API key (not found in DB).",
-                { api_key: this.settings.zoteroApiKey },
+                { api_key: this.settings.zoteroapikey },
             );
         }
 
