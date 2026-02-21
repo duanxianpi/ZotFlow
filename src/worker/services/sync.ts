@@ -9,6 +9,7 @@ import type { IParentProxy } from "bridge/types";
 
 const PULL_BULK_SIZE = 100;
 const UPDATE_BULK_SIZE = 50;
+const MAX_PUSH_RETRIES = 3;
 
 export class SyncService {
     private syncing = false;
@@ -151,7 +152,32 @@ export class SyncService {
                     await this.pullItems(lib.type, libKey);
 
                     if (libConfig.mode === "bidirectional") {
-                        await this.pushDirtyItems(lib.type, libKey);
+                        for (
+                            let attempt = 0;
+                            attempt < MAX_PUSH_RETRIES;
+                            attempt++
+                        ) {
+                            const { retryNeeded } = await this.pushDirtyItems(
+                                lib.type,
+                                libKey,
+                            );
+                            if (!retryNeeded) break;
+
+                            this.parentHost.log(
+                                "info",
+                                `Push returned 412 (attempt ${attempt + 1}/${MAX_PUSH_RETRIES}). Re-pulling before retry...`,
+                                "SyncService",
+                            );
+                            await this.pullItems(lib.type, libKey);
+
+                            if (attempt === MAX_PUSH_RETRIES - 1) {
+                                this.parentHost.log(
+                                    "warn",
+                                    `Push failed after ${MAX_PUSH_RETRIES} retries for library ${libKey}. Remaining dirty items will sync next time.`,
+                                    "SyncService",
+                                );
+                            }
+                        }
                     }
                     successCount++;
                 } catch (error: unknown) {
@@ -668,8 +694,8 @@ export class SyncService {
     public async pushDirtyItems(
         libraryType: "user" | "group",
         libraryID: number,
-    ): Promise<void> {
-        if (!this.zotero) return;
+    ): Promise<{ retryNeeded: boolean }> {
+        if (!this.zotero) return { retryNeeded: false };
 
         const apiKey = this.settings.zoteroapikey;
         if (!apiKey) {
@@ -679,6 +705,10 @@ export class SyncService {
                 "No API key found for push.",
             );
         }
+
+        // Get current library version for write checks
+        const libState = await db.libraries.get(libraryID);
+        let latestVersion = libState?.itemVersion || 0;
 
         // Step 1: Fetch Dirty Items
         const dirtyParams = [
@@ -692,7 +722,13 @@ export class SyncService {
             .anyOf(dirtyParams)
             .toArray();
 
-        if (dirtyItems.length === 0) return;
+        this.parentHost.log(
+            "debug",
+            `Dirty items to push: ${dirtyItems.length}`,
+            "SyncService",
+        );
+
+        if (dirtyItems.length === 0) return { retryNeeded: false };
 
         const deletions = dirtyItems.filter((i) => i.syncStatus === "deleted");
         const upserts = dirtyItems.filter(
@@ -711,12 +747,19 @@ export class SyncService {
             const deletePromises = deletions.map((item) => {
                 return limit(async () => {
                     try {
-                        await this.zotero.client
+                        const delResponse = await this.zotero.client
                             .library(libraryType, libraryID)
                             .items(item.key)
                             .delete([], {
                                 ifUnmodifiedSinceVersion: item.version,
                             });
+
+                        // Track latest library version from delete response
+                        const delVersion = delResponse.getVersion();
+                        if (delVersion !== null && delVersion > latestVersion) {
+                            latestVersion = delVersion;
+                        }
+
                         await db.items.delete([libraryID, item.key]);
                         this.parentHost.log(
                             "debug",
@@ -796,7 +839,15 @@ export class SyncService {
                     const response = await this.zotero.client
                         .library(libraryType, libraryID)
                         .items()
-                        .post(payload);
+                        .post(payload, {
+                            ifUnmodifiedSinceVersion: latestVersion,
+                        });
+
+                    // Track latest library version from write response
+                    const postVersion = response.getVersion();
+                    if (postVersion !== null && postVersion > latestVersion) {
+                        latestVersion = postVersion;
+                    }
 
                     const resData = response.raw as any;
                     const successful = resData.successful || {};
@@ -891,6 +942,16 @@ export class SyncService {
                         });
                     }
                 } catch (e: any) {
+                    const status = e.response?.status ?? e.code ?? 0;
+                    if (status === 412) {
+                        this.parentHost.log(
+                            "warn",
+                            "Library modified during push (412). Retry needed.",
+                            "SyncService",
+                        );
+                        return { retryNeeded: true };
+                    }
+
                     // Log but don't stop the whole sync for one batch failure
                     this.parentHost.log(
                         "error",
@@ -901,6 +962,20 @@ export class SyncService {
                 }
             }
         }
+
+        // All writes succeeded — safe to update library version
+        if (latestVersion > (libState?.itemVersion || 0)) {
+            await db.libraries.update(libraryID, {
+                itemVersion: latestVersion,
+            });
+            this.parentHost.log(
+                "debug",
+                `Updated library ${libraryID} itemVersion to ${latestVersion} after push.`,
+                "SyncService",
+            );
+        }
+
+        return { retryNeeded: false };
     }
 
     private chunkArray<T>(array: T[], size: number): T[][] {
