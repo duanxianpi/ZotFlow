@@ -62,7 +62,7 @@ ZotFlow's source notes follow a **Zettelkasten-inspired** philosophy: each Zoter
 3. Copy the three files into that folder.
 4. Reload Obsidian → **Settings → Community plugins** → enable **ZotFlow**. -->
 
-## Getting Started
+## Quick Start
 
 1. **Get a Zotero API key** — go to [https://www.zotero.org/settings/keys/new](https://www.zotero.org/settings/keys/new) and create a key with read/write access to your personal library (and any groups you want to sync).
 2. **Enter the key** in **Settings → ZotFlow → Sync**.
@@ -70,18 +70,14 @@ ZotFlow's source notes follow a **Zettelkasten-inspired** philosophy: each Zoter
 4. **Browse your library** — open the Zotero Tree View from the command palette or the left sidebar.
 5. **Read & annotate** — click any attachment in the tree to open it in the built-in reader.
 
-### Optional Setup
+## Documentation
 
-| Setting                        | Description                                                            |
-| ------------------------------ | ---------------------------------------------------------------------- |
-| **Source Note Template**       | Path to a `.md` LiquidJS template for Zotero item notes.               |
-| **Source Note Folder**         | Vault folder where generated notes are saved.                          |
-| **Local Source Note Template** | Template for notes created from local vault files.                     |
-| **Local Source Note Folder**   | Folder for locally-generated notes.                                    |
-| **WebDAV**                     | URL, username, and password for WebDAV attachment downloads.           |
-| **Cache**                      | Toggle file caching and set a size limit (default 500 MB).             |
-| **Annotation Images**          | Auto-extract visual annotations and set an image folder.               |
-| **Overwrite Viewer**           | Replace Obsidian's default PDF/EPUB/HTML viewer with ZotFlow's reader. |
+| Guide                                                      | Description                                                                                    |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **[Getting Started](docs/getting-started.md)**             | Install ZotFlow, connect your Zotero account, configure libraries, and run your first sync.    |
+| **[Reading & Annotating](docs/reading-and-annotating.md)** | Open PDFs/EPUBs in the built-in reader, annotate, and use the local reader for vault files.    |
+| **[Source Notes](docs/source-notes.md)**                   | Create, customize, and understand auto-generated source notes.                                 |
+| **[Template Guide](docs/template-guide.md)**               | Full LiquidJS template reference — all variables, filters, frontmatter handling, and examples. |
 
 ## Commands
 
