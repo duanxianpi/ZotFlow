@@ -354,6 +354,8 @@ export class NoteService {
                 fileCheck.frontmatter || {},
             );
 
+            await this.parentHost.writeTextFile(fileCheck.path, content);
+
             this.parentHost.log(
                 "debug",
                 `Updated note: ${fileCheck.path} (v${currentVersion} -> v${newVersion})`,
