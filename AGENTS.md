@@ -324,7 +324,9 @@ src/
 npm install          # Install dependencies
 npm run dev:plugin   # esbuild watch mode (plugin only)
 npm run dev:reader   # webpack watch mode (reader only)
-npm run build        # Production build: tsc check + esbuild
+npm run build:plugin   # Production build: tsc check + esbuild (plugin only)
+npm run build:reader   # Production build: webpack prod mode (reader only)
+npm run build        # Production build: reader + plugin
 npm run build:ci     # Full CI: build pdf.js + reader + plugin
 npm run lint         # eslint
 ```
@@ -539,7 +541,7 @@ corresponding state is reached.
 
 ### Do
 
-- Always run `npm run build` after making changes to verify compilation.
+- Always run `npm run build:plugin` after making changes to verify compilation.
 - Add new service methods behind the existing `IParentProxy` pattern when the Worker needs main-thread access.
 - Use `ZotFlowError` for all error paths. Include the originating service name and a human-readable message.
 - Add CSS classes to `styles.css` for any new UI styling. Use the `zotflow-` prefix.

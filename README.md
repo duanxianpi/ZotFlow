@@ -1,90 +1,180 @@
-# Obsidian Sample Plugin
+# ZotFlow — Keep Your Research in Flow
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+ZotFlow is a community plugin for [Obsidian](https://obsidian.md) that deeply integrates [Zotero](https://www.zotero.org) into your note-taking workflow. It syncs your Zotero libraries, lets you read and annotate PDFs/EPUBs/snapshots directly inside Obsidian, and automatically generates richly-templated source notes — all without leaving your vault.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+### Zotero Library Sync
 
-## First time developing plugins?
+- **Bidirectional sync** — pull items from Zotero and push local changes (annotations, metadata) back.
+- **Per-library control** — configure each library as _Bidirectional_, _Read-Only_, or _Ignored_.
+- **Conflict resolution** — field-level diff viewer with _Keep Local_ / _Accept Remote_ actions and batch resolve.
+- **WebDAV support** — download attachments from your own WebDAV server in addition to Zotero cloud storage.
 
-Quick starting guide for new plugin devs:
+### Built-in Reader
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+- **Read PDFs, EPUBs, and HTML snapshots** inside Obsidian — no external app needed.
+- **Full annotation support** — highlights, underlines, notes, text selections, images, and ink drawings.
+- **Local reader mode** — open any PDF/EPUB/HTML file in your vault with the same reader.
+- **Live annotation refresh** — annotations update automatically after a sync completes.
+- Optionally **replace Obsidian's default viewer** for PDF/EPUB/HTML files.
 
-## Releasing new releases
+### Source Notes
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+- **Template-powered** — use [LiquidJS](https://liquidjs.com) templates to control exactly how Zotero items are rendered as Markdown notes.
+- **Separate templates** for Zotero items and local vault files.
+- **Auto-update** — source notes regenerate when annotations change.
+- **Annotation images** — visual annotations (image/ink) can be auto-extracted and saved to your vault.
+- **Locked notes** — generated notes are marked `zotflow-locked` so they open in preview mode, preventing accidental edits.
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+### Zotero Tree View
 
-## Adding your plugin to the community plugin list
+- Browse your entire Zotero library structure (collections, items, attachments) in a sidebar tree.
+- Quickly open attachments or source notes from the tree.
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+### Activity Center
 
-## How to use
+- **Sync tab** — view library statuses, pending changes, conflicts, and trigger syncs.
+- **Tasks tab** — monitor running and completed background tasks (sync, batch note creation, image extraction).
+- **Telemetry tab** — searchable, filterable in-memory log console with expandable entries and copy support.
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+### Other
 
-## Manually installing the plugin
+- **Protocol handler** — open notes or attachments via `obsidian://zotflow?type=open-note&libraryID=...&key=...` URIs.
+- **Secure credential storage** — API keys and passwords are stored in Obsidian's `SecretStorage`, never in synced `data.json`.
+- **Mobile-safe** — designed to work on both desktop and mobile.
+- **Offline-first** — all data is cached locally in IndexedDB. Network is only used for Zotero API and WebDAV.
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+<!-- ## Installation
 
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
+### From Community Plugins (recommended)
 
-## Funding URL
+1. Open **Settings → Community plugins → Browse**.
+2. Search for **ZotFlow**.
+3. Click **Install**, then **Enable**.
 
-You can include funding URLs where people who use your plugin can financially support it.
+### Manual Installation
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/duanxianpi/obsidian-zotflow/releases).
+2. Create a folder at `<your-vault>/.obsidian/plugins/obsidian-zotflow/`.
+3. Copy the three files into that folder.
+4. Reload Obsidian → **Settings → Community plugins** → enable **ZotFlow**. -->
 
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+## Getting Started
+
+1. **Get a Zotero API key** — go to [https://www.zotero.org/settings/keys/new](https://www.zotero.org/settings/keys/new) and create a key with read/write access to your personal library (and any groups you want to sync).
+2. **Enter the key** in **Settings → ZotFlow → Sync**.
+3. **Run your first sync** — open the Activity Center (ribbon icon or command palette) and click **Sync All**.
+4. **Browse your library** — open the Zotero Tree View from the command palette or the left sidebar.
+5. **Read & annotate** — click any attachment in the tree to open it in the built-in reader.
+
+### Optional Setup
+
+| Setting                        | Description                                                            |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| **Source Note Template**       | Path to a `.md` LiquidJS template for Zotero item notes.               |
+| **Source Note Folder**         | Vault folder where generated notes are saved.                          |
+| **Local Source Note Template** | Template for notes created from local vault files.                     |
+| **Local Source Note Folder**   | Folder for locally-generated notes.                                    |
+| **WebDAV**                     | URL, username, and password for WebDAV attachment downloads.           |
+| **Cache**                      | Toggle file caching and set a size limit (default 500 MB).             |
+| **Annotation Images**          | Auto-extract visual annotations and set an image folder.               |
+| **Overwrite Viewer**           | Replace Obsidian's default PDF/EPUB/HTML viewer with ZotFlow's reader. |
+
+## Commands
+
+TODO
+
+<!-- | Command                   | Description                              |
+| ------------------------- | ---------------------------------------- |
+| **Open Zotero Tree View** | Show the library browser in the sidebar. | -->
+
+## Architecture
+
+ZotFlow uses a **Main Thread + Web Worker** split:
+
+- **Main thread** — Obsidian API interactions, UI rendering (React for complex views, native Obsidian APIs for settings).
+- **Web Worker** — Zotero API communication, sync engine, database (IndexedDB via Dexie), template rendering, PDF processing.
+- **Reader iframe** — Zotero's PDF/EPUB/HTML reader embedded via penpal for isolated, sandboxed rendering.
+
+Communication flows through [Comlink](https://github.com/GoogleChromeLabs/comlink) (main ↔ worker) and [Penpal](https://github.com/nicmeriano/penpal) (main ↔ reader iframe).
+
+## Development
+
+### Prerequisites
+
+- Node.js ≥ 16
+- npm
+
+### Setup
+
+```bash
+git clone https://github.com/duanxianpi/obsidian-zotflow.git --recursive
+cd obsidian-zotflow
+npm install
 ```
 
-If you have multiple URLs, you can also do:
+### Build
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+```bash
+npm run build:ci       # Full CI build (PDF.js + reader + plugin)
 ```
 
-## API Documentation
+### Development Mode
 
-See https://docs.obsidian.md
+```bash
+npm run dev:plugin     # esbuild watch mode (plugin)
+npm run dev:reader     # webpack watch mode (reader, separate terminal)
+```
+
+### Lint
+
+```bash
+npm run lint
+```
+
+### Testing Locally
+
+Copy `main.js`, `manifest.json`, and `styles.css` to:
+
+```
+<vault>/.obsidian/plugins/obsidian-zotflow/
+```
+
+Reload Obsidian and enable the plugin.
+
+## Privacy
+
+- **No telemetry, no analytics, no tracking.**
+- Network requests go only to the Zotero API and your configured WebDAV server.
+- Credentials are stored in Obsidian's platform-native `SecretStorage`.
+- The reader iframe communicates only via structured-clone messaging (no `eval`, no remote code).
+
+## License
+
+[AGPL-3.0-only](LICENSE)
+
+## Author
+
+**Xianpi Duan** — [GitHub](https://github.com/duanxianpi/)
+
+## Sponsor
+
+Thanks for checking out the plugin! I’m currently a student and working on this plugin nights and weekends. If it’s useful to you, a small tip will help me keep shipping features.
+
+<div>
+	<a href="https://www.buymeacoffee.com/duanxianpi" target="_blank" title="buymeacoffee">
+	  <img src="https://iili.io/JoQ0zN9.md.png"  alt="buymeacoffee-orange-badge" style="width: 200px;">
+	</a>
+</div>
+
+---
+
+## Roadmap / Feedback
+
+Have ideas or found a bug? Please join the discord server!
+<a href="https://discord.gg/7vNrR6qhVr"> <img alt="Join our Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white&style=for-the-badge"> </a>
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=duanxianpi/obsidian-zotflow&type=Date)](https://www.star-history.com/#duanxianpi/obsidian-zotflow&Date)
