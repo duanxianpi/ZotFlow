@@ -65,8 +65,8 @@
 .zotflow-settings-lib-table th {
     padding: 10px;
     text-align: left;
-    font-size: var(--font-ui-medium);
-    font-weight: var(--font-semibold);
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-medium);
 }
 
 .zotflow-settings-lib-table td {
@@ -448,7 +448,9 @@
     gap: var(--size-4-3);
 }
 
-/* Activity Center: Tasks View */
+/* ============================================================
+   Activity Center: Tasks View
+   ============================================================ */
 
 .zotflow-tasks-view {
     display: flex;
@@ -468,7 +470,7 @@
     flex-shrink: 0;
 }
 
-.zotflow-tasks-view > .zotflow-tasks-section:first-child {
+.zotflow-tasks-section:first-child {
     display: flex;
     flex-direction: column;
     min-height: 35%;
@@ -490,7 +492,7 @@
     align-items: center;
     justify-content: center;
     padding: var(--size-4-8) 0;
-    color: var(--text-muted);
+    color: var(--text-faint);
     gap: var(--size-4-2);
     font-size: var(--font-ui-small);
 
@@ -723,77 +725,80 @@
 /* ============================================================
    Activity Center: Sync View
    ============================================================ */
-
 .zotflow-sync-view {
     display: flex;
     flex-direction: column;
     gap: var(--size-4-4);
     height: 100%;
+    overflow: hidden;
 }
 
-.zotflow-sync-controls {
-    flex: 0 0 auto;
-}
-
-.zotflow-sync-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--size-4-2);
-}
-
-.zotflow-sync-header-left {
-    display: flex;
-    align-items: center;
-    gap: var(--size-4-4);
-}
-
-.zotflow-sync-header-left h3 {
+.zotflow-sync-section-header {
     font-size: var(--font-ui-small);
     font-weight: var(--font-semibold);
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin: 0;
-}
-
-.zotflow-sync-last {
-    display: flex;
-    align-items: center;
-    gap: var(--size-4-1);
-    font-size: var(--font-ui-smaller);
-    color: var(--text-faint);
-}
-
-.zotflow-sync-btn {
+    margin-bottom: var(--size-4-1);
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: var(--size-4-2);
-    padding: var(--size-4-2) var(--size-4-4);
-    border: none;
-    border-radius: var(--radius-s);
-    background-color: var(--interactive-accent);
+}
+
+.zotflow-sync-controls {
+    display: flex;
+    flex-direction: column;
+    min-height: 25%;
+    max-height: 45%;
+    flex: 0 1 auto;
+}
+
+.zotflow-sync-conflicts {
+    display: flex;
+    flex-direction: column;
+    min-height: 55%;
+    max-height: 75%;
+    flex: 1 1 auto;
+}
+
+/* Conflict count badge */
+.zotflow-sync-conflict-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--text-error);
     color: var(--text-on-accent);
+    font-size: var(--font-smallest);
+    font-weight: var(--font-semibold);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    line-height: 1;
+    box-sizing: border-box;
+}
+
+/* Empty state */
+.zotflow-sync-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--size-4-8) 0;
+    color: var(--text-faint);
+    gap: var(--size-4-2);
     font-size: var(--font-ui-small);
-    font-weight: var(--font-medium);
-    cursor: pointer;
-    transition: opacity 0.15s ease;
+
+    flex: 1 1 auto;
 }
 
-.zotflow-sync-btn:hover:not(:disabled) {
-    opacity: 0.9;
+/* Spin animation */
+.zotflow-spin > svg {
+    animation: zotflow-spin-anim 1.5s linear infinite;
 }
 
-.zotflow-sync-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.zotflow-spinning {
-    animation: zotflow-spin 1.5s linear infinite;
-}
-
-@keyframes zotflow-spin {
+@keyframes zotflow-spin-anim {
     from {
         transform: rotate(0deg);
     }
@@ -802,138 +807,343 @@
     }
 }
 
-.zotflow-sync-active {
-    flex: 0 0 auto;
-}
-
-.zotflow-sync-active h3 {
-    font-size: var(--font-ui-small);
-    font-weight: var(--font-semibold);
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--size-4-3);
-}
-
-.zotflow-sync-active-card {
+/* ---- Library table ---- */
+.zotflow-sync-lib-table-wrapper {
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
-    padding: var(--size-4-3);
-    display: flex;
-    flex-direction: column;
-    gap: var(--size-4-2);
-}
-
-.zotflow-sync-active-header {
-    display: flex;
-    align-items: center;
-    gap: var(--size-4-2);
-}
-
-.zotflow-sync-active-label {
-    font-weight: var(--font-semibold);
-    font-size: var(--font-ui-small);
-    color: var(--interactive-accent);
-}
-
-.zotflow-sync-history {
-    flex: 1;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.zotflow-sync-history h3 {
-    font-size: var(--font-ui-small);
-    font-weight: var(--font-semibold);
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: var(--size-4-3);
-}
-
-.zotflow-sync-history-list {
-    flex: 1;
+    overflow-x: hidden;
     overflow-y: auto;
+    max-height: 260px;
+}
+
+.zotflow-sync-lib-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.zotflow-sync-lib-table thead {
+    background-color: var(--background-secondary);
+    top: 0;
+    z-index: 1;
+}
+
+.zotflow-sync-lib-table th {
+    padding: var(--size-4-2) var(--size-4-3);
+    text-align: left;
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-medium);
+    color: var(--text-muted);
+}
+
+.zotflow-sync-lib-table td {
+    padding: var(--size-4-2) var(--size-4-3);
+    font-size: var(--font-ui-small);
+    color: var(--text-normal);
+    vertical-align: middle;
+}
+
+.zotflow-sync-lib-table tbody tr + tr {
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.zotflow-sync-lib-row-ignored td {
+    opacity: 0.5;
+}
+
+.zotflow-sync-lib-type {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.zotflow-sync-badge {
+    font-size: var(--font-ui-smaller);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.zotflow-sync-badge--rw {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.zotflow-sync-badge--ro {
+    background-color: var(--background-modifier-border);
+    color: var(--text-muted);
+}
+
+.zotflow-sync-mode-label {
+    color: var(--text-muted);
+}
+
+.zotflow-sync-time-cell {
+    font-family: var(--font-monospace);
+    font-size: var(--font-ui-smaller) !important;
+    color: var(--text-faint) !important;
+    white-space: nowrap;
+}
+
+/* Sync All button row */
+.zotflow-sync-actions {
+    display: flex;
+    justify-content: flex-start;
+    padding-bottom: var(--size-4-2);
+}
+
+/* ---- Conflict panel ---- */
+.zotflow-conflict-container {
+    display: flex;
+    gap: var(--size-4-4);
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Conflict sidebar list */
+.zotflow-conflict-list {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-4-2);
+    overflow-y: auto;
+    padding-right: var(--size-4-2);
+}
+
+.zotflow-conflict-item {
     border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
-}
-
-.zotflow-sync-history-item {
-    padding: var(--size-4-3) var(--size-4-4);
-    border-bottom: 1px solid var(--background-modifier-border);
+    padding: var(--size-4-2) var(--size-4-3);
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: all 0.15s ease;
 }
 
-.zotflow-sync-history-item:last-child {
-    border-bottom: none;
-}
-
-.zotflow-sync-history-item:hover {
+.zotflow-conflict-item:hover {
     background-color: var(--background-modifier-hover);
+    border-color: var(--background-modifier-border-hover);
 }
 
-.zotflow-sync-history-item.is-expanded {
-    background-color: var(--background-modifier-hover);
+.zotflow-conflict-item.is-selected {
+    border-color: var(--interactive-accent);
+    background-color: rgba(var(--interactive-accent-rgb), 0.08);
 }
 
-.zotflow-sync-history-header {
+.zotflow-conflict-key {
+    font-family: var(--font-monospace);
+    font-size: var(--font-ui-smaller);
+    color: var(--text-faint);
+}
+
+.zotflow-conflict-item-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: var(--size-4-3);
-    font-size: var(--font-ui-small);
+    margin-bottom: 4px;
 }
 
-.zotflow-sync-history-icon {
-    display: flex;
-    align-items: center;
+.zotflow-conflict-type-badge {
+    font-size: 10px;
+    font-weight: var(--font-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    border-radius: var(--radius-s);
     flex-shrink: 0;
 }
 
-.zotflow-status-success {
-    color: var(--text-success);
+.zotflow-conflict-type-badge--update {
+    background-color: rgba(var(--color-yellow-rgb), 0.15);
+    color: var(--text-warning);
 }
 
-.zotflow-status-error {
+.zotflow-conflict-type-badge--delete {
+    background-color: rgba(var(--color-red-rgb), 0.15);
     color: var(--text-error);
 }
 
-.zotflow-status-muted {
-    color: var(--text-muted);
+.zotflow-conflict-type-badge--push {
+    background-color: rgba(var(--color-orange-rgb), 0.15);
+    color: var(--text-warning);
 }
 
-.zotflow-sync-history-time {
-    color: var(--text-faint);
-    font-size: var(--font-ui-smaller);
-    font-family: var(--font-monospace);
-    flex-shrink: 0;
+.zotflow-conflict-type-badge--collection {
+    background-color: rgba(var(--color-blue-rgb), 0.15);
+    color: var(--text-accent);
 }
 
-.zotflow-sync-history-msg {
+.zotflow-conflict-title {
+    display: block;
+    font-size: var(--font-ui-small);
     color: var(--text-normal);
-    flex: 1;
-    min-width: 0;
+    line-height: 1.4;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.zotflow-sync-history-details {
-    margin-top: var(--size-4-2);
+/* Diff pane (right side) */
+.zotflow-conflict-diff {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--size-4-3);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.zotflow-conflict-diff-heading {
+    font-size: var(--font-ui-medium);
+    font-weight: var(--font-semibold);
+    color: var(--text-normal);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Sync error banner in diff pane */
+.zotflow-conflict-sync-error {
+    display: flex;
+    align-items: center;
+    gap: var(--size-4-2);
     padding: var(--size-4-2) var(--size-4-3);
-    background-color: var(--background-primary-alt);
+    background-color: rgba(var(--color-red-rgb), 0.08);
+    border: 1px solid rgba(var(--color-red-rgb), 0.2);
+    border-radius: var(--radius-s);
+    font-size: var(--font-ui-smaller);
+    color: var(--text-error);
+    flex-shrink: 0;
+}
+
+/* Field diff table */
+.zotflow-field-diff-wrapper {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    border: 1px solid var(--background-modifier-border);
     border-radius: var(--radius-s);
 }
 
-.zotflow-sync-history-details code {
-    font-family: var(--font-monospace);
+.zotflow-field-diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
     font-size: var(--font-ui-smaller);
-    color: var(--interactive-accent);
 }
 
-.zotflow-text-error {
-    color: var(--text-error) !important;
+.zotflow-field-diff-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.zotflow-field-diff-table th {
+    padding: var(--size-4-2) var(--size-4-3);
+    text-align: left;
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background-color: var(--background-secondary);
+    border-bottom: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+}
+
+.zotflow-field-diff-table th:first-child {
+    width: 140px;
+}
+
+.zotflow-field-diff-local {
+    color: var(--text-error);
+}
+
+.zotflow-field-diff-remote {
+    color: var(--text-success);
+}
+
+.zotflow-field-diff-table td {
+    padding: var(--size-4-2) var(--size-4-3);
+    border-bottom: 1px solid var(--background-modifier-border);
+    vertical-align: top;
+}
+
+.zotflow-field-diff-name {
+    font-family: var(--font-monospace);
+    font-weight: var(--font-medium);
+    color: var(--text-normal);
+    word-break: break-word;
+}
+
+.zotflow-field-diff-val {
+    max-width: 0;
+}
+
+.zotflow-field-diff-val pre {
+    margin: 0;
+    font-family: var(--font-monospace);
+    font-size: var(--font-ui-smaller);
+    line-height: 1.5;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.zotflow-field-diff-val--local {
+    background-color: rgba(var(--color-red-rgb), 0.04);
+}
+
+.zotflow-field-diff-val--remote {
+    background-color: rgba(var(--color-green-rgb), 0.04);
+}
+
+/* Conflict action buttons */
+.zotflow-conflict-actions {
+    display: flex;
+    gap: var(--size-4-3);
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+
+.zotflow-conflict-btn {
+    padding: var(--size-4-2) var(--size-4-4);
+    border: none;
+    border-radius: var(--radius-s);
+    font-size: var(--font-ui-small);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.zotflow-conflict-btn--local {
+    background-color: var(--background-modifier-border);
+    color: var(--text-normal);
+}
+
+.zotflow-conflict-btn--local:hover {
+    background-color: var(--background-modifier-border-hover);
+}
+
+.zotflow-conflict-btn--remote {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.zotflow-conflict-btn--remote:hover {
+    filter: brightness(1.1);
+}
+
+/* Sync reminder after resolving all conflicts */
+.zotflow-sync-reminder {
+    display: flex;
+    align-items: center;
+    gap: var(--size-4-2);
+    padding: var(--size-4-2) var(--size-4-3);
+    background-color: rgba(var(--color-blue-rgb), 0.08);
+    border: 1px solid rgba(var(--color-blue-rgb), 0.2);
+    border-radius: var(--radius-s);
+    font-size: var(--font-ui-small);
+    color: var(--text-accent);
 }
 
 /* ============================================================

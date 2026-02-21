@@ -34,6 +34,7 @@ export class SyncService {
             total: number,
             message: string,
         ) => void,
+        libraryId?: number,
     ): Promise<{ successCount: number; failCount: number }> {
         if (this.syncing) {
             this.parentHost.log(
@@ -100,11 +101,29 @@ export class SyncService {
 
         // Build the active library list for progress reporting
         const activeLibraries: number[] = [];
-        for (const libKey of libraries) {
-            const libConfig = librariesConfig[libKey];
-            const lib = await db.libraries.get(libKey);
+
+        if (libraryId !== undefined) {
+            // Sync a specific library — still validate it exists and isn't ignored
+            const libConfig = librariesConfig[libraryId];
+            const lib = await db.libraries.get(libraryId);
             if (lib && libConfig && libConfig.mode !== "ignored") {
-                activeLibraries.push(libKey);
+                activeLibraries.push(libraryId);
+            } else {
+                this.syncing = false;
+                this.parentHost.log(
+                    "warn",
+                    `Library ${libraryId} is ignored or not found.`,
+                    "SyncService",
+                );
+                return { successCount: 0, failCount: 0 };
+            }
+        } else {
+            for (const libKey of libraries) {
+                const libConfig = librariesConfig[libKey];
+                const lib = await db.libraries.get(libKey);
+                if (lib && libConfig && libConfig.mode !== "ignored") {
+                    activeLibraries.push(libKey);
+                }
             }
         }
 
@@ -745,24 +764,32 @@ export class SyncService {
             for (const chunk of chunks) {
                 // Prepare Payload & Sanitization
                 const payload = chunk.map((item) => {
-                    const data = { ...item.raw } as any;
+                    const itemRawData = { ...item.raw } as any;
 
-                    if (data.dateAdded)
-                        data.dateAdded = toZoteroDate(data.dateAdded);
+                    if (itemRawData.data.dateAdded)
+                        itemRawData.data.dateAdded = toZoteroDate(
+                            itemRawData.data.dateAdded,
+                        );
 
-                    data.dateModified = toZoteroDate(new Date().toISOString());
+                    itemRawData.data.dateModified = toZoteroDate(
+                        new Date().toISOString(),
+                    );
 
                     if (item.syncStatus === "created") {
-                        delete data.key;
-                        delete data.version;
+                        delete itemRawData.key;
+                        delete itemRawData.data.key;
+                        delete itemRawData.version;
+                        delete itemRawData.data.version;
                     } else {
-                        data.key = item.key;
-                        data.version = item.version;
+                        itemRawData.key = item.key;
+                        itemRawData.data.key = item.key;
+                        itemRawData.version = item.version;
+                        itemRawData.data.version = item.version;
                     }
 
                     // Remove annotationIsExternal
-                    delete data.annotationIsExternal;
-                    return data;
+                    delete itemRawData.data.annotationIsExternal;
+                    return itemRawData;
                 });
 
                 try {
@@ -796,18 +823,18 @@ export class SyncService {
                                 failData = failed[indexStr];
                         } else {
                             // Handle updated items
-                            if (successful[itemKey])
-                                serverResponseItem = successful[itemKey];
+                            if (successful[indexStr])
+                                serverResponseItem = successful[indexStr];
                             // If unchanged, update item with unchanged data
-                            else if (unchanged[itemKey])
+                            else if (unchanged[indexStr])
                                 serverResponseItem = {
                                     key: itemKey,
                                     version: item.version,
                                     isUnchanged: true,
                                 };
                             // If failed, update item with failure data
-                            else if (failed[itemKey])
-                                failData = failed[itemKey];
+                            else if (failed[indexStr])
+                                failData = failed[indexStr];
                         }
 
                         if (serverResponseItem) {

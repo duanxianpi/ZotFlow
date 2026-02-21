@@ -9,6 +9,7 @@ import { NoteService } from "./services/note";
 import { PDFProcessWorker } from "./services/pdf-processor";
 import { LocalNoteService } from "./services/local-note";
 import { LocalTemplateService } from "./services/local-template";
+import { ConflictService } from "./services/conflict";
 import { TaskManager } from "./tasks/manager";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
@@ -43,12 +44,13 @@ export interface WorkerAPI {
     note: NoteService;
 
     localNote: LocalNoteService;
+    conflict: ConflictService;
     pdfProcessor: PDFProcessWorker;
     tasks: TaskManager;
     updateSettings(settings: ZotFlowSettings): void;
 
     // Task factory methods
-    createSyncTask(): Promise<string>;
+    createSyncTask(libraryId?: number): Promise<string>;
     createBatchNoteTask(
         input: BatchNoteInput,
         options: UpdateOptions,
@@ -77,6 +79,7 @@ let _note: NoteService | undefined;
 
 let _localNote: LocalNoteService | undefined;
 let _localTemplate: LocalTemplateService | undefined;
+let _conflict: ConflictService | undefined;
 let _pdfProcessor: PDFProcessWorker | undefined;
 let _taskManager: TaskManager | undefined;
 let _currentSettings: ZotFlowSettings | undefined;
@@ -93,6 +96,7 @@ function assertInitialized() {
         !_pdfProcessor ||
         !_localNote ||
         !_localTemplate ||
+        !_conflict ||
         !_taskManager ||
         !_currentSettings
     ) {
@@ -179,6 +183,8 @@ const exposedApi: WorkerAPI = {
                 parentHost,
                 _localTemplate,
             );
+
+            _conflict = new ConflictService(parentHost);
 
             _taskManager = new TaskManager(parentHost);
 
@@ -270,6 +276,16 @@ const exposedApi: WorkerAPI = {
         return Comlink.proxy(_localNote);
     },
 
+    get conflict() {
+        if (!_conflict)
+            throw new ZotFlowError(
+                ZotFlowErrorCode.UNKNOWN,
+                "Worker",
+                "Worker not initialized",
+            );
+        return Comlink.proxy(_conflict);
+    },
+
     get pdfProcessor() {
         if (!_pdfProcessor)
             throw new ZotFlowError(
@@ -299,9 +315,9 @@ const exposedApi: WorkerAPI = {
     // Task factory methods
     // ================================================================
 
-    createSyncTask: async () => {
+    createSyncTask: async (libraryId?: number) => {
         assertInitialized();
-        return _taskManager!.createSyncTask(_sync!);
+        return _taskManager!.createSyncTask(_sync!, libraryId);
     },
 
     createBatchNoteTask: async (

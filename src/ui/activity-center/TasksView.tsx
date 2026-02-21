@@ -251,10 +251,9 @@ export const TasksView: React.FC = () => {
                     <div className="zotflow-tasks-empty">
                         <ObsidianIcon
                             icon="check-circle"
-                            containerStyle={{ opacity: 0.4 }}
-                            iconStyle={{ width: "32px", height: "32px" }}
+                            iconStyle={{ color: "var(--text-faint)" }}
                         />
-                        <p>All systems go. No active tasks.</p>
+                        <span>All systems go. No active tasks.</span>
                     </div>
                 ) : (
                     <div className="zotflow-task-cards">
@@ -283,10 +282,9 @@ export const TasksView: React.FC = () => {
                     <div className="zotflow-tasks-empty">
                         <ObsidianIcon
                             icon="clock"
-                            containerStyle={{ opacity: 0.4 }}
-                            iconStyle={{ width: "32px", height: "32px" }}
+                            iconStyle={{ color: "var(--text-faint)" }}
                         />
-                        <p>No completed tasks yet</p>
+                        <span>No completed tasks yet</span>
                     </div>
                 ) : (
                     <div className="zotflow-history-list">

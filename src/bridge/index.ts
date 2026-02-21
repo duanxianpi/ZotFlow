@@ -15,6 +15,7 @@ import type { WebDavService } from "worker/services/webdav";
 import type { TreeViewService } from "worker/services/tree-view";
 import type { NoteService, UpdateOptions } from "worker/services/note";
 import type { LocalNoteService } from "worker/services/local-note";
+import type { ConflictService } from "worker/services/conflict";
 import type { BatchNoteInput } from "worker/tasks/impl/batch-note-task";
 import type {
     BatchExtractImagesInput,
@@ -23,6 +24,7 @@ import type {
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 import type { AnnotationJSON } from "types/zotero-reader";
+
 import type { App } from "obsidian";
 import { services } from "services/services";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
@@ -39,6 +41,7 @@ export class WorkerBridge {
     private _treeView: TreeViewService;
     private _note: NoteService;
     private _localNote: LocalNoteService;
+    private _conflict: ConflictService;
     private _pdfProcessor: PDFProcessWorker;
     private _tasks: TaskManager;
 
@@ -70,6 +73,7 @@ export class WorkerBridge {
         this._treeView = await this._api.treeView;
         this._note = await this._api.note;
         this._localNote = await this._api.localNote;
+        this._conflict = await this._api.conflict;
         this._pdfProcessor = await this._api.pdfProcessor;
         this._tasks = await this._api.tasks;
 
@@ -126,6 +130,11 @@ export class WorkerBridge {
         return this._localNote;
     }
 
+    get conflict() {
+        this.assertInitialized();
+        return this._conflict;
+    }
+
     get pdfProcessWorker() {
         this.assertInitialized();
         return this._pdfProcessor;
@@ -140,9 +149,9 @@ export class WorkerBridge {
     // Task factory methods (delegates to top-level WorkerAPI methods)
     // ================================================================
 
-    async createSyncTask(): Promise<string> {
+    async createSyncTask(libraryId?: number): Promise<string> {
         this.assertInitialized();
-        return this._api.createSyncTask();
+        return this._api.createSyncTask(libraryId);
     }
 
     async createBatchNoteTask(

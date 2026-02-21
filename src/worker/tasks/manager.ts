@@ -68,9 +68,9 @@ export class TaskManager {
         return this.startTask(task);
     }
 
-    public async createSyncTask(syncService: SyncService) {
+    public async createSyncTask(syncService: SyncService, libraryId?: number) {
         const { SyncTask } = await import("./impl/sync-task");
-        const task = new SyncTask(syncService);
+        const task = new SyncTask(syncService, libraryId);
         return this.startTask(task);
     }
 
