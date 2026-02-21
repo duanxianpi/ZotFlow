@@ -24,6 +24,7 @@ interface LibraryRow {
     canWrite: boolean;
     mode: LibrarySyncMode;
     syncedAt: string; // ISO or display string
+    changedCount: number;
 }
 
 interface ConflictEntry {
@@ -34,6 +35,24 @@ interface ConflictEntry {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+const DIRTY_STATUSES = ["created", "updated", "deleted", "conflict"] as const;
+
+/** Count items + collections with a non-synced status for a library. */
+async function countChangedItems(libraryID: number): Promise<number> {
+    let total = 0;
+    for (const status of DIRTY_STATUSES) {
+        total += await db.items
+            .where("[libraryID+syncStatus]")
+            .equals([libraryID, status])
+            .count();
+        total += await db.collections
+            .where("[libraryID+syncStatus]")
+            .equals([libraryID, status])
+            .count();
+    }
+    return total;
+}
 
 function formatSyncTime(iso: string): string {
     if (!iso) return "Never";
@@ -72,6 +91,8 @@ async function loadLibraries(settings: ZotFlowSettings): Promise<LibraryRow[]> {
             settings.librariesConfig[keyInfo.userID]?.mode ??
             (canWrite ? "bidirectional" : "readonly");
 
+        const changedCount = await countChangedItems(keyInfo.userID);
+
         rows.push({
             id: keyInfo.userID,
             type: "user",
@@ -79,6 +100,7 @@ async function loadLibraries(settings: ZotFlowSettings): Promise<LibraryRow[]> {
             canWrite,
             mode,
             syncedAt: libState?.syncedAt ?? "",
+            changedCount,
         });
     }
 
@@ -97,6 +119,8 @@ async function loadLibraries(settings: ZotFlowSettings): Promise<LibraryRow[]> {
             settings.librariesConfig[group.id]?.mode ??
             (canWrite ? "bidirectional" : "readonly");
 
+        const changedCount = await countChangedItems(group.id);
+
         rows.push({
             id: group.id,
             type: "group",
@@ -104,6 +128,7 @@ async function loadLibraries(settings: ZotFlowSettings): Promise<LibraryRow[]> {
             canWrite,
             mode,
             syncedAt: libState?.syncedAt ?? "",
+            changedCount,
         });
     }
 
@@ -169,6 +194,7 @@ const LibraryTable: React.FC<{
                             <th>Name</th>
                             <th>Access</th>
                             <th>Sync Mode</th>
+                            <th>Changes</th>
                             <th>Last Synced</th>
                             <th></th>
                         </tr>
@@ -225,6 +251,17 @@ const LibraryTable: React.FC<{
                                                   ? "Read-Only"
                                                   : "Ignored"}
                                         </span>
+                                    </td>
+                                    <td>
+                                        {lib.changedCount > 0 ? (
+                                            <span className="zotflow-sync-changed-badge">
+                                                {lib.changedCount}
+                                            </span>
+                                        ) : (
+                                            <span className="zotflow-sync-changed-none">
+                                                —
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="zotflow-sync-time-cell">
                                         {lib.syncedAt

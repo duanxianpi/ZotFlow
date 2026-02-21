@@ -24,6 +24,86 @@ function formatTimestamp(ts: number): string {
     return new Date(ts).toLocaleTimeString("en-US", { hour12: false });
 }
 
+function formatEntryText(entry: LogEntry): string {
+    let text = `[${formatTimestamp(entry.timestamp)}] [${entry.level.toUpperCase()}]`;
+    if (entry.context) text += ` [${entry.context}]`;
+    text += ` ${entry.message}`;
+    if (entry.error) {
+        text += `\n${formatErrorDetail(entry.error)}`;
+    }
+    return text;
+}
+
+function formatErrorDetail(error: unknown): string {
+    if (error instanceof Error) {
+        return error.stack ?? `${error.name}: ${error.message}`;
+    }
+    if (typeof error === "string") return error;
+    try {
+        return JSON.stringify(error, null, 2);
+    } catch {
+        return String(error);
+    }
+}
+
+const LogLine: React.FC<{ entry: LogEntry }> = ({ entry }) => {
+    const [expanded, setExpanded] = useState(false);
+    const hasDetail = !!entry.error;
+    const expandable = hasDetail;
+
+    const handleCopyEntry = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(formatEntryText(entry));
+            services.notificationService.notify("success", "Log entry copied");
+        },
+        [entry],
+    );
+
+    return (
+        <div
+            className={`zotflow-log-line ${getLogLevelClass(entry.level)}${expanded ? " zotflow-log-line--expanded" : ""}${expandable ? " zotflow-log-line--expandable" : ""}`}
+            onClick={expandable ? () => setExpanded((v) => !v) : undefined}
+        >
+            <div className="zotflow-log-line-header">
+                {expandable && (
+                    <span className="zotflow-log-chevron">
+                        <ObsidianIcon
+                            icon={expanded ? "chevron-down" : "chevron-right"}
+                        />
+                    </span>
+                )}
+                <span className="zotflow-log-time">
+                    {formatTimestamp(entry.timestamp)}
+                </span>
+                <span className="zotflow-log-level">
+                    {entry.level.toUpperCase()}
+                </span>
+                {entry.context && (
+                    <span className="zotflow-log-context">
+                        [{entry.context}]
+                    </span>
+                )}
+                <span className={"zotflow-log-msg zotflow-log-msg--truncated"}>
+                    {entry.message}
+                </span>
+                <button
+                    className="zotflow-log-copy-btn clickable-icon"
+                    onClick={handleCopyEntry}
+                    aria-label="Copy log entry"
+                >
+                    <ObsidianIcon icon="copy" />
+                </button>
+            </div>
+            {expanded && hasDetail && (
+                <pre className="zotflow-log-detail">
+                    {formatErrorDetail(entry.error)}
+                </pre>
+            )}
+        </div>
+    );
+};
+
 export const TelemetryView: React.FC = () => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [filter, setFilter] = useState<LogFilter>("all");
@@ -115,25 +195,7 @@ export const TelemetryView: React.FC = () => {
                     </div>
                 ) : (
                     filteredLogs.map((entry) => (
-                        <div
-                            key={entry.id}
-                            className={`zotflow-log-line ${getLogLevelClass(entry.level)}`}
-                        >
-                            <span className="zotflow-log-time">
-                                {formatTimestamp(entry.timestamp)}
-                            </span>
-                            <span className="zotflow-log-level">
-                                {entry.level.toUpperCase()}
-                            </span>
-                            {entry.context && (
-                                <span className="zotflow-log-context">
-                                    [{entry.context}]
-                                </span>
-                            )}
-                            <span className="zotflow-log-msg">
-                                {entry.message}
-                            </span>
-                        </div>
+                        <LogLine key={entry.id} entry={entry} />
                     ))
                 )}
             </div>

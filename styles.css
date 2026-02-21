@@ -877,6 +877,24 @@
     color: var(--text-muted);
 }
 
+.zotflow-sync-changed-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: var(--font-ui-smaller);
+    font-weight: var(--font-semibold);
+    background-color: rgba(var(--color-yellow-rgb), 0.15);
+    color: var(--text-warning);
+}
+
+.zotflow-sync-changed-none {
+    color: var(--text-faint);
+}
+
 .zotflow-sync-time-cell {
     font-family: var(--font-monospace);
     font-size: var(--font-ui-smaller) !important;
@@ -1196,10 +1214,53 @@
 }
 
 .zotflow-log-line {
-    display: flex;
-    gap: var(--size-4-2);
     padding: 2px 0;
     color: var(--text-muted);
+    border-radius: 2px;
+}
+
+.zotflow-log-line--expandable {
+    cursor: pointer;
+}
+
+.zotflow-log-line--expandable:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.zotflow-log-line-header {
+    display: flex;
+    align-items: center;
+    gap: var(--size-4-2);
+}
+
+.zotflow-log-chevron {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-faint);
+}
+
+.zotflow-log-chevron svg {
+    width: 12px;
+    height: 12px;
+}
+
+.zotflow-log-copy-btn {
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    padding: 0 2px;
+}
+
+.zotflow-log-line:hover .zotflow-log-copy-btn {
+    opacity: 1;
+}
+
+.zotflow-log-copy-btn svg {
+    width: 12px;
+    height: 12px;
 }
 
 .zotflow-log-line.zotflow-log-error {
@@ -1238,6 +1299,26 @@
     flex: 1;
     min-width: 0;
     word-break: break-word;
+}
+
+.zotflow-log-msg--truncated {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.zotflow-log-detail {
+    margin: var(--size-4-1) 0 var(--size-4-2) 24px;
+    padding: var(--size-4-2) var(--size-4-3);
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-s);
+    font-size: var(--font-ui-smaller);
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-muted);
+    max-height: 200px;
+    overflow-y: auto;
 }
 
 .zotflow-log-empty {
