@@ -21,6 +21,8 @@ ZotFlow is a community plugin for [Obsidian](https://obsidian.md) that deeply in
 
 ### Source Notes
 
+ZotFlow's source notes follow a **Zettelkasten-inspired** philosophy: each Zotero item gets exactly one atomic note that serves as a permanent reference node in your knowledge graph. The generated note captures bibliographic metadata and your annotations in a structured, reproducible format — acting as a _literature note_ in Zettelkasten terms. Because these notes are auto-generated and locked, they stay faithful to the source material. Your own ideas, interpretations, and connections belong in separate _permanent notes_ that **link back** to the source note, keeping the boundary between "what the author said" and "what I think" clean. This makes source notes stable anchor points you can link to from anywhere in your vault without worrying about drift.
+
 - **Template-powered** — use [LiquidJS](https://liquidjs.com) templates to control exactly how Zotero items are rendered as Markdown notes.
 - **Separate templates** for Zotero items and local vault files.
 - **Auto-update** — source notes regenerate when annotations change.
@@ -177,4 +179,4 @@ Have ideas or found a bug? Please join the discord server!
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=duanxianpi/obsidian-zotflow&type=Date)](https://www.star-history.com/#duanxianpi/obsidian-zotflow&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=duanxianpi/obsidian-zotflow&type=date&legend=top-left)](https://www.star-history.com/#duanxianpi/obsidian-zotflow&type=date&legend=top-left)
