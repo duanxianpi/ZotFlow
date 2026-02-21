@@ -409,6 +409,12 @@ export class IframeReaderBridge {
         });
     }
 
+    refreshAnnotations(annotations: AnnotationJSON[]) {
+        return this.runAfterReaderReady(async () => {
+            await this.child!.refreshAnnotations(annotations);
+        });
+    }
+
     navigate(navigationInfo: any) {
         return this.runAfterReaderReady(async () => {
             await this.child!.navigate(navigationInfo);

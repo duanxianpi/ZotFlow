@@ -14,6 +14,7 @@ import type {
     AnnotationJSON,
     ColorScheme,
 } from "types/zotero-reader";
+import type { ITaskInfo } from "types/tasks";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
 export const ZOTERO_READER_VIEW_TYPE = "zotflow-zotero-reader-view";
@@ -32,6 +33,8 @@ export class ZoteroReaderView extends ItemView {
     private bridge?: IframeReaderBridge;
     private colorSchemeObserver?: MutationObserver;
     private colorScheme: ColorScheme = "light"; // Default to light
+    private unsubscribeTaskMonitor?: () => void;
+    private lastSyncTaskStatuses = new Map<string, ITaskInfo["status"]>();
 
     constructor(leaf: WorkspaceLeaf) {
         super(leaf);
@@ -281,6 +284,9 @@ export class ZoteroReaderView extends ItemView {
 
                 // Extract external annotations
                 this.extractExternalAnnotation();
+
+                // Subscribe to sync events for live annotation updates
+                this.subscribeToSyncEvents();
             }
         } catch (e: any) {
             services.logService.error(
@@ -314,12 +320,78 @@ export class ZoteroReaderView extends ItemView {
     }
 
     async onClose() {
+        this.unsubscribeTaskMonitor?.();
         if (this.colorSchemeObserver) {
             this.colorSchemeObserver.disconnect();
         }
         if (this.bridge) {
             await this.bridge.dispose();
         }
+    }
+
+    /**
+     * Subscribe to TaskMonitor and refresh annotations in the reader
+     * when a sync task that covers this attachment's library completes.
+     */
+    private subscribeToSyncEvents() {
+        // Avoid double-subscribe
+        this.unsubscribeTaskMonitor?.();
+
+        this.unsubscribeTaskMonitor = services.taskMonitor.subscribe(
+            (tasks: ITaskInfo[]) => {
+                for (const task of tasks) {
+                    if (task.type !== "sync") continue;
+
+                    const prev = this.lastSyncTaskStatuses.get(task.id);
+                    this.lastSyncTaskStatuses.set(task.id, task.status);
+
+                    // Only act on a transition *into* "completed"
+                    if (task.status !== "completed" || prev === "completed")
+                        continue;
+
+                    // Check if the sync covers this attachment's library
+                    const taskLibId = task.input?.["libraryId"];
+                    if (
+                        taskLibId !== undefined &&
+                        taskLibId !== this.attachmentItem.libraryID
+                    ) {
+                        continue; // Sync was for a different library
+                    }
+
+                    // Refresh annotations from IDB without reconnecting
+                    services.logService.info(
+                        `Sync completed — refreshing reader annotations (task ${task.id})`,
+                        "ZoteroReaderView",
+                    );
+                    this.refreshAnnotationsFromDB().catch((e) => {
+                        services.logService.error(
+                            "Failed to refresh reader annotations after sync",
+                            "ZoteroReaderView",
+                            e,
+                        );
+                    });
+
+                    // One refresh per update batch is enough
+                    break;
+                }
+            },
+        );
+    }
+
+    /**
+     * Re-read annotations from IDB and push them to the reader iframe
+     * without tearing down the bridge.
+     */
+    private async refreshAnnotationsFromDB() {
+        if (!this.bridge || this.bridge.state !== "reader-ready") return;
+
+        const annotations = await getAnnotationJson(
+            this.attachmentItem,
+            services.settings.zoteroapikey,
+            (item) => item.syncStatus !== "deleted",
+        );
+
+        this.bridge.refreshAnnotations(annotations);
     }
 
     private async extractExternalAnnotation() {

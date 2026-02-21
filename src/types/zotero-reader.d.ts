@@ -85,6 +85,7 @@ export type ChildAPI = {
     initReader: (opts: CreateReaderOptions) => Promise<boolean>;
     setColorScheme: (colorScheme: ColorScheme) => Promise<boolean>;
     addAnnotation: (annotation: AnnotationJSON) => Promise<boolean>;
+    refreshAnnotations: (annotations: AnnotationJSON[]) => Promise<boolean>;
     navigate: (navigationInfo: any) => Promise<boolean>;
     destroy: () => Promise<boolean>;
 };
