@@ -10,6 +10,9 @@ import { PDFProcessWorker } from "./services/pdf-processor";
 import { LocalNoteService } from "./services/local-note";
 import { LocalTemplateService } from "./services/local-template";
 import { ConflictService } from "./services/conflict";
+import { AnnotationService } from "./services/annotation";
+import { KeyService } from "./services/key";
+import { QueryService } from "./services/query";
 import { TaskManager } from "./tasks/manager";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
@@ -24,6 +27,9 @@ import type {
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 import type { AnnotationJSON } from "types/zotero-reader";
+import type { SaveAnnotationsResult } from "./services/annotation";
+import type { LibraryRow } from "./services/key";
+import type { QueryService as QueryServiceType } from "./services/query";
 
 /**
  * Worker API definition
@@ -45,6 +51,9 @@ export interface WorkerAPI {
 
     localNote: LocalNoteService;
     conflict: ConflictService;
+    annotation: AnnotationService;
+    key: KeyService;
+    query: QueryServiceType;
     pdfProcessor: PDFProcessWorker;
     tasks: TaskManager;
     updateSettings(settings: ZotFlowSettings): void;
@@ -80,6 +89,9 @@ let _note: NoteService | undefined;
 let _localNote: LocalNoteService | undefined;
 let _localTemplate: LocalTemplateService | undefined;
 let _conflict: ConflictService | undefined;
+let _annotation: AnnotationService | undefined;
+let _key: KeyService | undefined;
+let _query: QueryService | undefined;
 let _pdfProcessor: PDFProcessWorker | undefined;
 let _taskManager: TaskManager | undefined;
 let _currentSettings: ZotFlowSettings | undefined;
@@ -97,6 +109,9 @@ function assertInitialized() {
         !_localNote ||
         !_localTemplate ||
         !_conflict ||
+        !_annotation ||
+        !_key ||
+        !_query ||
         !_taskManager ||
         !_currentSettings
     ) {
@@ -185,6 +200,10 @@ const exposedApi: WorkerAPI = {
             );
 
             _conflict = new ConflictService(parentHost);
+
+            _annotation = new AnnotationService(_note, parentHost);
+            _key = new KeyService(_zotero, parentHost);
+            _query = new QueryService();
 
             _taskManager = new TaskManager(parentHost);
 
@@ -284,6 +303,36 @@ const exposedApi: WorkerAPI = {
                 "Worker not initialized",
             );
         return Comlink.proxy(_conflict);
+    },
+
+    get annotation() {
+        if (!_annotation)
+            throw new ZotFlowError(
+                ZotFlowErrorCode.UNKNOWN,
+                "Worker",
+                "Worker not initialized",
+            );
+        return Comlink.proxy(_annotation);
+    },
+
+    get key() {
+        if (!_key)
+            throw new ZotFlowError(
+                ZotFlowErrorCode.UNKNOWN,
+                "Worker",
+                "Worker not initialized",
+            );
+        return Comlink.proxy(_key);
+    },
+
+    get query() {
+        if (!_query)
+            throw new ZotFlowError(
+                ZotFlowErrorCode.UNKNOWN,
+                "Worker",
+                "Worker not initialized",
+            );
+        return Comlink.proxy(_query);
     },
 
     get pdfProcessor() {

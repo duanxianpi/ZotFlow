@@ -6,18 +6,25 @@ This guide walks you through installing ZotFlow, connecting your Zotero account,
 
 ## 1. Install ZotFlow
 
-<!-- ### From Community Plugins (Recommended)
+> **Note:** This plugin is currently in beta and not available in the official Obsidian Community Plugins store yet.
 
-1. Open **Settings → Community plugins → Browse**.
-2. Search for **ZotFlow**.
-3. Click **Install**, then **Enable**. -->
+1. **Install BRAT Plugin**
+    - Open Obsidian Settings (⚙️)
+    - Go to **Community plugins**
+    - Click **Browse** and search for "BRAT"
+    - Install and enable the **BRAT** plugin
 
-### Manual Installation
+2. **Add Beta Plugin**
+    - In Obsidian, open **Settings → Community plugins**
+    - Find **BRAT** in your installed plugins and click **Options**
+    - Click **Add Beta plugin**
+    - Enter the repository: `duanxianpi/obsidian-zotflow`
+    - Click **Add Plugin**
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the discord.
-2. Create a folder at `<your-vault>/.obsidian/plugins/obsidian-zotflow/`.
-3. Copy the three files into that folder.
-4. Reload Obsidian → **Settings → Community plugins** → enable **ZotFlow**.
+3. **Enable Plugin**
+    - Go to **Settings → Community plugins**
+    - Find **Obsidian ZotFlow** in the list
+    - Toggle it on to enable
 
 ---
 

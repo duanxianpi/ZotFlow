@@ -2,7 +2,6 @@ import * as Comlink from "comlink";
 // @ts-ignore
 import workerCode from "virtual:worker";
 import { ParentHost } from "./parent-host";
-import { PDFProcessWorker } from "worker/services/pdf-processor";
 import { getBlobUrls } from "bundle-assets/inline-assets";
 
 import type { WorkerAPI } from "worker/worker";
@@ -16,6 +15,10 @@ import type { TreeViewService } from "worker/services/tree-view";
 import type { NoteService, UpdateOptions } from "worker/services/note";
 import type { LocalNoteService } from "worker/services/local-note";
 import type { ConflictService } from "worker/services/conflict";
+import type { AnnotationService } from "worker/services/annotation";
+import type { KeyService } from "worker/services/key";
+import type { QueryService } from "worker/services/query";
+import type { PDFProcessWorker } from "worker/services/pdf-processor";
 import type { BatchNoteInput } from "worker/tasks/impl/batch-note-task";
 import type {
     BatchExtractImagesInput,
@@ -42,6 +45,9 @@ export class WorkerBridge {
     private _note: NoteService;
     private _localNote: LocalNoteService;
     private _conflict: ConflictService;
+    private _annotation: AnnotationService;
+    private _key: KeyService;
+    private _query: QueryService;
     private _pdfProcessor: PDFProcessWorker;
     private _tasks: TaskManager;
 
@@ -74,6 +80,9 @@ export class WorkerBridge {
         this._note = await this._api.note;
         this._localNote = await this._api.localNote;
         this._conflict = await this._api.conflict;
+        this._annotation = await this._api.annotation;
+        this._key = await this._api.key;
+        this._query = await this._api.query;
         this._pdfProcessor = await this._api.pdfProcessor;
         this._tasks = await this._api.tasks;
 
@@ -133,6 +142,21 @@ export class WorkerBridge {
     get conflict() {
         this.assertInitialized();
         return this._conflict;
+    }
+
+    get annotation() {
+        this.assertInitialized();
+        return this._annotation;
+    }
+
+    get key() {
+        this.assertInitialized();
+        return this._key;
+    }
+
+    get query() {
+        this.assertInitialized();
+        return this._query;
     }
 
     get pdfProcessWorker() {

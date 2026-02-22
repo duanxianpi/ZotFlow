@@ -425,6 +425,21 @@ export class AttachmentService {
     }
 
     /**
+     * Return the total size in bytes of all cached files.
+     */
+    async getCacheTotalSizeBytes(): Promise<number> {
+        const allFiles = await db.files.toArray();
+        return allFiles.reduce((acc, file) => acc + (file.size || 0), 0);
+    }
+
+    /**
+     * Delete all cached files.
+     */
+    async purgeCache(): Promise<void> {
+        await db.files.clear();
+    }
+
+    /**
      * LRU Cache Pruning
      */
     private async pruneCache() {

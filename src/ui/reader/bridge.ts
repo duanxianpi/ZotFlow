@@ -33,9 +33,9 @@ import { v4 as uuidv4 } from "uuid";
 import { connect, WindowMessenger } from "penpal";
 import { getBlobUrls } from "bundle-assets/inline-assets";
 import { services } from "services/services";
+import { workerBridge } from "bridge";
 
 import type { ZotFlowSettings } from "settings/types";
-import { getAnnotationJson } from "db/annotation";
 import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 import type { LocalAnnotationManager } from "./local-anno-manager";
@@ -343,11 +343,11 @@ export class IframeReaderBridge {
             let newAnnotationJson: AnnotationJSON[] = [];
 
             if (!this.isLocal && this.attachmentItem) {
-                newAnnotationJson = await getAnnotationJson(
-                    this.attachmentItem,
-                    services.settings.zoteroapikey,
-                    (item) => item.syncStatus !== "deleted",
-                );
+                newAnnotationJson =
+                    await workerBridge.annotation.getAnnotations(
+                        this.attachmentItem,
+                        services.settings.zoteroapikey,
+                    );
             } else if (this.isLocal && this.localAnnoManager) {
                 newAnnotationJson = this.localAnnoManager.getAll();
             }

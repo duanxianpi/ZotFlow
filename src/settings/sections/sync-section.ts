@@ -1,12 +1,10 @@
 import { Setting, ButtonComponent, setIcon, SettingGroup } from "obsidian";
-import { db } from "db/db";
 import { workerBridge } from "bridge";
 import { services } from "services/services";
 
 import type ZotFlow from "main";
-import type { ZoteroGroup } from "types/zotero";
-import type { IDBZoteroKey } from "types/db-schema";
 import type { LibrarySyncMode } from "settings/types";
+import type { LibraryRow } from "worker/services/key";
 
 export class SyncSection {
     constructor(
@@ -19,7 +17,9 @@ export class SyncSection {
         settingGroup.setHeading("Synchronization");
 
         // Retrieve cached key info
-        const keyInfo = await db.keys.get(this.plugin.settings.zoteroapikey);
+        const keyInfo = await workerBridge.key.getKeyInfo(
+            this.plugin.settings.zoteroapikey,
+        );
 
         // Description
         const apiDescContainer = new DocumentFragment();
@@ -79,7 +79,7 @@ export class SyncSection {
                         const oldKey = this.plugin.settings.zoteroapikey;
                         this.plugin.settings.zoteroapikey = "";
                         this.plugin.settings.librariesConfig = {};
-                        if (oldKey) await db.keys.delete(oldKey);
+                        if (oldKey) await workerBridge.key.deleteKey(oldKey);
 
                         await this.plugin.saveSettings();
 
@@ -104,11 +104,10 @@ export class SyncSection {
     }
 
     private async renderLibrariesTable(containerEl: HTMLElement) {
-        const keyInfo = await db.keys.get(this.plugin.settings.zoteroapikey);
-        if (!keyInfo) return;
-
-        // Prepare Data
-        const libraryItems = await this.prepareLibraryData(keyInfo);
+        // Prepare Data — the KeyService computes everything we need
+        const libraryItems = await workerBridge.key.getLibraryRows(
+            this.plugin.settings,
+        );
 
         if (libraryItems.length === 0) {
             containerEl.createDiv({
@@ -208,71 +207,6 @@ export class SyncSection {
         );
     }
 
-    // Prepare Library Data
-    private async prepareLibraryData(keyInfo: IDBZoteroKey) {
-        const libraryItems: {
-            id: number;
-            type: "user" | "group";
-            name: string;
-            canRead: boolean;
-            canWrite: boolean;
-            allowedModes: LibrarySyncMode[];
-            defaultMode: LibrarySyncMode;
-        }[] = [];
-
-        const getModes = (
-            canRead: boolean,
-            canWrite: boolean,
-        ): { default: LibrarySyncMode; allowed: LibrarySyncMode[] } => {
-            if (!canRead) return { default: "ignored", allowed: ["ignored"] };
-            const defaultMode: LibrarySyncMode = canWrite
-                ? "bidirectional"
-                : "readonly";
-            const allowed: LibrarySyncMode[] = canWrite
-                ? ["bidirectional", "readonly", "ignored"]
-                : ["readonly", "ignored"];
-            return { default: defaultMode, allowed };
-        };
-
-        if (keyInfo.access.user) {
-            const u = keyInfo.access.user;
-            const canRead = !!(u.library && u.files && u.notes);
-            const canWrite = !!u.write;
-            const { default: def, allowed } = getModes(canRead, canWrite);
-            libraryItems.push({
-                id: keyInfo.userID,
-                type: "user",
-                name: "My Library",
-                canRead,
-                canWrite,
-                allowedModes: allowed,
-                defaultMode: def,
-            });
-        }
-
-        for (const groupId of keyInfo.joinedGroups) {
-            const group = await db.groups.get(groupId);
-            if (group) {
-                const gAccess = keyInfo.access.groups;
-                const specific = gAccess?.[groupId];
-                const all = gAccess?.all;
-                const canRead = specific?.library ?? all?.library ?? false;
-                const canWrite = specific?.write ?? all?.write ?? false;
-                const { default: def, allowed } = getModes(canRead, canWrite);
-                libraryItems.push({
-                    id: group.id,
-                    type: "group",
-                    name: group.name,
-                    canRead,
-                    canWrite,
-                    allowedModes: allowed,
-                    defaultMode: def,
-                });
-            }
-        }
-        return libraryItems;
-    }
-
     private async handleVerifyOrRefresh(
         btn: ButtonComponent,
         mode: "verify" | "refresh",
@@ -291,61 +225,13 @@ export class SyncSection {
         btn.setDisabled(true);
 
         try {
-            // Use Worker Bridge
-            const verifiedKeyInfo = await workerBridge.zotero.verifyKey(apiKey);
-
-            if (!verifiedKeyInfo) throw new Error("Invalid API Key");
-
-            // Fetch Groups via Worker
-            const groups: ZoteroGroup[] = await workerBridge.zotero.getGroups(
-                verifiedKeyInfo.userID,
-            );
-
-            await db.keys.put({
-                joinedGroups: groups.map((g) => g.id),
-                ...verifiedKeyInfo,
-            });
-
-            await db.groups.bulkPut(groups);
-
-            // Create library records if not exist
-            const libState = await db.libraries.get(verifiedKeyInfo.userID);
-
-            if (!libState) {
-                await db.libraries.add({
-                    id: verifiedKeyInfo.userID,
-                    type: "user",
-                    name: "My Library",
-                    collectionVersion: 0,
-                    itemVersion: 0,
-                    syncedAt: new Date().toISOString().split(".")[0] + "Z",
-                });
-            }
-
-            await Promise.all(
-                groups.map(async (group) => {
-                    const libState = await db.libraries.get(group.id);
-                    if (!libState) {
-                        await db.libraries.add({
-                            id: group.id,
-                            type: "group",
-                            name: group.name,
-                            collectionVersion: 0,
-                            itemVersion: 0,
-                            syncedAt:
-                                new Date().toISOString().split(".")[0] + "Z",
-                        });
-                    } else if (libState.name !== group.name) {
-                        libState.name = group.name;
-                        await db.libraries.put(libState);
-                    }
-                }),
-            );
+            // Verify key & persist key/groups/libraries via worker
+            const result = await workerBridge.key.verifyAndPersistKey(apiKey);
 
             services.notificationService.notify(
                 "success",
                 mode === "verify"
-                    ? `Verified as ${verifiedKeyInfo.username}`
+                    ? `Verified as ${result.username}`
                     : "Libraries refreshed.",
             );
             await this.plugin.saveSettings();

@@ -1,13 +1,10 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { workerBridge } from "bridge";
 import { IframeReaderBridge } from "./bridge";
-import { db, getCombinations } from "db/db";
-import { annotationItemFromJSON, getAnnotationJson } from "db/annotation";
-import { toZoteroDate } from "db/normalize";
 import { services } from "services/services";
 
 import type { ViewStateResult } from "obsidian";
-import type { AttachmentData, AnnotationData } from "types/zotero-item";
+import type { AttachmentData } from "types/zotero-item";
 import type { IDBZoteroItem, IDBZoteroKey } from "types/db-schema";
 import type {
     CreateReaderOptions,
@@ -56,7 +53,9 @@ export class ZoteroReaderView extends ItemView {
         state: ReaderViewState,
         result: ViewStateResult,
     ): Promise<void> {
-        const _keyInfo = await db.keys.get(services.settings.zoteroapikey);
+        const _keyInfo = await workerBridge.annotation.getKeyInfo(
+            services.settings.zoteroapikey,
+        );
 
         if (!_keyInfo) {
             services.logService.error(
@@ -69,8 +68,11 @@ export class ZoteroReaderView extends ItemView {
         }
 
         if (state.itemKey) {
-            const _item = await db.items.get([state.libraryID, state.itemKey]);
-            if (!_item || _item.itemType !== "attachment") {
+            const _item = await workerBridge.query.getAttachmentItem(
+                state.libraryID,
+                state.itemKey,
+            );
+            if (!_item) {
                 services.logService.error(
                     `Item ${state.itemKey} doesn't exist or is not an attachment`,
                     "ZoteroReaderView",
@@ -226,10 +228,9 @@ export class ZoteroReaderView extends ItemView {
             }
 
             // Get Annotations
-            const annotationJson = await getAnnotationJson(
+            const annotationJson = await workerBridge.annotation.getAnnotations(
                 this.attachmentItem,
                 services.settings.zoteroapikey,
-                (item) => item.syncStatus !== "deleted",
             );
             // Initialize Reader if ready
             if (this.bridge.state === "bridge-ready") {
@@ -385,10 +386,9 @@ export class ZoteroReaderView extends ItemView {
     private async refreshAnnotationsFromDB() {
         if (!this.bridge || this.bridge.state !== "reader-ready") return;
 
-        const annotations = await getAnnotationJson(
+        const annotations = await workerBridge.annotation.getAnnotations(
             this.attachmentItem,
             services.settings.zoteroapikey,
-            (item) => item.syncStatus !== "deleted",
         );
 
         this.bridge.refreshAnnotations(annotations);
@@ -450,303 +450,47 @@ export class ZoteroReaderView extends ItemView {
     }
 
     /**
-     * Compare annotation data to check if it has changed
-     */
-    private annotationDataDiff(
-        existing: AnnotationData,
-        annotationData: Partial<AnnotationData>,
-    ) {
-        return (
-            existing.annotationComment !== annotationData.annotationComment ||
-            existing.annotationColor !== annotationData.annotationColor ||
-            existing.annotationPageLabel !==
-                annotationData.annotationPageLabel ||
-            existing.annotationPosition !== annotationData.annotationPosition ||
-            existing.annotationSortIndex !==
-                annotationData.annotationSortIndex ||
-            existing.annotationText !== annotationData.annotationText ||
-            existing.annotationType !== annotationData.annotationType
-        );
-    }
-
-    /**
      * Handle saved/updated annotations
      */
-    private async handleAnnotationsSaved(annotations: any[]) {
-        const { libraryID, parentItem: paperKey } = this.attachmentItem;
-        const library = this.attachmentItem.raw.library;
-        const attachmentKey = this.attachmentItem.key;
-
-        let hasChanges = false;
-
-        const itemsToPut: IDBZoteroItem<AnnotationData>[] = [];
-
-        const existingItems = (
-            await db.items
-                .where({
-                    libraryID,
-                    parentItem: attachmentKey,
-                    itemType: "annotation",
-                })
-                .toArray()
-        ).filter(
-            (i) => i.syncStatus !== "deleted" && i.syncStatus !== "ignore",
-        ) as IDBZoteroItem<AnnotationData>[];
-
-        const existingMap = new Map(existingItems.map((i) => [i.key, i]));
-
-        const now = new Date().toISOString().split(".")[0] + "Z";
-        const zoteroDate = toZoteroDate(new Date().toISOString());
-
-        for (const json of annotations) {
-            const annotationData = annotationItemFromJSON(json);
-            const key = json.id;
-            const existing = existingMap.get(key);
-            const isVisual =
-                annotationData.annotationType === "image" ||
-                annotationData.annotationType === "ink";
-            if (isVisual && json.image) {
-                workerBridge.note
-                    .saveBase64Image(json.image, key)
-                    .catch((e) => {
-                        services.logService.error(
-                            `Failed to save annotation image for ${key}`,
-                            "ZoteroReaderView",
-                            e,
-                        );
-                        services.notificationService.notify(
-                            "error",
-                            `Failed to save annotation image for ${key}`,
-                        );
-                    });
-            }
-
-            if (existing) {
-                // === Update logic (UPDATE) ===
-                if (!json.isExternal) {
-                    if (
-                        this.annotationDataDiff(
-                            existing.raw.data,
-                            annotationData,
-                        )
-                    ) {
-                        hasChanges = true;
-
-                        const newSyncStatus =
-                            existing.syncStatus === "created"
-                                ? "created"
-                                : "updated";
-
-                        itemsToPut.push({
-                            ...existing,
-                            syncStatus: newSyncStatus,
-                            dateModified: now,
-                            raw: {
-                                ...existing.raw,
-                                data: {
-                                    ...existing.raw.data,
-                                    ...annotationData,
-                                    dateModified: zoteroDate,
-                                } as any,
-                            },
-                        });
-                    }
-                }
-            } else {
-                // === Create logic (CREATE) ===
-                hasChanges = true;
-
-                const newItem: IDBZoteroItem<AnnotationData> = {
-                    libraryID,
-                    key,
-                    itemType: "annotation",
-                    parentItem: attachmentKey, // Annotation parent item is PDF
-                    title: "",
-                    collections: [],
-                    dateAdded: now,
-                    dateModified: now,
-                    version: 0,
-                    trashed: 0,
-                    searchCreators: [],
-                    searchTags: [],
-                    syncStatus: !json.isExternal ? "created" : "ignore",
-                    syncedAt: now,
-                    syncError: "",
-                    annotationImageVersion: 1,
-                    raw: {
-                        key,
-                        version: 0,
-                        library,
-                        links: {},
-                        meta: { numChildren: 0 },
-                        data: {
-                            ...annotationData,
-                            key,
-                            itemType: "annotation",
-                            parentItem: attachmentKey,
-                            relations: {},
-                            dateAdded: zoteroDate,
-                            dateModified: zoteroDate,
-                            tags: annotationData.tags || [],
-                            deleted: false,
-                            version: 0,
-                        } as unknown as AnnotationData,
-                    },
-                };
-
-                if (library.type === "group" && this.keyInfo) {
-                    newItem.raw.meta.createdByUser = {
-                        id: this.keyInfo.userID,
-                        name: this.keyInfo.displayName,
-                        username: this.keyInfo.username,
-                        links: {},
-                    };
-                }
-
-                itemsToPut.push(newItem);
-            }
-        }
-
-        // Execute batch transaction
-        if (itemsToPut.length > 0) {
-            await db.transaction("rw", db.items, async () => {
-                await db.items.bulkPut(itemsToPut);
-            });
-        }
-
-        // Debounce Update Source Note
-        if (hasChanges) {
-            services.logService.log(
-                "debug",
-                `Triggering update for note: ${paperKey}`,
-                "ZoteroReaderView",
+    private async handleAnnotationsSaved(annotations: AnnotationJSON[]) {
+        try {
+            await workerBridge.annotation.saveAnnotations(
+                this.attachmentItem,
+                this.keyInfo,
+                annotations,
             );
-            workerBridge.note
-                .triggerUpdate(
-                    libraryID,
-                    paperKey !== "" ? paperKey : attachmentKey,
-                    {
-                        forceUpdateContent: true,
-                        forceUpdateImages: false,
-                    },
-                    true,
-                )
-                .catch((e) => {
-                    services.logService.error(
-                        "Failed to trigger note update after annotation save",
-                        "ZoteroReaderView",
-                        e,
-                    );
-                    services.notificationService.notify(
-                        "error",
-                        "Failed to trigger note update after annotation save",
-                    );
-                });
+        } catch (e) {
+            services.logService.error(
+                "Failed to save annotations",
+                "ZoteroReaderView",
+                e,
+            );
+            services.notificationService.notify(
+                "error",
+                "Failed to save annotations",
+            );
         }
     }
 
     /**
      * Handle deleted annotations
-     * Optimization: Batch processing
      */
     private async handleAnnotationsDeleted(ids: string[]) {
-        services.logService.log(
-            "debug",
-            `Handling deleted annotations: ${ids.join(", ")}`,
-            "ZoteroReaderView",
-        );
-        const { libraryID } = this.attachmentItem;
-        const paperKey = this.attachmentItem.parentItem;
-
-        if (!ids.length) return;
-
-        const itemsToDeletePhysical: [number, string][] = [];
-        const itemsToDeleteSoft: IDBZoteroItem<AnnotationData>[] = [];
-        const now = new Date().toISOString().split(".")[0] + "Z";
-
-        // Read affected items to determine types
-        const items = (await db.items
-            .where(["libraryID", "key"])
-            .anyOf(getCombinations([[libraryID], ids]))
-            .toArray()) as IDBZoteroItem<AnnotationData>[];
-
-        services.logService.log(
-            "debug",
-            `Found ${items.length} annotations to delete`,
-            "ZoteroReaderView",
-        );
-
-        // Iterate and handle delete logic
-        for (const existing of items) {
-            const isVisual =
-                existing.raw.data.annotationType === "image" ||
-                existing.raw.data.annotationType === "ink";
-
-            // Only delete physical images if it's a visual annotation
-            if (isVisual) {
-                workerBridge.note
-                    .deleteAnnotationImage(existing.key)
-                    .catch((e) => {
-                        services.logService.error(
-                            `Failed to delete annotation image for ${existing.key}`,
-                            "ZoteroReaderView",
-                            e,
-                        );
-                        services.notificationService.notify(
-                            "error",
-                            `Failed to delete annotation image for ${existing.key}`,
-                        );
-                    });
-            }
-
-            if (existing.syncStatus === "created") {
-                itemsToDeletePhysical.push([libraryID, existing.key]);
-            } else {
-                itemsToDeleteSoft.push({
-                    ...existing,
-                    syncStatus: "deleted",
-                    dateModified: now,
-                    raw: {
-                        ...existing.raw,
-                        data: {
-                            ...existing.raw.data,
-                            deleted: true,
-                        } as any,
-                    },
-                });
-            }
+        try {
+            await workerBridge.annotation.deleteAnnotations(
+                this.attachmentItem,
+                ids,
+            );
+        } catch (e) {
+            services.logService.error(
+                "Failed to delete annotations",
+                "ZoteroReaderView",
+                e,
+            );
+            services.notificationService.notify(
+                "error",
+                "Failed to delete annotations",
+            );
         }
-
-        // Execute batch transaction
-        if (itemsToDeletePhysical.length > 0 || itemsToDeleteSoft.length > 0) {
-            await db.transaction("rw", db.items, async () => {
-                if (itemsToDeletePhysical.length > 0) {
-                    await db.items.bulkDelete(itemsToDeletePhysical);
-                }
-                if (itemsToDeleteSoft.length > 0) {
-                    await db.items.bulkPut(itemsToDeleteSoft);
-                }
-            });
-        }
-
-        // Trigger note update
-        workerBridge.note
-            .triggerUpdate(
-                libraryID,
-                paperKey !== "" ? paperKey : this.attachmentItem.key,
-                { forceUpdateContent: true },
-                true,
-            )
-            .catch((e) => {
-                services.logService.error(
-                    "Failed to trigger note update after annotation delete",
-                    "ZoteroReaderView",
-                    e,
-                );
-                services.notificationService.notify(
-                    "error",
-                    "Failed to trigger note update after annotation delete",
-                );
-            });
     }
 }

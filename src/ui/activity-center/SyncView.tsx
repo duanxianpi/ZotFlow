@@ -1,31 +1,19 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { ObsidianIcon } from "../ObsidianIcon";
-import { db } from "db/db";
 import { workerBridge } from "bridge";
 import { services } from "services/services";
 
-import type { IDBZoteroKey, IDBZoteroLibrary } from "types/db-schema";
-import type { LibrarySyncMode, ZotFlowSettings } from "settings/types";
 import type {
     ConflictItemInfo,
     ConflictCollectionInfo,
     ConflictAction,
     FieldDiff,
 } from "worker/services/conflict";
+import type { LibraryRow } from "worker/services/key";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
-
-interface LibraryRow {
-    id: number;
-    type: "user" | "group";
-    name: string;
-    canWrite: boolean;
-    mode: LibrarySyncMode;
-    syncedAt: string; // ISO or display string
-    changedCount: number;
-}
 
 interface ConflictEntry {
     kind: "item" | "collection";
@@ -35,24 +23,6 @@ interface ConflictEntry {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-const DIRTY_STATUSES = ["created", "updated", "deleted", "conflict"] as const;
-
-/** Count items + collections with a non-synced status for a library. */
-async function countChangedItems(libraryID: number): Promise<number> {
-    let total = 0;
-    for (const status of DIRTY_STATUSES) {
-        total += await db.items
-            .where("[libraryID+syncStatus]")
-            .equals([libraryID, status])
-            .count();
-        total += await db.collections
-            .where("[libraryID+syncStatus]")
-            .equals([libraryID, status])
-            .count();
-    }
-    return total;
-}
 
 function formatSyncTime(iso: string): string {
     if (!iso) return "Never";
@@ -72,67 +42,8 @@ function formatSyncTime(iso: string): string {
 /*  Data loading                                                       */
 /* ------------------------------------------------------------------ */
 
-async function loadLibraries(settings: ZotFlowSettings): Promise<LibraryRow[]> {
-    const keyInfo: IDBZoteroKey | undefined = await db.keys.get(
-        settings.zoteroapikey,
-    );
-    if (!keyInfo) return [];
-
-    const rows: LibraryRow[] = [];
-
-    // Personal library
-    if (keyInfo.access.user) {
-        const u = keyInfo.access.user;
-        const canWrite = !!u.write;
-        const libState: IDBZoteroLibrary | undefined = await db.libraries.get(
-            keyInfo.userID,
-        );
-        const mode =
-            settings.librariesConfig[keyInfo.userID]?.mode ??
-            (canWrite ? "bidirectional" : "readonly");
-
-        const changedCount = await countChangedItems(keyInfo.userID);
-
-        rows.push({
-            id: keyInfo.userID,
-            type: "user",
-            name: "My Library",
-            canWrite,
-            mode,
-            syncedAt: libState?.syncedAt ?? "",
-            changedCount,
-        });
-    }
-
-    // Group libraries
-    for (const groupId of keyInfo.joinedGroups) {
-        const group = await db.groups.get(groupId);
-        if (!group) continue;
-        const gAccess = keyInfo.access.groups;
-        const specific = gAccess?.[groupId];
-        const all = gAccess?.all;
-        const canWrite = specific?.write ?? all?.write ?? false;
-        const libState: IDBZoteroLibrary | undefined = await db.libraries.get(
-            group.id,
-        );
-        const mode =
-            settings.librariesConfig[group.id]?.mode ??
-            (canWrite ? "bidirectional" : "readonly");
-
-        const changedCount = await countChangedItems(group.id);
-
-        rows.push({
-            id: group.id,
-            type: "group",
-            name: group.name,
-            canWrite,
-            mode,
-            syncedAt: libState?.syncedAt ?? "",
-            changedCount,
-        });
-    }
-
-    return rows;
+async function loadLibraries(): Promise<LibraryRow[]> {
+    return workerBridge.key.getLibraryRows(services.settings);
 }
 
 /** Load all conflicts via the ConflictService in the worker. */
@@ -485,9 +396,8 @@ export const SyncView: React.FC = () => {
     // Load data on mount
     const refresh = useCallback(async () => {
         try {
-            const settings = services.settings;
             const [libs, conf] = await Promise.all([
-                loadLibraries(settings),
+                loadLibraries(),
                 loadConflicts(),
             ]);
             setLibraries(libs);
