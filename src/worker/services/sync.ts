@@ -457,6 +457,9 @@ export class SyncService {
         libraryID: number,
         parentKey: string,
     ): Promise<any[]> {
+        // Guard: empty parentKey would match ALL top-level collections
+        if (!parentKey) return [];
+
         const children = await db.collections
             .where({
                 libraryID: libraryID,
@@ -670,6 +673,9 @@ export class SyncService {
         libraryID: number,
         parentKey: string,
     ): Promise<any[]> {
+        // Guard: empty parentKey would match ALL top-level items
+        if (!parentKey) return [];
+
         const children = await db.items
             .where({ libraryID: libraryID, parentItem: parentKey })
             .toArray();

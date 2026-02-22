@@ -54,6 +54,16 @@ export class ZotFlowDB extends Dexie {
             // Zotero Files
             files: "&[libraryID+key], md5, lastAccessedAt",
         });
+
+        // v2: Add [libraryID+parentCollection] index to collections
+        this.version(2).stores({
+            collections: `
+                &[libraryID+key], 
+                [libraryID+trashed],
+                [libraryID+syncStatus],
+                [libraryID+parentCollection]
+            `,
+        });
     }
 }
 
