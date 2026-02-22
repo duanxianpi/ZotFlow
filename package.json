@@ -8,7 +8,7 @@
         "generate-zotero-item-schema": "node scripts/generate-zotero-item-schema.js",
         "dev:reader": "cd reader/reader && npm install && webpack --config webpack.obsidian.js --mode development --watch",
         "dev:plugin": "node esbuild.config.mjs",
-        "build": "npm run build:plugin",
+        "build": "npm run build:reader && npm run build:plugin",
         "build:ci": "npm run build:pdf.js && npm run build:reader && npm run build:plugin",
         "build:pdf.js": "cd reader/reader && npm run build:pdf.js",
         "build:reader": "cd reader/reader && npm install && webpack --config webpack.obsidian.js --mode production",
