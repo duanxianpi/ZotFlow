@@ -1,10 +1,9 @@
-name: Node.js build
+name: Release
 
 on:
     push:
-        branches: ["master"]
-    pull_request:
-        branches: ["master"]
+        tags:
+            - "*"
 
 env:
     PLUGIN_NAME: obsidian-zotflow
@@ -19,11 +18,8 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
-
-            # --- Added Step ---
-            - name: Initialize Submodules
-              run: git submodule update --init --recursive
-            # ------------------
+              with:
+                  submodules: recursive
 
             - name: Use Node.js ${{ matrix.node-version }}
               uses: actions/setup-node@v4
@@ -32,26 +28,24 @@ jobs:
                   cache: "npm"
             - run: npm ci
             - run: npm run build:ci --if-present
-            # - run: npm run lint
 
-            - name: Package and Get Latest Tag
+            - name: Package
               id: build
               run: |
                   mkdir ${{ env.PLUGIN_NAME }}
                   cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}
                   zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
                   ls
-                  echo "tag_name=$(git tag --sort=version:refname | tail -n 1)" >> "$GITHUB_OUTPUT"
+                  echo "tag_name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
             - name: Create Release
               id: create_release
               uses: actions/create-release@v1
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  VERSION: ${{ github.ref }}
               with:
-                  tag_name: ${{ github.ref }}
-                  release_name: ${{ github.ref }}
+                  tag_name: ${{ github.ref_name }}
+                  release_name: ${{ github.ref_name }}
                   draft: false
                   prerelease: false
 
