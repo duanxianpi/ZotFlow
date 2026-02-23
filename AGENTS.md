@@ -69,14 +69,17 @@ processing.
 │       │     ├── template.ts     (LiquidJS item templates)    │
 │       │     ├── local-template.ts (LiquidJS local templates) │
 │       │     ├── tree-view.ts    (tree topology builder)      │
-│       │     └── pdf-processor.ts (nested PDF.js Worker)      │
+│       │     ├── pdf-processor.ts (nested PDF.js Worker)      │
+│       │     ├── annotation.ts   (reader annotation CRUD)     │
+│       │     ├── key.ts          (API key/library metadata)   │
+│       │     └── query.ts        (general-purpose DB queries) │
 │       │                                                      │
 │       └── tasks/                                             │
 │             ├── base.ts         (BaseTask abstract class)    │
 │             ├── manager.ts      (TaskManager + AbortController) │
 │             └── impl/           (SyncTask, TestTask)         │
 │                                                              │
-│  db/  (Dexie.js — IndexedDB)                                │
+│  db/  (Dexie.js — IndexedDB, WORKER-ONLY)                    │
 │       ├── db.ts          (schema: keys, groups, items,       │
 │       │                   collections, libraries, files)     │
 │       ├── normalize.ts   (API response → IDB shape)          │
@@ -216,9 +219,9 @@ src/
 │   └── patch-inlined-assets.ts     # Rewrite viewer.html to use Blob URLs
 │
 ├── db/
-│   ├── db.ts                       # Dexie schema & getCombinations() helper
-│   ├── normalize.ts                # Zotero API → IDB normalization
-│   └── annotation.ts               # AnnotationJSON ↔ IDB conversion
+│   ├── db.ts                       # Dexie schema & getCombinations() helper (WORKER-ONLY)
+│   ├── normalize.ts                # Zotero API → IDB normalization (WORKER-ONLY)
+│   └── annotation.ts               # AnnotationJSON ↔ IDB conversion (WORKER-ONLY)
 │
 ├── services/
 │   ├── services.ts                 # ServiceLocator singleton (main thread)
@@ -281,7 +284,10 @@ src/
 │   │   ├── template.ts             # TemplateService (LiquidJS for Zotero items)
 │   │   ├── local-template.ts       # LocalTemplateService (LiquidJS for local files)
 │   │   ├── tree-view.ts            # TreeViewService (builds flattened topology)
-│   │   └── pdf-processor.ts        # PDFProcessWorker (nested Worker for PDF.js)
+│   │   ├── pdf-processor.ts        # PDFProcessWorker (nested Worker for PDF.js)
+│   │   ├── annotation.ts           # AnnotationService (reader annotation CRUD)
+│   │   ├── key.ts                  # KeyService (API key verify, library metadata)
+│   │   └── query.ts                # QueryService (general-purpose DB lookups)
 │   └── tasks/
 │       ├── base.ts                 # BaseTask abstract (id, status, progress)
 │       ├── manager.ts              # TaskManager (register, start, cancel)
@@ -373,15 +379,23 @@ import * as Comlink from "comlink";
 import { Notice, Plugin } from "obsidian";
 
 // 2. Internal modules (absolute from src/)
-import { db } from "db/db";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 import type { ZotFlowSettings } from "settings/types";
 
 // 3. Use `import type` for type-only imports (required by verbatimModuleSyntax)
 import type { IParentProxy } from "bridge/types";
+
+// 4. Worker-only modules — NEVER import these from main-thread code
+import { db } from "db/db"; // Only in src/worker/ files
+import { getAnnotationJson } from "db/annotation"; // Only in src/worker/ files
 ```
 
 Imports use **absolute paths from `src/`** (configured via `baseUrl`). Do not use relative paths like `../../db/db` — use `db/db` instead.
+
+**Import isolation rule:** `bridge/index.ts` must use `import type` for all
+worker service imports (e.g. `import type { AnnotationService } from
+"worker/services/annotation"`). A value import would pull the entire worker
+dependency tree (including Dexie) into the main bundle.
 
 ### 6.3 Error handling
 
@@ -498,7 +512,30 @@ const response = await fetch(url, { ... }); // transparently proxied
 
 ---
 
-## 9. Database (Dexie/IndexedDB)
+## 9. Database (Dexie/IndexedDB) — Worker-Only
+
+**Critical:** The `db/` module (Dexie) must **only** be imported from Worker
+code (`src/worker/`). Main-thread code (`src/ui/`, `src/settings/`,
+`src/bridge/`, `src/main.ts`) must **never** import from `db/db.ts`,
+`db/annotation.ts`, or `db/normalize.ts` — not even indirectly.
+
+If esbuild bundles Dexie into both the main bundle and the worker bundle, the
+two copies will clash at runtime:
+
+> `Error: Two different versions of Dexie loaded in the same app`
+
+All database access from the main thread goes through worker services
+(`AnnotationService`, `KeyService`, `QueryService`, `AttachmentService`, etc.)
+via the Comlink `WorkerBridge`.
+
+### Worker services for DB access
+
+| Service             | Replaces main-thread `db` usage in | Key methods                                                            |
+| ------------------- | ---------------------------------- | ---------------------------------------------------------------------- |
+| `AnnotationService` | `view.ts`, `bridge.ts`             | `getKeyInfo`, `getAnnotations`, `saveAnnotations`, `deleteAnnotations` |
+| `KeyService`        | `sync-section.ts`, `SyncView.tsx`  | `getKeyInfo`, `deleteKey`, `getLibraryRows`, `verifyAndPersistKey`     |
+| `QueryService`      | `view.ts` (attachment lookup)      | `getAttachmentItem` (extensible for future `getItem`, etc.)            |
+| `AttachmentService` | `cache-section.ts`                 | `getCacheTotalSizeBytes`, `purgeCache`                                 |
 
 ### Schema (version 1)
 
@@ -517,6 +554,7 @@ const response = await fetch(url, { ... }); // transparently proxied
 - Use `getCombinations()` from `db/db.ts` for Cartesian product queries on compound indexes.
 - Use Dexie transactions (`db.transaction('rw', ...)`) for multi-table writes.
 - When adding new indexes or tables, bump the Dexie version number and add a migration.
+- **Never import `db/` modules from main-thread code.** If the main thread needs data from IDB, add a method to an existing worker service (or create a new one) and call it via `workerBridge`.
 
 ---
 
@@ -560,6 +598,8 @@ corresponding state is reached.
 - Don't store sensitive data (passwords, API keys) in `data.json` via `saveData()`. Use `utils/credentials.ts` (backed by Obsidian `SecretStorage`).
 - Don't introduce new `@ts-expect-error` or `@ts-ignore` without a clear justification comment.
 - Don't access Obsidian/DOM APIs from Worker code. All main-thread access goes through `ParentHost`.
+- Don't import `db/` modules (`db/db.ts`, `db/annotation.ts`, `db/normalize.ts`) from main-thread code. All DB access from the main thread must go through worker services via `workerBridge`.
+- Don't use value imports (e.g. `import { Foo } from "worker/..."`) in `bridge/index.ts` or any main-thread file — use `import type` instead. A value import will pull the worker's Dexie dependency into the main bundle.
 - Don't create Blob URLs without a corresponding revocation path (e.g., in `revokeBlobUrls()`).
 - Don't modify files under `reader/reader/` unless explicitly asked. That's a separate build.
 - Don't remove or rename existing command IDs.
