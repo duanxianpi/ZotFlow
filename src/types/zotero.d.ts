@@ -1,5 +1,6 @@
 import { ZoteroItemData, ZoteroItemDataTypeMap } from "./zotero-item";
 
+/** Permission structure returned by the Zotero API key verification endpoint. */
 export interface ZoteroKeyAccess {
     user?: {
         library: boolean;
@@ -15,6 +16,7 @@ export interface ZoteroKeyAccess {
     };
 }
 
+/** Zotero API key identity and access permissions. */
 export interface ZoteroKey {
     key: string;
     userID: number;
@@ -23,6 +25,7 @@ export interface ZoteroKey {
     access: ZoteroKeyAccess;
 }
 
+/** Zotero group library metadata. */
 export interface ZoteroGroup {
     id: number;
     version: number;
@@ -36,12 +39,14 @@ export interface ZoteroGroup {
     fileEditing: string;
 }
 
+/** Minimal library identifier (id, type, name). */
 export interface ZoteroLibrary {
     id: number;
     type: "user" | "group";
     name: string;
 }
 
+/** Full Zotero collection response from the API. */
 export interface ZoteroCollection {
     key: string;
     version: number;
@@ -72,6 +77,7 @@ export interface ZoteroCollection {
     };
 }
 
+/** Generic Zotero item response envelope, parameterized by item data type. */
 export interface ZoteroItem<T extends ZoteroItemData> {
     key: string;
     version: number;
@@ -95,6 +101,7 @@ export interface ZoteroItem<T extends ZoteroItemData> {
     data: T;
 }
 
+/** Union of all possible `ZoteroItem<T>` instantiations. */
 export type AnyZoteroItem = {
     [K in keyof ZoteroItemDataTypeMap]: ZoteroItem<ZoteroItemDataTypeMap[K]>;
 }[keyof ZoteroItemDataTypeMap];

@@ -5,10 +5,11 @@ import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 import type { IParentProxy } from "bridge/types";
 import type { AnyIDBZoteroItem, IDBZoteroCollection } from "types/db-schema";
 
-/* ------------------------------------------------------------------ */
-/*  Public types                                                       */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Public types                                                   */
+/* ================================================================ */
 
+/** Discriminator for conflict resolution strategy. */
 export type ConflictAction = "keep-local" | "accept-remote";
 
 /** A single field-level diff entry */
@@ -18,11 +19,13 @@ export interface FieldDiff {
     remoteValue: string;
 }
 
+/** Discriminates the kind of item-level sync conflict. */
 export type ItemConflictType =
     | "update" // both sides changed
     | "delete" // remote deleted, local dirty
     | "push"; // push failed (412 or API error)
 
+/** Full detail of a single item-level sync conflict. */
 export interface ConflictItemInfo {
     libraryID: number;
     key: string;
@@ -33,6 +36,7 @@ export interface ConflictItemInfo {
     fields: FieldDiff[];
 }
 
+/** Full detail of a single collection-level sync conflict. */
 export interface ConflictCollectionInfo {
     libraryID: number;
     key: string;
@@ -41,16 +45,17 @@ export interface ConflictCollectionInfo {
     fields: FieldDiff[];
 }
 
-/* ------------------------------------------------------------------ */
-/*  Service                                                            */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Service                                                        */
+/* ================================================================ */
 
+/** Worker-side service for querying and resolving sync conflicts. */
 export class ConflictService {
     constructor(private parentHost: IParentProxy) {}
 
-    /* ============================================================== */
+    /* ================================================================ */
     /*  Queries                                                        */
-    /* ============================================================== */
+    /* ================================================================ */
 
     /** Return all item-level conflicts across all libraries. */
     async getItemConflicts(): Promise<ConflictItemInfo[]> {
@@ -108,9 +113,9 @@ export class ConflictService {
         }
     }
 
-    /* ============================================================== */
+    /* ================================================================ */
     /*  Resolution — Items                                             */
-    /* ============================================================== */
+    /* ================================================================ */
 
     async resolveItemConflict(
         libraryID: number,
@@ -157,9 +162,9 @@ export class ConflictService {
         }
     }
 
-    /* ============================================================== */
+    /* ================================================================ */
     /*  Resolution — Collections                                       */
-    /* ============================================================== */
+    /* ================================================================ */
 
     async resolveCollectionConflict(
         libraryID: number,
@@ -206,9 +211,9 @@ export class ConflictService {
         }
     }
 
-    /* ============================================================== */
+    /* ================================================================ */
     /*  Batch resolution                                               */
-    /* ============================================================== */
+    /* ================================================================ */
 
     async resolveAllItemConflicts(action: ConflictAction): Promise<number> {
         const conflicts = await this.getItemConflicts();
@@ -246,9 +251,9 @@ export class ConflictService {
         return resolved;
     }
 
-    /* ============================================================== */
+    /* ================================================================ */
     /*  Private — keep-local logic                                     */
-    /* ============================================================== */
+    /* ================================================================ */
 
     /**
      * Keep local changes. Mark item as "updated" so the next push uploads it.
@@ -290,9 +295,9 @@ export class ConflictService {
         });
     }
 
-    /* ============================================================== */
+    /* ================================================================ */
     /*  Private — accept-remote logic                                  */
-    /* ============================================================== */
+    /* ================================================================ */
 
     /**
      * Accept the remote version. If `serverCopyRaw` exists, overwrite `raw`
@@ -338,9 +343,9 @@ export class ConflictService {
         await db.collections.put(normalized);
     }
 
-    /* ============================================================== */
+    /* ================================================================ */
     /*  Private — diff helpers                                         */
-    /* ============================================================== */
+    /* ================================================================ */
 
     /**
      * Build a ConflictItemInfo from an IDB item, including field-level diffs.

@@ -8,6 +8,7 @@ interface QueuedDeco {
     isLine: boolean;
 }
 
+/** CM6 state field that builds mark and line decorations for `%% ZOTFLOW_ANNO_* %%` comment tags. */
 export const zoteroBlockField = StateField.define<DecorationSet>({
     create(state) {
         return buildDecorations(state.doc);
@@ -90,6 +91,7 @@ function buildDecorations(doc: any): DecorationSet {
     return builder.finish();
 }
 
+/** Returns a CM6 extension combining the annotation block field with collapse base-theme styles. */
 export function ZotFlowCommentExtension(): Extension {
     return [
         zoteroBlockField,

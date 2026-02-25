@@ -1,6 +1,7 @@
 import { Setting, SettingGroup } from "obsidian";
 import ZotFlow from "main";
 
+/** Settings section rendering source note paths, folders, and local reader options. */
 export class GeneralSection {
     plugin: ZotFlow;
     refreshUI: () => void;

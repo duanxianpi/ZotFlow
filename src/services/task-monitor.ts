@@ -3,6 +3,7 @@ import type { ITaskInfo } from "types/tasks";
 
 type TaskUpdateCallback = (tasks: ITaskInfo[]) => void;
 
+/** Pub/sub hub that tracks worker task state and notifies UI subscribers on updates. */
 export class TaskMonitor {
     private tasks: Map<string, ITaskInfo> = new Map();
     private subscribers: Set<TaskUpdateCallback> = new Set();

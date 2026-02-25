@@ -5,6 +5,7 @@ import type { AnnotationJSON } from "types/zotero-reader";
 import type { IParentProxy } from "bridge/types";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
+/** Default LiquidJS template string for local vault file source notes. */
 export const DEFAULT_LOCAL_NOTE_TEMPLATE = `---
 zotflow-locked: true
 zotflow-local-attachment: [[{{ path }}]]
@@ -34,6 +35,7 @@ zotflow-local-attachment: [[{{ path }}]]
 {%- endif -%}
 `;
 
+/** LiquidJS template engine for rendering local vault file (PDF/EPUB) source notes. */
 export class LocalTemplateService {
     private engine: Liquid;
 

@@ -7,6 +7,7 @@ import type { IDBZoteroKey } from "types/db-schema";
 import type { ZoteroGroup, ZoteroKey } from "types/zotero";
 import type { ZotFlowSettings, LibrarySyncMode } from "settings/types";
 
+/** Row data structure for displaying library metadata and sync status in settings UI. */
 export interface LibraryRow {
     id: number;
     type: "user" | "group";

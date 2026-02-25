@@ -5,6 +5,7 @@ import type { AnnotationJSON } from "types/zotero-reader";
 import type { TFileWithoutParentAndVault } from "types/zotflow";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
+/** CRUD service for local vault file notes (PDF/EPUB opened locally) with annotation management. */
 export class LocalNoteService {
     private debouncers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 

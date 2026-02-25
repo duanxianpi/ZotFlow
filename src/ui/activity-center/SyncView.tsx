@@ -11,18 +11,18 @@ import type {
 } from "worker/services/conflict";
 import type { LibraryRow } from "worker/services/key";
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Types                                                           */
+/* ================================================================ */
 
 interface ConflictEntry {
     kind: "item" | "collection";
     data: ConflictItemInfo | ConflictCollectionInfo;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Helpers                                                         */
+/* ================================================================ */
 
 function formatSyncTime(iso: string): string {
     if (!iso) return "Never";
@@ -38,9 +38,9 @@ function formatSyncTime(iso: string): string {
     });
 }
 
-/* ------------------------------------------------------------------ */
-/*  Data loading                                                       */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Data loading                                                    */
+/* ================================================================ */
 
 async function loadLibraries(): Promise<LibraryRow[]> {
     return workerBridge.key.getLibraryRows(services.settings);
@@ -65,9 +65,9 @@ async function loadConflicts(): Promise<ConflictEntry[]> {
     return entries;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Sub-components                                                    */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Sub-components                                                  */
+/* ================================================================ */
 
 const LibraryTable: React.FC<{
     libraries: LibraryRow[];
@@ -279,9 +279,9 @@ const ConflictPanel: React.FC<{
     );
 };
 
-/* ------------------------------------------------------------------ */
-/*  ConflictDiffPane — field-level diff table                          */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  ConflictDiffPane — field-level diff table                       */
+/* ================================================================ */
 
 /** Fields hidden by default (noisy / internal metadata). */
 const DEFAULT_HIDDEN_FIELDS = new Set([
@@ -378,10 +378,11 @@ const ConflictDiffPane: React.FC<{
     );
 };
 
-/* ------------------------------------------------------------------ */
-/*  Main SyncView                                                      */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Main SyncView                                                   */
+/* ================================================================ */
 
+/** React component showing library sync controls and merge conflict resolution UI. */
 export const SyncView: React.FC = () => {
     const [libraries, setLibraries] = useState<LibraryRow[]>([]);
     const [conflicts, setConflicts] = useState<ConflictEntry[]>([]);

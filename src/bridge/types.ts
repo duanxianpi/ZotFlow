@@ -5,12 +5,14 @@ import type { LogLevel } from "services/log-service";
 import type { ITaskInfo, ITaskOptions } from "types/tasks";
 import type { RequestUrlParam } from "obsidian";
 
+/** Shape of an HTTP response proxied from main thread to worker. */
 export interface IRequestResponse {
     status: number;
     headers: Record<string, string>;
     arrayBuffer: ArrayBuffer;
 }
 
+/** Contract for all operations the worker can invoke on the main thread. */
 export interface IParentProxy {
     notify(type: NotificationType, message: string): void;
     log(

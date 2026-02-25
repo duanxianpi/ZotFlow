@@ -10,8 +10,10 @@ import type {
 } from "types/zotero-reader";
 import { services } from "services/services";
 
+/** View type identifier for the local vault file reader view. */
 export const LOCAL_ZOTERO_READER_VIEW_TYPE = "zotflow-local-zotero-reader-view";
 
+/** Obsidian `ItemView` that embeds the Zotero reader iframe for local PDF/EPUB/HTML vault files. */
 export class LocalReaderView extends ItemView {
     private file: TFile | null = null;
     private bridge?: IframeReaderBridge;

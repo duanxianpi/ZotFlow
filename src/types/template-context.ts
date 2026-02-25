@@ -1,8 +1,10 @@
+/** Utility functions available inside LiquidJS templates. */
 export interface TemplateUtils {
     formatCreators: (creators: string[]) => string;
     formatDate: (date: string, format?: string) => string;
 }
 
+/** Template rendering context for a top-level Zotero item. */
 export interface ItemTemplateContext {
     // Identity
     key: string;
@@ -48,6 +50,7 @@ export interface ItemTemplateContext {
     notes: NoteTemplateContext[];
 }
 
+/** Template rendering context for a Zotero attachment. */
 export interface AttachmentTemplateContext {
     key: string;
     libraryID: number;
@@ -64,6 +67,7 @@ export interface AttachmentTemplateContext {
     annotations: AnnotationTemplateContext[];
 }
 
+/** Template rendering context for a Zotero note child item. */
 export interface NoteTemplateContext {
     key: string;
     libraryID: number;
@@ -74,6 +78,7 @@ export interface NoteTemplateContext {
     dateModified: string;
 }
 
+/** Template rendering context for a single Zotero annotation. */
 export interface AnnotationTemplateContext {
     key: string;
     libraryID: number;

@@ -36,9 +36,9 @@ function formatDetailsJson(
     return JSON.stringify(details);
 }
 
-/* ------------------------------------------------------------------ */
-/*  Active Task Card (expandable)                                      */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Active Task Card (expandable)                                   */
+/* ================================================================ */
 
 const ActiveTaskCard: React.FC<{
     task: ITaskInfo;
@@ -128,9 +128,9 @@ const ActiveTaskCard: React.FC<{
     );
 };
 
-/* ------------------------------------------------------------------ */
-/*  History Item                                                       */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  History Item                                                    */
+/* ================================================================ */
 
 const HistoryItem: React.FC<{
     task: ITaskInfo;
@@ -217,10 +217,11 @@ const HistoryItem: React.FC<{
     );
 };
 
-/* ------------------------------------------------------------------ */
-/*  Tasks View                                                         */
-/* ------------------------------------------------------------------ */
+/* ================================================================ */
+/*  Tasks View                                                      */
+/* ================================================================ */
 
+/** React component displaying active background tasks and session task history. */
 export const TasksView: React.FC = () => {
     const [tasks, setTasks] = useState<ITaskInfo[]>([]);
     const [expandedId, setExpandedId] = useState<string | null>(null);

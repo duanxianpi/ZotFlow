@@ -20,6 +20,7 @@ export interface UpdateOptions {
     forceUpdateImages?: boolean;
 }
 
+/** CRUD service for Zotero item source notes — creates, opens, updates, and manages annotation images. */
 export class NoteService {
     // Debounce map for update operations
     private debouncers: Map<string, ReturnType<typeof setTimeout>> = new Map();

@@ -4,8 +4,10 @@ import type { ZoteroCollection, AnyZoteroItem } from "types/zotero";
 
 /**
  * Normalize a raw Zotero collection from the API into our IDB schema.
- * @param raw - The raw collection object from Zotero API (containing .data, .key, etc.)
- * @param libraryID - The library ID this collection belongs to
+ *
+ * @param raw The raw collection object from Zotero API (containing .data, .key, etc.)
+ * @param libraryID The library ID this collection belongs to
+ * @returns A normalized IDB collection record
  */
 export function normalizeCollection(
     raw: ZoteroCollection,
@@ -33,13 +35,10 @@ function extractCitationKey(extra?: string) {
 
 /**
  * Normalize a raw Zotero item from the API into our IDB schema.
- * @param raw - The raw item object from Zotero API (containing .data, .key, etc.)
- * @param libraryID - The library ID this item belongs to
- */
-/**
- * Normalize a raw Zotero item from the API into our IDB schema.
- * @param raw - The raw item object from Zotero API (containing .data, .key, etc.)
- * @param libraryID - The library ID this item belongs to
+ *
+ * @param raw The raw item object from Zotero API (containing .data, .key, etc.)
+ * @param libraryID The library ID this item belongs to
+ * @returns A normalized IDB item record
  */
 export function normalizeItem(
     raw: AnyZoteroItem,
@@ -126,6 +125,7 @@ export function normalizeItem(
     return item;
 }
 
+/** Converts a `Date` or ISO string to Zotero's truncated ISO format (`YYYY-MM-DDTHH:MM:SSZ`). */
 export function toZoteroDate(dateInput?: string | Date): string {
     const date = dateInput ? new Date(dateInput) : new Date();
     return date.toISOString().split(".")[0] + "Z";

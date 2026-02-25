@@ -1,5 +1,5 @@
-declare module 'zotero-api-client' {
-    export type HttpVerb = 'get' | 'post' | 'put' | 'patch' | 'delete';
+declare module "zotero-api-client" {
+    export type HttpVerb = "get" | "post" | "put" | "patch" | "delete";
 
     export type RelLinks = {
         next?: string;
@@ -110,7 +110,7 @@ declare module 'zotero-api-client' {
         mtime?: number | null;
         md5sum?: string;
         filePatch?: ArrayBuffer;
-        algorithm?: 'xdelta' | 'vcdiff' | 'bsdiff';
+        algorithm?: "xdelta" | "vcdiff" | "bsdiff";
         uploadRegisterOnly?: boolean | null;
     }
 
@@ -127,32 +127,36 @@ declare module 'zotero-api-client' {
     }
 
     export class SchemaResponse<TData = any> extends ApiResponse<TData> {
-        getResponseType(): 'SchemaResponse';
+        getResponseType(): "SchemaResponse";
         getVersion(): number;
         getMeta(): null;
     }
 
     export class SingleReadResponse<TData = any> extends ApiResponse<TData> {
-        getResponseType(): 'SingleReadResponse';
+        getResponseType(): "SingleReadResponse";
         getData(): TData;
     }
 
     export class MultiReadResponse<TData = any> extends ApiResponse<TData[]> {
-        getResponseType(): 'MultiReadResponse';
+        getResponseType(): "MultiReadResponse";
         getData(): TData[];
         getLinks(): Array<any>;
         getMeta(): Array<any>;
         getTotalResults(): number | null;
-        getRelLinks(): RelLinks
+        getRelLinks(): RelLinks;
     }
 
-    export class SingleWriteResponse<TPatch extends object = any> extends ApiResponse<Required<TPatch>> {
-        getResponseType(): 'SingleWriteResponse';
+    export class SingleWriteResponse<
+        TPatch extends object = any,
+    > extends ApiResponse<Required<TPatch>> {
+        getResponseType(): "SingleWriteResponse";
         getData(): Required<TPatch> & { version: number | null };
     }
 
-    export class MultiWriteResponse<TItem extends object = any> extends ApiResponse<any> {
-        getResponseType(): 'MultiWriteResponse';
+    export class MultiWriteResponse<
+        TItem extends object = any,
+    > extends ApiResponse<any> {
+        getResponseType(): "MultiWriteResponse";
         isSuccess(): boolean;
         getData(): Array<TItem>;
         getLinks(): Array<any>;
@@ -163,43 +167,51 @@ declare module 'zotero-api-client' {
     }
 
     export class DeleteResponse extends ApiResponse<any> {
-        getResponseType(): 'DeleteResponse';
+        getResponseType(): "DeleteResponse";
     }
 
     export class FileUploadResponse extends ApiResponse<any> {
         uploadResponse?: any;
         registerResponse?: any;
-        getResponseType(): 'FileUploadResponse';
+        getResponseType(): "FileUploadResponse";
         getVersion(): number | null;
     }
 
     export class FileDownloadResponse extends ApiResponse<ArrayBuffer> {
-        getResponseType(): 'FileDownloadResponse';
+        getResponseType(): "FileDownloadResponse";
         getData(): ArrayBuffer;
     }
 
     export class FileUrlResponse extends ApiResponse<string> {
-        getResponseType(): 'FileUrlResponse';
+        getResponseType(): "FileUrlResponse";
         getData(): string;
     }
 
     export class RawApiResponse extends ApiResponse<any> {
         constructor(rawResponse: any, options: RequestOptions);
-        getResponseType(): 'RawApiResponse';
+        getResponseType(): "RawApiResponse";
     }
 
-    export class PretendResponse extends ApiResponse<{ url: string; fetchConfig: any }> {
-        getResponseType(): 'PretendResponse';
+    export class PretendResponse extends ApiResponse<{
+        url: string;
+        fetchConfig: any;
+    }> {
+        getResponseType(): "PretendResponse";
         getVersion(): null;
     }
 
     export class ErrorResponse extends Error {
-        constructor(message: string, reason: string, response: any, options: RequestOptions);
+        constructor(
+            message: string,
+            reason: string,
+            response: any,
+            options: RequestOptions,
+        );
         response: any;
         reason: string;
         options: RequestOptions;
         getVersion(): number | null;
-        getResponseType(): 'ErrorResponse';
+        getResponseType(): "ErrorResponse";
     }
 
     export type AnyResponse =
@@ -216,11 +228,16 @@ declare module 'zotero-api-client' {
         | RawApiResponse
         | PretendResponse;
 
-    // ------------------- API Chain -------------------
+    /* ================================================================ */
+    /*  API Chain                                                      */
+    /* ================================================================ */
     export interface ExtendArgs {
         config: RequestOptions;
         ef: (opts?: Partial<RequestOptions>) => ApiChain;
-        efr: (resource?: Partial<ResourceSelection>, opts?: Partial<RequestOptions>) => ApiChain;
+        efr: (
+            resource?: Partial<ResourceSelection>,
+            opts?: Partial<RequestOptions>,
+        ) => ApiChain;
         execute: (cfg: RequestOptions) => Promise<AnyResponse>;
         functions: Record<string, any>;
     }
@@ -229,7 +246,7 @@ declare module 'zotero-api-client' {
         api(key?: string | null, opts?: Partial<RequestOptions>): ApiChain;
 
         // Resource configuration
-        library(typeOrKey: 'user' | 'group', id: number): ApiChain;
+        library(typeOrKey: "user" | "group", id: number): ApiChain;
         library(libraryKey: string): ApiChain;
 
         items(items?: string | null): ApiChain;
@@ -261,9 +278,14 @@ declare module 'zotero-api-client' {
             mtime?: number | null,
             md5sum?: string,
             patch?: ArrayBuffer,
-            algorithm?: 'xdelta' | 'vcdiff' | 'bsdiff' | string
+            algorithm?: "xdelta" | "vcdiff" | "bsdiff" | string,
         ): ApiChain;
-        registerAttachment(fileName: string, fileSize: number, mtime: number, md5sum: string): ApiChain;
+        registerAttachment(
+            fileName: string,
+            fileSize: number,
+            mtime: number,
+            md5sum: string,
+        ): ApiChain;
         attachmentUrl(): ApiChain;
 
         // Access/keys
@@ -271,11 +293,27 @@ declare module 'zotero-api-client' {
 
         // Execution
         get(opts?: Partial<RequestOptions>): Promise<AnyResponse>;
-        post(data: any, opts?: Partial<RequestOptions>): Promise<SingleWriteResponse | MultiWriteResponse>;
-        put(data: any, opts?: Partial<RequestOptions>): Promise<SingleWriteResponse>;
-        patch(data: any, opts?: Partial<RequestOptions>): Promise<SingleWriteResponse>;
-        delete(keysToDelete?: string[], opts?: Partial<RequestOptions>): Promise<DeleteResponse>;
-        pretend(verb?: HttpVerb, data?: any, opts?: Partial<RequestOptions>): Promise<PretendResponse>;
+        post(
+            data: any,
+            opts?: Partial<RequestOptions>,
+        ): Promise<SingleWriteResponse | MultiWriteResponse>;
+        put(
+            data: any,
+            opts?: Partial<RequestOptions>,
+        ): Promise<SingleWriteResponse>;
+        patch(
+            data: any,
+            opts?: Partial<RequestOptions>,
+        ): Promise<SingleWriteResponse>;
+        delete(
+            keysToDelete?: string[],
+            opts?: Partial<RequestOptions>,
+        ): Promise<DeleteResponse>;
+        pretend(
+            verb?: HttpVerb,
+            data?: any,
+            opts?: Partial<RequestOptions>,
+        ): Promise<PretendResponse>;
 
         // Utilities
         getConfig(): RequestOptions;
@@ -283,14 +321,16 @@ declare module 'zotero-api-client' {
     }
 
     function api(key?: string | null, opts?: Partial<RequestOptions>): ApiChain;
-    function request(config: RequestOptions): Promise<{ response: AnyResponse } & RequestOptions & { source: string }>;
+    function request(
+        config: RequestOptions,
+    ): Promise<{ response: AnyResponse } & RequestOptions & { source: string }>;
 
     // When importing CJS module in Node ESM environment, default export is the module.exports object.
     // The library exports 'api' function as default, but in this context it appears as a property 'default'.
     const defaultExport: {
         default: typeof api;
         request: typeof request;
-    }
+    };
 
     export default defaultExport;
 }

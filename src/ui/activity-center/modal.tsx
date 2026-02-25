@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import * as React from "react";
 import { ZotFlowActivityCenter } from "./ZotFlowActivityCenter";
 
+/** Obsidian `Modal` subclass that mounts the React `ZotFlowActivityCenter` component. */
 export class ActivityCenterModal extends Modal {
     private root: Root | null = null;
 

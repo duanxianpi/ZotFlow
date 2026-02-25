@@ -44,6 +44,7 @@ import { ZotFlowCommentExtension } from "ui/zotflow-comment-extension";
 
 const SUPPORTED_EXTENSIONS = ["pdf", "epub", "html"];
 
+/** Plugin entry point managing lifecycle, commands, views, settings, and protocol handlers. */
 export default class ZotFlow extends Plugin {
     settings: ZotFlowSettings;
     viewStates: Record<string, ViewStateEntry>;
@@ -107,7 +108,7 @@ export default class ZotFlow extends Plugin {
 
         if (this.settings.overwriteViewer) {
             try {
-                /**@ts-expect-error */
+                // @ts-expect-error Undocumented Obsidian API: unregisterExtensions()
                 this.app.viewRegistry.unregisterExtensions(
                     SUPPORTED_EXTENSIONS,
                 );

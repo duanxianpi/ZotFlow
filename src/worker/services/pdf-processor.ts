@@ -30,6 +30,7 @@ type QueueItem = [
     (reason?: any) => void,
 ];
 
+/** Manages a nested PDF.js Web Worker for PDF operations (export, import, annotation rendering). */
 export class PDFProcessWorker {
     config: PDFWorkerConfig;
     private _worker: Worker | null;
@@ -317,12 +318,12 @@ export class PDFProcessWorker {
     }
 
     /**
-     * Export PDF file with annotations
+     * Export PDF file with annotations.
      *
-     * @param {ArrayBuffer} buf
-     * @param {ZoteroItemDataTypeMap["annotation"][]} items
-     * @param {Boolean} [isPriority]
-     * @returns {Promise<Uint8Array>} PDF buffer
+     * @param buf The PDF file buffer
+     * @param items Annotation items to embed
+     * @param isPriority Whether to prioritize this export
+     * @returns The exported PDF buffer
      */
     async export(
         buf: ArrayBuffer,

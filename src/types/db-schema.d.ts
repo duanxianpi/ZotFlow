@@ -7,15 +7,15 @@ import {
 } from "./zotero";
 import { ZoteroItemData, ZoteroItemDataTypeMap } from "./zotero-item";
 
-// Zotero Key
+/** Stored Zotero API key with associated group membership. */
 export interface IDBZoteroKey extends ZoteroKey {
     joinedGroups: number[]; // Array of Group IDs the key has access to
 }
 
-// Zotero Group
+/** Stored Zotero group library metadata. */
 export interface IDBZoteroGroup extends ZoteroGroup {}
 
-// Zotero Library
+/** Stored Zotero library with sync version tracking. */
 export interface IDBZoteroLibrary extends ZoteroLibrary {
     collectionVersion?: number; // For collection sync, indicates the global version of the library
     itemVersion?: number; // For item sync, indicates the global version of the library
@@ -23,7 +23,7 @@ export interface IDBZoteroLibrary extends ZoteroLibrary {
     syncedAt: string; // ISO String of last successful sync
 }
 
-// Zotero Collection
+/** Stored Zotero collection with sync state and raw API payload. */
 export interface IDBZoteroCollection {
     libraryID: number;
     key: string;
@@ -42,7 +42,7 @@ export interface IDBZoteroCollection {
     serverCopyRaw?: ZoteroCollection;
 }
 
-// Zotero Item
+/** Internal stored Zotero item with indexed fields and sync state. */
 interface _IDBZoteroItem<T extends ZoteroItemData> {
     // Core Zotero Data
     libraryID: number; // Library ID (User or Group ID)
@@ -96,12 +96,15 @@ interface _IDBZoteroItem<T extends ZoteroItemData> {
     serverCopyRaw?: ZoteroItem<T>;
 }
 
+/** Stored Zotero item, parameterized by item data type. */
 export type IDBZoteroItem<T extends ZoteroItemData> = _IDBZoteroItem<T>;
+
+/** Union of all possible `IDBZoteroItem<T>` instantiations. */
 export type AnyIDBZoteroItem = {
     [K in keyof ZoteroItemDataTypeMap]: IDBZoteroItem<ZoteroItemDataTypeMap[K]>;
 }[keyof ZoteroItemDataTypeMap];
 
-// Zotero File
+/** Cached attachment file blob with metadata for LRU eviction. */
 export interface IDBZoteroFile {
     libraryID: number; // Library ID (User or Group ID)
     key: string; // Zotero Item Key (itemType='attachment')

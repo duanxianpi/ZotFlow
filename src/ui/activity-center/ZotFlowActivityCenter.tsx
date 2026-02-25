@@ -4,6 +4,7 @@ import { SyncView } from "./SyncView";
 import { TasksView } from "./TasksView";
 import { TelemetryView } from "./TelemetryView";
 
+/** Tab container React component with Sync, Tasks, and Telemetry tabs. */
 export const ZotFlowActivityCenter: React.FC = () => {
     const [activeTab, setActiveTab] = useState("sync");
 

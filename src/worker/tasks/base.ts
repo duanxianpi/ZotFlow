@@ -3,6 +3,7 @@ import type { ITaskInfo, ITaskResult, TaskStatus, TaskType } from "types/tasks";
 import type { LogLevel } from "services/log-service";
 import type { IParentProxy } from "bridge/types";
 
+/** Abstract base for all trackable background tasks (sync, download, batch ops). */
 export abstract class BaseTask {
     public readonly id: string;
     public readonly type: TaskType;

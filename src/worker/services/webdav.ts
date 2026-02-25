@@ -1,9 +1,8 @@
-// WebDAV Client (Worker Side)
-
 import type { IParentProxy } from "bridge/types";
 import type { ZotFlowSettings } from "settings/types";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
+/** WebDAV file download service for fetching Zotero attachments from a user-configured server. */
 export class WebDavService {
     constructor(
         private settings: ZotFlowSettings,

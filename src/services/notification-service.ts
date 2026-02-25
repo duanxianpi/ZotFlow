@@ -1,12 +1,15 @@
 import { Notice, setIcon } from "obsidian";
 
+/** Notification style type. */
 export type NotificationType = "info" | "success" | "warning" | "error";
 
+/** Wraps Obsidian's `Notice` API with styled, icon-prefixed, type-aware notifications. */
 export class NotificationService {
     /**
      * Display a stylised notification.
-     * @param type - The urgency/type of the notification.
-     * @param message - The content to display.
+     *
+     * @param type The urgency/type of the notification
+     * @param message The content to display
      */
     public notify(type: NotificationType, message: string) {
         let duration = 2000;

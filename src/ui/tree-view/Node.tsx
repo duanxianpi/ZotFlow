@@ -9,6 +9,7 @@ import { workerBridge } from "bridge";
 import { openAttachment } from "ui/viewer";
 import { getNotePath } from "utils/utils";
 
+/** Pixel indentation per tree depth level. */
 export const INDENT_SIZE = 20;
 
 const Highlight = ({ text, term }: { text: string; term: string }) => {
@@ -29,6 +30,7 @@ const Highlight = ({ text, term }: { text: string; term: string }) => {
     );
 };
 
+/** React component rendering a single tree node with icon, label, drag support, and context menu. */
 export const NodeItem = ({
     node,
     style,

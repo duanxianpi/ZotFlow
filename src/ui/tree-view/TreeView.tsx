@@ -13,8 +13,11 @@ import { services } from "services/services";
 
 import type { TreeTransferPayload } from "worker/services/tree-view";
 
-// --- TYPES ---
+/* ================================================================ */
+/*  Types                                                          */
+/* ================================================================ */
 
+/** Tree node representing a library, collection, item, or spacer in the tree view. */
 export type ViewNode = {
     id: string;
     parent?: string | null;
@@ -102,6 +105,7 @@ function rebuildTreeFromWorker(payload: TreeTransferPayload): ViewNode[] {
     return roots;
 }
 
+/** Root React component for the Zotero library tree with search, refresh, and virtual scrolling. */
 export const ZotFlowTree = () => {
     const [rawData, setRawData] = useState<TreeTransferPayload | null>(null);
     const [term, setTerm] = useState("");
@@ -173,9 +177,9 @@ export const ZotFlowTree = () => {
     const handleSearch = (node: NodeApi<ViewNode>, term: string) => {
         const lowerTerm = term.toLowerCase();
 
-        // ==================================================
-        // Case A: Item (Parent Node)
-        // ==================================================
+        /* ================================================================ */
+        /*  Case A: Item (Parent Node)                                     */
+        /* ================================================================ */
         if (node.data.nodeType === "item") {
             // Does it match itself?
             if (node.data.name.toLowerCase().includes(lowerTerm)) return true;
@@ -191,9 +195,9 @@ export const ZotFlowTree = () => {
             return false;
         }
 
-        // ==================================================
-        // Case B: Child Node (Source Note or PDF)
-        // ==================================================
+        /* ================================================================ */
+        /*  Case B: Child Node (Source Note or PDF)                        */
+        /* ================================================================ */
         if (node.parent && node.parent.data.nodeType === "item") {
             const parent = node.parent;
 
@@ -214,9 +218,9 @@ export const ZotFlowTree = () => {
             return false;
         }
 
-        // ==================================================
-        // Case C: Standalone Attachment
-        // ==================================================
+        /* ================================================================ */
+        /*  Case C: Standalone Attachment                                  */
+        /* ================================================================ */
         return node.data.name.toLowerCase().includes(lowerTerm);
     };
 

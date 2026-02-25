@@ -26,6 +26,7 @@ import type { NotificationType } from "services/notification-service";
 import type { LogLevel } from "services/log-service";
 import type { ITaskInfo } from "types/tasks";
 
+/** Main-thread API exposed to the Worker via Comlink for filesystem, network, logging, and UI operations. */
 export class ParentHost implements IParentProxy {
     constructor(private app: App) {}
 

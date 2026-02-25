@@ -8,8 +8,10 @@ import type {
 import type { AnnotationJSON } from "types/zotero-reader";
 
 /**
- * @param {Object} json reader compatible annotation data
- * @return {Object} Annotation item
+ * Convert reader-compatible annotation JSON into a Zotero annotation item.
+ *
+ * @param json The reader annotation data
+ * @returns A partial Zotero annotation item
  */
 export function annotationItemFromJSON(
     json: AnnotationJSON,
@@ -69,11 +71,6 @@ export async function getAnnotationJson(
 
     // Tag Colors from Settings
     const tagColors = new Map();
-    // if (client.settings.tagColors && client.settings.tagColors.value) {
-    //     client.settings.tagColors.value.forEach((tc: any) => {
-    //         tagColors.set(tc.name, { color: tc.color, position: 0 }); // Position logic might need refinement if present in settings
-    //     });
-    // }
 
     // Zotero Annotations
     let annotations = (await db.items

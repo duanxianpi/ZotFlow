@@ -11,6 +11,7 @@ const PULL_BULK_SIZE = 100;
 const UPDATE_BULK_SIZE = 50;
 const MAX_PUSH_RETRIES = 3;
 
+/** Bidirectional sync engine — pulls items/collections from Zotero and pushes local changes. */
 export class SyncService {
     private syncing = false;
 
@@ -224,9 +225,9 @@ export class SyncService {
         }
     }
 
-    // ========================================================================
-    // Collection Pull
-    // ========================================================================
+    /* ================================================================ */
+    /*  Collection Pull                                                */
+    /* ================================================================ */
     private async pullCollections(
         libraryType: "user" | "group",
         libraryID: number,
@@ -388,9 +389,9 @@ export class SyncService {
         }
     }
 
-    // ========================================================================
-    // Helper: Safe Cascade Collection Delete
-    // ========================================================================
+    /* ================================================================ */
+    /*  Helper: Safe Cascade Collection Delete                          */
+    /* ================================================================ */
     private async handlePullCollectionDeletions(
         libraryID: number,
         keysToDelete: string[],
@@ -481,9 +482,9 @@ export class SyncService {
         return allDescendants;
     }
 
-    // ========================================================================
-    // Item Pull
-    // ========================================================================
+    /* ================================================================ */
+    /*  Item Pull                                                      */
+    /* ================================================================ */
     private async pullItems(libraryType: "user" | "group", libraryID: number) {
         if (!this.zotero) return;
 
@@ -615,9 +616,9 @@ export class SyncService {
         }
     }
 
-    // ========================================================================
-    // Helper: Safe Cascade Delete
-    // ========================================================================
+    /* ================================================================ */
+    /*  Helper: Safe Cascade Delete                                    */
+    /* ================================================================ */
     private async handlePullDeletions(
         libraryID: number,
         keysToDelete: string[],
@@ -694,9 +695,9 @@ export class SyncService {
         return allDescendants;
     }
 
-    // ========================================================================
-    // Push Changes
-    // ========================================================================
+    /* ================================================================ */
+    /*  Push Changes                                                   */
+    /* ================================================================ */
     public async pushDirtyItems(
         libraryType: "user" | "group",
         libraryID: number,

@@ -13,6 +13,7 @@ import type { IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 import type { AnnotationJSON } from "types/zotero-reader";
 
+/** Registers, starts, and cancels background tasks; routes lifecycle events to the main thread. */
 export class TaskManager {
     private tasks: Map<string, BaseTask> = new Map();
     private activeControllers: Map<string, AbortController> = new Map();
@@ -58,9 +59,9 @@ export class TaskManager {
         }
     }
 
-    // ================================================================
-    // Factory methods (dynamic imports to avoid circular deps)
-    // ================================================================
+    /* ================================================================ */
+    /*  Factory methods (dynamic imports to avoid circular deps)        */
+    /* ================================================================ */
 
     public async createTestTask(duration: number) {
         const { TestTask } = await import("./impl/test-task");

@@ -3,6 +3,7 @@ import { db } from "db/db";
 import type { SyncService } from "worker/services/sync";
 import type { TaskStatus } from "types/tasks";
 
+/** Tracked background task that runs a full or library-scoped sync cycle. */
 export class SyncTask extends BaseTask {
     constructor(
         private syncService: SyncService,

@@ -9,6 +9,7 @@ interface ObsidianIconProps {
     onClick?: () => void;
 }
 
+/** React wrapper that renders an Obsidian icon via `setIcon()` inside a ref-managed div. */
 export const ObsidianIcon: React.FC<ObsidianIconProps> = ({
     icon,
     className,

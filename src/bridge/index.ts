@@ -1,5 +1,5 @@
 import * as Comlink from "comlink";
-// @ts-ignore
+// @ts-expect-error esbuild virtual module "virtual:worker"
 import workerCode from "virtual:worker";
 import { ParentHost } from "./parent-host";
 import { getBlobUrls } from "bundle-assets/inline-assets";
@@ -32,6 +32,7 @@ import type { App } from "obsidian";
 import { services } from "services/services";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
+/** Comlink-based RPC wrapper managing the Web Worker lifecycle and exposing all worker service proxies. */
 export class WorkerBridge {
     private _worker: Worker;
 
@@ -169,9 +170,9 @@ export class WorkerBridge {
         return this._tasks;
     }
 
-    // ================================================================
-    // Task factory methods (delegates to top-level WorkerAPI methods)
-    // ================================================================
+    /* ================================================================ */
+    /*  Task factory methods (delegates to top-level WorkerAPI methods) */
+    /* ================================================================ */
 
     async createSyncTask(libraryId?: number): Promise<string> {
         this.assertInitialized();
@@ -224,4 +225,5 @@ export class WorkerBridge {
     }
 }
 
+/** Singleton `WorkerBridge` instance used throughout the main thread. */
 export const workerBridge = new WorkerBridge();

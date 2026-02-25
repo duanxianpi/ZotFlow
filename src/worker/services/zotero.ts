@@ -4,6 +4,7 @@ import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 import type { ZoteroKey } from "types/zotero";
 import type { ApiChain } from "zotero-api-client";
 
+/** Wrapper around `zotero-api-client` for Zotero Web API communication. */
 export class ZoteroAPIService {
     private _client: ApiChain;
 

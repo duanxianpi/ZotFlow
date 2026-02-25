@@ -7,6 +7,7 @@ import { GeneralSection } from "./sections/general-section";
 import type ZotFlow from "main";
 import type { TabSection } from "./types";
 
+/** Obsidian `PluginSettingTab` with tabbed navigation (General, Sync, WebDAV, Cache). */
 export class ZotFlowSettingTab extends PluginSettingTab {
     plugin: ZotFlow;
     activeTab: TabSection = "general";

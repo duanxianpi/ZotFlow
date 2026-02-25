@@ -9,6 +9,7 @@ function isLocked(state: EditorState): boolean {
     return /^---\s*[\s\S]*?zotflow-locked:\s*true/m.test(head);
 }
 
+/** Returns a CM6 extension that makes the editor read-only when `zotflow-locked: true` is in frontmatter. */
 export function ZotFlowLockExtension(): Extension {
     return [EditorState.readOnly.compute(["doc"], (state) => isLocked(state))];
 }

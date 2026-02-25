@@ -4,6 +4,7 @@ import { services } from "services/services";
 
 import type ZotFlow from "main";
 
+/** Settings section for WebDAV server URL, credentials, and connection verification. */
 export class WebDavSection {
     constructor(
         private plugin: ZotFlow,

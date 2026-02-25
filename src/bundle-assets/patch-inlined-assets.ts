@@ -1,12 +1,12 @@
 function uint8ArrayToBase64(bytes: Uint8Array): string {
-	let binary = '';
-	const len = bytes.byteLength;
-	const CHUNK_SIZE = 32768;
-	for (let i = 0; i < len; i += CHUNK_SIZE) {
-		const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, len));
-		binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
-	}
-	return btoa(binary);
+    let binary = "";
+    const len = bytes.byteLength;
+    const CHUNK_SIZE = 32768;
+    for (let i = 0; i < len; i += CHUNK_SIZE) {
+        const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, len));
+        binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+    }
+    return btoa(binary);
 }
 
 /** -----------------------------------------------------------
@@ -16,36 +16,39 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
  */
 
 function getPatchedViewerCSS(
-	BLOB_BINARY_MAP: Record<string, { type: string; data: Uint8Array }>
+    BLOB_BINARY_MAP: Record<string, { type: string; data: Uint8Array }>,
 ): string {
-	const originalCSS = BLOB_BINARY_MAP["pdf/web/viewer.css"];
-	if (!originalCSS) return "";
+    const originalCSS = BLOB_BINARY_MAP["pdf/web/viewer.css"];
+    if (!originalCSS) return "";
 
-	const text = new TextDecoder("utf-8").decode(originalCSS.data);
+    const text = new TextDecoder("utf-8").decode(originalCSS.data);
 
-	// Match url(...)
-	const relativeUrlPattern = /url\(\s*(['"]?)(?![a-z][\w+.-]*:|\/\/)([^'")]+)\1\s*\)/g;
+    // Match url(...)
+    const relativeUrlPattern =
+        /url\(\s*(['"]?)(?![a-z][\w+.-]*:|\/\/)([^'")]+)\1\s*\)/g;
 
-	return text.replace(relativeUrlPattern, (match, quote, url) => {
-		// Extract pure filename (remove path and query parameters)
-		const basename = url.match(/([^\/?#]+)(?:\?.*)?$/)?.[1];
+    return text.replace(relativeUrlPattern, (match, quote, url) => {
+        // Extract pure filename (remove path and query parameters)
+        const basename = url.match(/([^\/?#]+)(?:\?.*)?$/)?.[1];
 
-		if (!basename) return match;
+        if (!basename) return match;
 
-		// Find matching resource
-		const hitKey = Object.keys(BLOB_BINARY_MAP).find((k) => k.endsWith(basename));
+        // Find matching resource
+        const hitKey = Object.keys(BLOB_BINARY_MAP).find((k) =>
+            k.endsWith(basename),
+        );
 
-		if (hitKey) {
-			const resource = BLOB_BINARY_MAP[hitKey]!;
-			const base64 = uint8ArrayToBase64(resource.data);
-			const mimeType = resource.type || "application/octet-stream";
+        if (hitKey) {
+            const resource = BLOB_BINARY_MAP[hitKey]!;
+            const base64 = uint8ArrayToBase64(resource.data);
+            const mimeType = resource.type || "application/octet-stream";
 
-			return `url("data:${mimeType};base64,${base64}")`;
-		} else {
-			console.warn(`[Zotero Reader] CSS Resource not found: ${url}`);
-			return match;
-		}
-	});
+            return `url("data:${mimeType};base64,${base64}")`;
+        } else {
+            console.warn(`[Zotero Reader] CSS Resource not found: ${url}`);
+            return match;
+        }
+    });
 }
 
 /** -----------------------------------------------------------
@@ -57,66 +60,68 @@ function getPatchedViewerCSS(
  * ------------------------------------------------------------
  */
 export function patchPDFJSViewerHTML(
-	BLOB_BINARY_MAP: Record<string, { type: string; data: Uint8Array }>,
-	BLOB_URL_MAP: Record<string, string>
+    BLOB_BINARY_MAP: Record<string, { type: string; data: Uint8Array }>,
+    BLOB_URL_MAP: Record<string, string>,
 ) {
-	// Get original HTML bytes
-	let originalHTML = BLOB_BINARY_MAP["pdf/web/viewer.html"];
-	if (!originalHTML) return "";
-	let originalHTMLText = originalHTML.data;
-	const BOM = [0xef, 0xbb, 0xbf];
-	if (
-		originalHTMLText[0] === BOM[0] &&
-		originalHTMLText[1] === BOM[1] &&
-		originalHTMLText[2] === BOM[2]
-	) {
-		originalHTMLText = originalHTMLText.slice(3);
-	}
-	const text = new TextDecoder("utf-8").decode(originalHTMLText);
+    // Get original HTML bytes
+    let originalHTML = BLOB_BINARY_MAP["pdf/web/viewer.html"];
+    if (!originalHTML) return "";
+    let originalHTMLText = originalHTML.data;
+    const BOM = [0xef, 0xbb, 0xbf];
+    if (
+        originalHTMLText[0] === BOM[0] &&
+        originalHTMLText[1] === BOM[1] &&
+        originalHTMLText[2] === BOM[2]
+    ) {
+        originalHTMLText = originalHTMLText.slice(3);
+    }
+    const text = new TextDecoder("utf-8").decode(originalHTMLText);
 
-	// Parse into a DOM
-	const parser = new DOMParser();
-	const doc = parser.parseFromString(text, "text/html");
+    // Parse into a DOM
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, "text/html");
 
-	// Guard: ensure <head> exists (PDF viewer.html should have it)
-	const head = doc.head || doc.getElementsByTagName("head")[0];
+    // Guard: ensure <head> exists (PDF viewer.html should have it)
+    const head = doc.head || doc.getElementsByTagName("head")[0];
 
-	const cssLinks = doc.querySelectorAll('link[rel="stylesheet"][href="viewer.css"]');
-	cssLinks.forEach((linkEl) => {
-		const styleEl = doc.createElement("style");
-		styleEl.textContent = getPatchedViewerCSS(BLOB_BINARY_MAP);
-		linkEl.replaceWith(styleEl);
-	});
+    const cssLinks = doc.querySelectorAll(
+        'link[rel="stylesheet"][href="viewer.css"]',
+    );
+    cssLinks.forEach((linkEl) => {
+        const styleEl = doc.createElement("style");
+        styleEl.textContent = getPatchedViewerCSS(BLOB_BINARY_MAP);
+        linkEl.replaceWith(styleEl);
+    });
 
-	// Rewrite <script type="module" src="...">
-	const moduleScripts = doc.querySelectorAll('script[type="module"][src]');
-	moduleScripts.forEach((scriptEl) => {
-		const src = scriptEl.getAttribute("src") || "";
-		// Find a key whose basename matches (similar to your RegExp logic)
-		const basenameMatch = src.match(/([^\/?#]+)(?:\?.*)?$/);
-		const basename = basenameMatch?.[1];
-		if (basename) {
-			const hit = Object.keys(BLOB_URL_MAP).find((k) =>
-				k.includes(basename)
-			);
-			if (hit) {
-				scriptEl.setAttribute("src", BLOB_URL_MAP[hit]!);
-			} else {
-				console.warn(`No blob URL found for ${src}`);
-			}
-		}
-	});
+    // Rewrite <script type="module" src="...">
+    const moduleScripts = doc.querySelectorAll('script[type="module"][src]');
+    moduleScripts.forEach((scriptEl) => {
+        const src = scriptEl.getAttribute("src") || "";
+        // Find a key whose basename matches (similar to your RegExp logic)
+        const basenameMatch = src.match(/([^\/?#]+)(?:\?.*)?$/);
+        const basename = basenameMatch?.[1];
+        if (basename) {
+            const hit = Object.keys(BLOB_URL_MAP).find((k) =>
+                k.includes(basename),
+            );
+            if (hit) {
+                scriptEl.setAttribute("src", BLOB_URL_MAP[hit]!);
+            } else {
+                console.warn(`No blob URL found for ${src}`);
+            }
+        }
+    });
 
-	// Build the patch scripts (order: first the map, then the monkey patch)
-	const blobMapScript = doc.createElement("script");
-	blobMapScript.type = "module";
-	blobMapScript.textContent = `
+    // Build the patch scripts (order: first the map, then the monkey patch)
+    const blobMapScript = doc.createElement("script");
+    blobMapScript.type = "module";
+    blobMapScript.textContent = `
         window.BLOB_URL_MAP = ${JSON.stringify(BLOB_URL_MAP)};
     `.trim();
 
-	const patchScript = doc.createElement("script");
-	patchScript.type = "module";
-	patchScript.textContent = `
+    const patchScript = doc.createElement("script");
+    patchScript.type = "module";
+    patchScript.textContent = `
         function getBlobUrlForRequest(requestedUrl) {
             if (!requestedUrl) return null;
             const isRelative = !/^[a-zA-Z][a-zA-Z\\d+\\-.]*:/.test(requestedUrl) && !requestedUrl.startsWith("//");
@@ -179,90 +184,90 @@ export function patchPDFJSViewerHTML(
     // };
     // xhr.send();
     `.trim();
-	// 	patchScript.textContent = `
-	//     /** Find matching resource key and return its blob URL */
-	//     function getBlobUrlForRequest(requestedUrl) {
-	//       const isRelative = (u) => !/^[a-zA-Z][a-zA-Z\\d+\\-.]*:/.test(u) && !u.startsWith("//");
-	//       if (isRelative(requestedUrl)) {
-	//         return globalThis.BLOB_URL_MAP[requestedUrl] ||
-	//           globalThis.BLOB_URL_MAP[
-	//             Object.keys(globalThis.BLOB_URL_MAP).find(key =>
-	//               key.includes(requestedUrl.match(/([^\\/?#]+)(?:\\?.*)?$/)[1])
-	//             )
-	//           ];
-	//       }
-	//     }
+    // 	patchScript.textContent = `
+    //     /** Find matching resource key and return its blob URL */
+    //     function getBlobUrlForRequest(requestedUrl) {
+    //       const isRelative = (u) => !/^[a-zA-Z][a-zA-Z\\d+\\-.]*:/.test(u) && !u.startsWith("//");
+    //       if (isRelative(requestedUrl)) {
+    //         return globalThis.BLOB_URL_MAP[requestedUrl] ||
+    //           globalThis.BLOB_URL_MAP[
+    //             Object.keys(globalThis.BLOB_URL_MAP).find(key =>
+    //               key.includes(requestedUrl.match(/([^\\/?#]+)(?:\\?.*)?$/)[1])
+    //             )
+    //           ];
+    //       }
+    //     }
 
-	//     // ---------- patched fetch ----------
-	//     const realFetch = window.fetch.bind(window);
-	//     window.fetch = async function patchedFetch(input, init) {
-	//       const url = typeof input === "string" ? input
-	//         : input instanceof Request ? input.url
-	//         : input instanceof URL ? input.toString()
-	//         : "";
-	//       const blobUrl = getBlobUrlForRequest(url);
-	//       if (blobUrl) {
-	//         // If the request is for a blob URL, we return the blob URL directly
-	//         console.debug("Patched fetch for URL:", url, "-> Blob URL:", blobUrl);
-	//         return realFetch(blobUrl, init);
-	//       }
-	//       return realFetch(input, init);
-	//     };
+    //     // ---------- patched fetch ----------
+    //     const realFetch = window.fetch.bind(window);
+    //     window.fetch = async function patchedFetch(input, init) {
+    //       const url = typeof input === "string" ? input
+    //         : input instanceof Request ? input.url
+    //         : input instanceof URL ? input.toString()
+    //         : "";
+    //       const blobUrl = getBlobUrlForRequest(url);
+    //       if (blobUrl) {
+    //         // If the request is for a blob URL, we return the blob URL directly
+    //         console.debug("Patched fetch for URL:", url, "-> Blob URL:", blobUrl);
+    //         return realFetch(blobUrl, init);
+    //       }
+    //       return realFetch(input, init);
+    //     };
 
-	//     // ---------- patched XMLHttpRequest ----------
-	//     const NativeXHR = window.XMLHttpRequest;
-	//     function PatchedXHR() {
-	//       const real = new NativeXHR();
-	//       return new Proxy(real, {
-	//         get(target, prop, receiver) {
-	//           if (prop === 'open') {
-	//             return function open(method, url, async = true, user, pw) {
-	//               const mapped = getBlobUrlForRequest(url);
-	//               // If the request is for a blob URL, we return the blob URL directly
-	//               mapped && console.debug("Patched XHR open for URL:", url, "-> Blob URL:", mapped);
-	//               return target.open.call(target, method, mapped || url, async, user, pw);
-	//             };
-	//           }
-	//           const value = Reflect.get(target, prop, receiver);
-	//             if (typeof value === 'function') return value.bind(target);
-	//           return value;
-	//         },
-	//         set(target, prop, value) {
-	//           (target)[prop] = value;
-	//           return true;
-	//         }
-	//       });
-	//     }
-	//     Object.getOwnPropertyNames(NativeXHR).forEach(k => {
-	//       if ((k in PatchedXHR)) {
-	//         Object.defineProperty(
-	//           PatchedXHR,
-	//           k,
-	//           Object.getOwnPropertyDescriptor(NativeXHR, k)
-	//         );
-	//       }
-	//     });
-	//     window.XMLHttpRequest = PatchedXHR;
+    //     // ---------- patched XMLHttpRequest ----------
+    //     const NativeXHR = window.XMLHttpRequest;
+    //     function PatchedXHR() {
+    //       const real = new NativeXHR();
+    //       return new Proxy(real, {
+    //         get(target, prop, receiver) {
+    //           if (prop === 'open') {
+    //             return function open(method, url, async = true, user, pw) {
+    //               const mapped = getBlobUrlForRequest(url);
+    //               // If the request is for a blob URL, we return the blob URL directly
+    //               mapped && console.debug("Patched XHR open for URL:", url, "-> Blob URL:", mapped);
+    //               return target.open.call(target, method, mapped || url, async, user, pw);
+    //             };
+    //           }
+    //           const value = Reflect.get(target, prop, receiver);
+    //             if (typeof value === 'function') return value.bind(target);
+    //           return value;
+    //         },
+    //         set(target, prop, value) {
+    //           (target)[prop] = value;
+    //           return true;
+    //         }
+    //       });
+    //     }
+    //     Object.getOwnPropertyNames(NativeXHR).forEach(k => {
+    //       if ((k in PatchedXHR)) {
+    //         Object.defineProperty(
+    //           PatchedXHR,
+    //           k,
+    //           Object.getOwnPropertyDescriptor(NativeXHR, k)
+    //         );
+    //       }
+    //     });
+    //     window.XMLHttpRequest = PatchedXHR;
 
-	//   `.trim();
+    //   `.trim();
 
-	// Insert both at head start (prepend order: second inserted first so final order is map then patch)
-	if (head.firstChild) {
-		head.insertBefore(patchScript, head.firstChild);
-		head.insertBefore(blobMapScript, head.firstChild);
-	} else {
-		head.appendChild(blobMapScript);
-		head.appendChild(patchScript);
-	}
+    // Insert both at head start (prepend order: second inserted first so final order is map then patch)
+    if (head.firstChild) {
+        head.insertBefore(patchScript, head.firstChild);
+        head.insertBefore(blobMapScript, head.firstChild);
+    } else {
+        head.appendChild(blobMapScript);
+        head.appendChild(patchScript);
+    }
 
-	// Serialize DOM back to HTML
-	const doctype = Array.from(doc.childNodes).find(
-		(n) => n.nodeType === Node.DOCUMENT_TYPE_NODE
-	) as DocumentType | undefined;
+    // Serialize DOM back to HTML
+    const doctype = Array.from(doc.childNodes).find(
+        (n) => n.nodeType === Node.DOCUMENT_TYPE_NODE,
+    ) as DocumentType | undefined;
 
-	const serialized =
-		(doctype ? `<!DOCTYPE ${doctype.name}>\n` : "<!DOCTYPE html>\n") +
-		doc.documentElement.outerHTML;
+    const serialized =
+        (doctype ? `<!DOCTYPE ${doctype.name}>\n` : "<!DOCTYPE html>\n") +
+        doc.documentElement.outerHTML;
 
-	return serialized;
+    return serialized;
 }

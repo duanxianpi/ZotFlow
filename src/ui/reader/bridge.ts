@@ -1,17 +1,3 @@
-/**
- * 1. Parent creates Iframe and sets up Penpal listener.
- * 2. Iframe loads JS, sets up Penpal, and calls connect().
- * 3. Penpal connection established.
- * 4. Iframe calls parent.shakehand().
- * 5. Parent (in shakehand) generates token, defines OBSIDIAN_BRIDGE on iframe window.
- * 6. Parent returns (promise resolves in child).
- * 7. Iframe calls initBridge(), which calls window.OBSIDIAN_BRIDGE().
- * 8. Iframe gets ParentAPI & RegisterFn synchronously.
- * 9. Iframe inits ZoteroReaderAdapter.
- * 10. Iframe calls registerChildAPI(childAPI).
- * 11. Parent (in register) stores childAPI, sets state=ready, processes queue.
- * 12. Parent connection promise resolves. System Ready.
- */
 import type {
     ChildAPI,
     ParentAPI,
@@ -20,12 +6,6 @@ import type {
     ChildEvents,
     AnnotationJSON,
 } from "types/zotero-reader";
-
-// import {
-// 	createEmbeddableMarkdownEditor,
-// 	EmbeddableMarkdownEditor,
-// 	MarkdownEditorProps,
-// } from "../editor/markdown-editor";
 
 import { EditorView } from "@codemirror/view";
 import { Platform } from "obsidian";
@@ -57,6 +37,7 @@ type DirectBridgeBootstrap = () => {
     register: (childAPI: ChildAPI, token: string) => Promise<{ ok: boolean }>;
 };
 
+/** Penpal-based state machine managing the reader iframe lifecycle and bidirectional RPC. */
 export class IframeReaderBridge {
     private iframe: HTMLIFrameElement | null = null;
     private child?: ChildAPI; // Direct reference to Child API (replaces RemoteProxy<ChildAPI>)

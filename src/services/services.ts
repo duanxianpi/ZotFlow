@@ -96,5 +96,5 @@ class ServiceLocator {
     }
 }
 
-// Export singleton
+/** Singleton `ServiceLocator` instance providing access to all main-thread services. */
 export const services = new ServiceLocator();

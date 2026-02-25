@@ -10,6 +10,7 @@ import type {
     IDBZoteroGroup,
 } from "types/db-schema";
 
+/** Dexie subclass defining the IndexedDB schema for ZotFlow. */
 export class ZotFlowDB extends Dexie {
     keys!: Table<IDBZoteroKey, string>;
     groups!: Table<IDBZoteroGroup, number>;
@@ -69,8 +70,9 @@ export class ZotFlowDB extends Dexie {
 
 /**
  * Generate the Cartesian product of an array of arrays.
- * @param {Array<Array<any>>} arrays - The input array of arrays, e.g. [[1, 2], ['a', 'b']]
- * @returns {Array<Array<any>>} - All possible combinations
+ *
+ * @param arrays The input array of arrays, e.g. [[1, 2], ['a', 'b']]
+ * @returns All possible combinations
  */
 export function getCombinations(arrays: any[][]) {
     return arrays.reduce(
@@ -85,4 +87,5 @@ export function getCombinations(arrays: any[][]) {
     );
 }
 
+/** Singleton `ZotFlowDB` instance for worker-only database access. */
 export const db = new ZotFlowDB();

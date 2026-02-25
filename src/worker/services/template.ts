@@ -89,6 +89,7 @@ doi: {{ item.DOI | json }}
 {%- endif -%}
 `;
 
+/** LiquidJS template engine for rendering Zotero item source notes. */
 export class TemplateService {
     private engine: Liquid;
 

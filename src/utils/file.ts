@@ -72,7 +72,9 @@ async function saveFileInternal(
     }
 }
 
-// ================= External API =================
+/* ================================================================ */
+/*  External API                                                   */
+/* ================================================================ */
 
 /**
  * Save text/Markdown file (auto create or overwrite)

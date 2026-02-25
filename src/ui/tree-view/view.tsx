@@ -4,8 +4,10 @@ import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import { ZotFlowTree } from "./TreeView";
 
+/** View type identifier for the Zotero library tree sidebar. */
 export const TREE_VIEW_TYPE = "zotflow-tree-view";
 
+/** Obsidian `ItemView` wrapper that mounts the React `ZotFlowTree` component. */
 export class ZotFlowTreeView extends ItemView {
     root: Root | null = null;
 

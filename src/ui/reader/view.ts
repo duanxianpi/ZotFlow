@@ -15,6 +15,7 @@ import type {
 import type { ITaskInfo } from "types/tasks";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
+/** View type identifier for the Zotero cloud reader view. */
 export const ZOTERO_READER_VIEW_TYPE = "zotflow-zotero-reader-view";
 
 interface ReaderViewState extends Record<string, unknown> {
@@ -23,6 +24,7 @@ interface ReaderViewState extends Record<string, unknown> {
     readerOptions: Partial<CreateReaderOptions>;
 }
 
+/** Obsidian `ItemView` that embeds the Zotero reader iframe for remote/cloud attachments. */
 export class ZoteroReaderView extends ItemView {
     private attachmentItem: IDBZoteroItem<AttachmentData>;
     private readerOptions: Partial<CreateReaderOptions>;

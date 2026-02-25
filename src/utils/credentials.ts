@@ -1,12 +1,3 @@
-/**
- * Credential storage utility.
- *
- * Sensitive fields (e.g. WebDAV password) are stored via Obsidian's
- * SecretStorage API (available since v1.11.4).  This is cross-platform
- * safe and avoids exposing secrets in data.json, which may be synced
- * via iCloud, Git, or other sync services.
- */
-
 import type { SecretStorage } from "obsidian";
 
 const CREDENTIAL_KEYS = ["webdavpassword", "zoteroapikey"] as const;

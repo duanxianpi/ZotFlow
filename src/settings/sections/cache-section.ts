@@ -6,6 +6,7 @@ import { services } from "services/services";
 
 import type ZotFlow from "main";
 
+/** Settings section for attachment cache toggle, size limit, usage bar, and purge. */
 export class CacheSection {
     constructor(
         private plugin: ZotFlow,

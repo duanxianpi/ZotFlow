@@ -1,8 +1,3 @@
-/**
- * AUTO-GENERATED ZOTERO TYPES
- * Source: schema.json (v40)
- */
-
 interface BaseZoteroItemData {
     key: string;
     version: number;
