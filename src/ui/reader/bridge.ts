@@ -224,6 +224,40 @@ export class IframeReaderBridge {
         this.iframe.sandbox.add("allow-forms");
 
         this.iframe.onload = () => {
+            // Apply Obsidian color-scheme classes based on setting
+            const scheme = services.settings.readerColorScheme;
+            const iframeDoc = this.iframe?.contentDocument;
+            if (iframeDoc) {
+                let isDark = false;
+                if (scheme === "light") {
+                    isDark = false;
+                } else if (scheme === "dark") {
+                    isDark = true;
+                } else {
+                    // "obsidian" or "obsidian-theme", detect from parent
+                    const parentBody =
+                        this.iframe?.contentWindow?.parent?.document.body;
+                    if (parentBody) {
+                        isDark =
+                            getComputedStyle(parentBody).colorScheme === "dark";
+                    }
+                }
+                iframeDoc.documentElement.classList.toggle(
+                    "obsidian-theme-dark",
+                    isDark,
+                );
+                iframeDoc.documentElement.classList.toggle(
+                    "obsidian-theme-light",
+                    !isDark,
+                );
+                if (scheme === "obsidian-theme") {
+                    iframeDoc.documentElement.setAttribute(
+                        "data-obsidian-theme",
+                        "",
+                    );
+                }
+            }
+
             // Only handle unexpected reloads when we're in a stable state
             if (
                 (this._state === "reader-ready" ||

@@ -1,5 +1,7 @@
 import { Setting, SettingGroup } from "obsidian";
 import ZotFlow from "main";
+import type { ReaderColorScheme } from "settings/types";
+import { services } from "services/services";
 
 /** Settings section rendering source note paths, folders, and local reader options. */
 export class GeneralSection {
@@ -148,35 +150,68 @@ export class GeneralSection {
 
         zoteroReaderSettingGroup.addSetting((setting) => {
             setting
-                .setName("Follow Obsidian Color Scheme")
+                .setName("Reader Color Scheme")
                 .setDesc(
-                    "Follow the current Obsidian color scheme (light/dark) in the Zotero reader.",
+                    "Color scheme for the Zotero Reader UI and page background.",
                 )
-                .addToggle((toggle) => {
-                    toggle.setValue(
-                        this.plugin.settings.readerFollowObsidianScheme,
-                    );
-                    toggle.onChange(async (value) => {
-                        this.plugin.settings.readerFollowObsidianScheme = value;
-                        await this.plugin.saveSettings();
-                    });
+                .addDropdown((dropdown) => {
+                    dropdown
+                        .addOption("light", "Light")
+                        .addOption("dark", "Dark")
+                        .addOption("obsidian", "Adapt to Obsidian Scheme")
+                        .addOption(
+                            "obsidian-theme",
+                            "Adapt to Obsidian Scheme (Theme)",
+                        )
+                        .setValue(this.plugin.settings.readerColorScheme)
+                        .onChange(async (value) => {
+                            this.plugin.settings.readerColorScheme =
+                                value as ReaderColorScheme;
+                            await this.plugin.saveSettings();
+                        });
                 });
         });
 
         zoteroReaderSettingGroup.addSetting((setting) => {
             setting
-                .setName("Follow Obsidian Theme")
-                .setDesc(
-                    "Use the forground/background colors of the current Obsidian theme in the Zotero reader.",
-                )
-                .addToggle((toggle) => {
-                    toggle.setValue(
-                        this.plugin.settings.readerFollowObsidianTheme,
-                    );
-                    toggle.onChange(async (value) => {
-                        this.plugin.settings.readerFollowObsidianTheme = value;
-                        await this.plugin.saveSettings();
-                    });
+                .setName("Default Light Theme")
+                .setDesc("Default page theme when the reader is in light mode.")
+                .addDropdown((dropdown) => {
+                    dropdown.addOption("original_fallback", "Original");
+                    dropdown.addOption("dark", "Dark");
+                    dropdown.addOption("snow", "Snow");
+                    dropdown.addOption("sepia", "Sepia");
+                    for (const t of services.viewStateService.getCustomThemes()) {
+                        dropdown.addOption(t.id, t.label);
+                    }
+                    dropdown
+                        .setValue(this.plugin.settings.defaultLightTheme)
+                        .onChange(async (value) => {
+                            this.plugin.settings.defaultLightTheme = value;
+                            await this.plugin.saveSettings();
+                        });
+                });
+        });
+
+        zoteroReaderSettingGroup.addSetting((setting) => {
+            setting
+                .setName("Default Dark Theme")
+                .setDesc("Default page theme when the reader is in dark mode.")
+                .addDropdown((dropdown) => {
+                    dropdown.addOption("original_fallback", "Original");
+                    dropdown.addOption("dark", "Dark");
+                    dropdown.addOption("snow", "Snow");
+                    dropdown.addOption("sepia", "Sepia");
+                    dropdown.addOption("obsidian", "Obsidian");
+                    for (const t of services.viewStateService.getCustomThemes()) {
+                        dropdown.addOption(t.id, t.label);
+                    }
+                    dropdown
+                        .setValue(this.plugin.settings.defaultDarkTheme)
+                        .onChange(async (value) => {
+                            this.plugin.settings.defaultDarkTheme = value;
+                            await this.plugin.saveSettings();
+                        });
                 });
         });
     }

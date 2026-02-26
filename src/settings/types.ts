@@ -3,6 +3,13 @@ import type { CustomReaderTheme } from "types/zotero-reader";
 /** Per-library sync mode. */
 export type LibrarySyncMode = "bidirectional" | "readonly" | "ignored";
 
+/** Reader color scheme mode. */
+export type ReaderColorScheme =
+    | "light"
+    | "dark"
+    | "obsidian"
+    | "obsidian-theme";
+
 /** Settings tab identifier. */
 export type TabSection = "sync" | "webdav" | "cache" | "general";
 
@@ -30,8 +37,9 @@ export interface ZotFlowSettings {
     autoImportAnnotationImages: boolean;
     annotationImageFolder: string;
     overwriteViewer: boolean;
-    readerFollowObsidianTheme: boolean;
-    readerFollowObsidianScheme: boolean;
+    readerColorScheme: ReaderColorScheme;
+    defaultLightTheme: string;
+    defaultDarkTheme: string;
 }
 
 /** Persisted reader view state for a single attachment (local or zotero). */
@@ -70,8 +78,9 @@ export const DEFAULT_SETTINGS: ZotFlowSettings = {
     autoImportAnnotationImages: false,
     annotationImageFolder: "",
     overwriteViewer: false,
-    readerFollowObsidianTheme: false,
-    readerFollowObsidianScheme: true,
+    readerColorScheme: "obsidian-theme",
+    defaultLightTheme: "obsidian",
+    defaultDarkTheme: "obsidian",
 };
 
 /** Default shape of the full `data.json` blob (settings + view states). */

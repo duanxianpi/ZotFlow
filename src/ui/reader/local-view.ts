@@ -86,9 +86,16 @@ export class LocalReaderView extends ItemView {
     private async renderReader(file: TFile) {
         const container = this.contentEl;
 
-        // Ensure color scheme is set initially
-        this.colorScheme = getComputedStyle(document.body)
-            .colorScheme as ColorScheme;
+        // Resolve initial color scheme based on setting
+        const schemeSetting = services.settings.readerColorScheme;
+        if (schemeSetting === "light") {
+            this.colorScheme = "light";
+        } else if (schemeSetting === "dark") {
+            this.colorScheme = "dark";
+        } else {
+            this.colorScheme = getComputedStyle(document.body)
+                .colorScheme as ColorScheme;
+        }
 
         try {
             // Create bridge once
@@ -147,16 +154,24 @@ export class LocalReaderView extends ItemView {
                 });
 
                 // Observe color scheme changes via Obsidian's css-change event
+                // Only monitor when following Obsidian scheme
+
                 this.registerEvent(
                     this.app.workspace.on("css-change", () => {
-                        const newColorScheme = getComputedStyle(document.body)
-                            .colorScheme as ColorScheme;
                         if (
-                            newColorScheme &&
-                            newColorScheme !== this.colorScheme
+                            schemeSetting === "obsidian" ||
+                            schemeSetting === "obsidian-theme"
                         ) {
-                            this.bridge!.setColorScheme(newColorScheme);
-                            this.colorScheme = newColorScheme;
+                            const newColorScheme = getComputedStyle(
+                                document.body,
+                            ).colorScheme as ColorScheme;
+                            if (
+                                newColorScheme &&
+                                newColorScheme !== this.colorScheme
+                            ) {
+                                this.bridge!.setColorScheme(newColorScheme);
+                                this.colorScheme = newColorScheme;
+                            }
                         }
                     }),
                 );
@@ -178,18 +193,10 @@ export class LocalReaderView extends ItemView {
                     file.path,
                 );
 
-                const themeDefaults = services.settings
-                    .readerFollowObsidianTheme
-                    ? { lightTheme: "obsidian", darkTheme: "obsidian" }
-                    : services.settings.readerFollowObsidianScheme
-                      ? {
-                            lightTheme: undefined,
-                            darkTheme: "dark",
-                        }
-                      : {
-                            lightTheme: "original_fallback",
-                            darkTheme: "original_fallback",
-                        };
+                const themeDefaults = {
+                    lightTheme: services.settings.defaultLightTheme,
+                    darkTheme: services.settings.defaultDarkTheme,
+                };
 
                 // User's saved theme takes top priority
                 const themeOverrides = {
