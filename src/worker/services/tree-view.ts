@@ -8,6 +8,8 @@ export type EntityMap = Record<
         libraryName: string;
         citationKey?: string;
         contentType?: string;
+        dateAdded?: string;
+        dateModified?: string;
     }
 >;
 
@@ -181,6 +183,8 @@ export class TreeViewService {
                 libraryName: string,
                 citationKey?: string,
                 contentType?: string,
+                dateAdded?: string,
+                dateModified?: string,
             ) => {
                 // Only register when the key is not registered
                 if (!entities[key]) {
@@ -191,6 +195,8 @@ export class TreeViewService {
                         libraryName,
                         citationKey,
                         contentType,
+                        dateAdded,
+                        dateModified,
                     };
                 }
             };
@@ -214,6 +220,9 @@ export class TreeViewService {
                         item.libraryID,
                         libName,
                         item.raw.data.contentType,
+                        undefined,
+                        item.dateAdded,
+                        item.dateModified,
                     );
                 } else {
                     registerEntity(
@@ -223,6 +232,9 @@ export class TreeViewService {
                         item.libraryID,
                         libName,
                         item.citationKey,
+                        undefined,
+                        item.dateAdded,
+                        item.dateModified,
                     );
                 }
 

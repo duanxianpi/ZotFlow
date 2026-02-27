@@ -13,6 +13,18 @@ export type ReaderColorScheme =
 /** Settings tab identifier. */
 export type TabSection = "sync" | "webdav" | "cache" | "general";
 
+/** Sort order for collections in the tree view. */
+export type CollectionSortOrder = "name-asc" | "name-desc";
+
+/** Sort order for items in the tree view. */
+export type ItemSortOrder =
+    | "title-asc"
+    | "title-desc"
+    | "modified-new"
+    | "modified-old"
+    | "added-new"
+    | "added-old";
+
 /** Per-library sync configuration. */
 export interface LibraryConfig {
     mode: LibrarySyncMode;
@@ -40,6 +52,8 @@ export interface ZotFlowSettings {
     readerColorScheme: ReaderColorScheme;
     defaultLightTheme: string;
     defaultDarkTheme: string;
+    treeCollectionSort: CollectionSortOrder;
+    treeItemSort: ItemSortOrder;
 }
 
 /** Persisted reader view state for a single attachment (local or zotero). */
@@ -81,6 +95,8 @@ export const DEFAULT_SETTINGS: ZotFlowSettings = {
     readerColorScheme: "obsidian-theme",
     defaultLightTheme: "obsidian",
     defaultDarkTheme: "obsidian",
+    treeCollectionSort: "name-asc",
+    treeItemSort: "title-asc",
 };
 
 /** Default shape of the full `data.json` blob (settings + view states). */

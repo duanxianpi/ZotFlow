@@ -5,12 +5,13 @@ import { ViewStateService } from "./view-state-service";
 import { TaskMonitor } from "./task-monitor";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
-import type { App, Plugin } from "obsidian";
+import type { App } from "obsidian";
 import type { ZotFlowSettings } from "settings/types";
+import type ZotFlow from "main";
 
 class ServiceLocator {
     private _app: App;
-    private _plugin: Plugin;
+    private _plugin: ZotFlow;
     private _settings: ZotFlowSettings;
     private _initialized = false;
 
@@ -20,7 +21,7 @@ class ServiceLocator {
     private _viewStateService: ViewStateService;
     private _taskMonitor: TaskMonitor;
 
-    initialize(plugin: Plugin, settings: ZotFlowSettings) {
+    initialize(plugin: ZotFlow, settings: ZotFlowSettings) {
         this._plugin = plugin;
         this._app = plugin.app;
         this._settings = settings;
@@ -52,7 +53,13 @@ class ServiceLocator {
     }
 
     updateSettings(newSettings: ZotFlowSettings) {
+        this.assertInitialized();
         this._settings = newSettings;
+    }
+
+    saveSettings() {
+        this.assertInitialized();
+        return this._plugin.saveSettings();
     }
 
     get plugin() {
