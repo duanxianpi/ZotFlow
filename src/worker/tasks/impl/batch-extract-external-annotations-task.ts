@@ -214,8 +214,8 @@ export class BatchExtractExternalAnnotationsTask extends BaseTask {
                     sortIndex: raw.annotationSortIndex,
                     position: JSON.parse(raw.annotationPosition),
                     tags: raw.tags || [],
-                    dateModified: "",
-                    dateCreated: "",
+                    dateModified: raw.dateModified,
+                    dateAdded: raw.dateAdded,
                 });
 
                 return {
@@ -225,8 +225,8 @@ export class BatchExtractExternalAnnotationsTask extends BaseTask {
                     parentItem: attachment.key,
                     title: "",
                     collections: [],
-                    dateAdded: now,
-                    dateModified: now,
+                    dateAdded: raw.dateAdded || now,
+                    dateModified: raw.dateModified || now,
                     version: 0,
                     trashed: 0,
                     searchCreators: [],
@@ -247,8 +247,8 @@ export class BatchExtractExternalAnnotationsTask extends BaseTask {
                             parentItem: attachment.key,
                             annotationIsExternal: true,
                             relations: {},
-                            dateAdded: now,
-                            dateModified: now,
+                            dateAdded: raw.dateAdded || now,
+                            dateModified: raw.dateModified || now,
                             tags: raw.tags || [],
                             deleted: false,
                             version: 0,

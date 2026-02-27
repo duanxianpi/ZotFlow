@@ -157,6 +157,7 @@ export class BatchExtractImagesTask extends BaseTask {
                 attachment,
                 this.settings.zoteroapikey,
                 (a: IDBZoteroItem<AnnotationData>) => {
+                    if (a.syncStatus === "deleted") return false;
                     const isImage =
                         a.raw.data.annotationType === "image" ||
                         a.raw.data.annotationType === "ink";

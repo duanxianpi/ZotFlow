@@ -52,6 +52,10 @@ export async function getAnnotationJson(
 ): Promise<AnnotationJSON[]> {
     // Get current user from settings/DB
 
+    if (item.itemType !== "attachment") {
+        return [];
+    }
+
     const currentUserKey = await db.keys.get(apiKey);
     const currentUser = currentUserKey
         ? {
@@ -161,8 +165,15 @@ export async function getAnnotationJson(
         processedTags.forEach((t) => delete t.position);
         o.tags = processedTags;
 
+        o.dateAdded = annotation.dateAdded;
         o.dateModified = annotation.dateModified;
         annotationJson.push(o);
     }
+
+    // Sort by document position (sortIndex is zero-padded: pageIndex|yOffset|xOffset)
+    annotationJson.sort((a, b) =>
+        (a.sortIndex ?? "").localeCompare(b.sortIndex ?? ""),
+    );
+
     return annotationJson;
 }

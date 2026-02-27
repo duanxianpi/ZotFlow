@@ -1,3 +1,5 @@
+import type { AnnotationJSON } from "./zotero-reader";
+
 /** Utility functions available inside LiquidJS templates. */
 export interface TemplateUtils {
     formatCreators: (creators: string[]) => string;
@@ -89,6 +91,7 @@ export interface AnnotationTemplateContext {
     color?: string;
     pageLabel?: string;
     tags: Array<{ tag: string; type?: number }>;
-    dateCreated: string;
+    dateAdded: string;
     dateModified: string;
+    raw: AnnotationJSON;
 }

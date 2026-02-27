@@ -15,6 +15,8 @@ import type {
 } from "types/zotero-item";
 import type { ZotFlowSettings } from "settings/types";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
+import { getAnnotationJson } from "db/annotation";
+import type { AnnotationJSON } from "types/zotero-reader";
 
 const DEFAULT_ITEM_TEMPLATE = `---
 citationKey: {{ item.citationKey | json }}
@@ -247,15 +249,13 @@ export class TemplateService {
                 .map((att) => this.mapToAttachmentContext(att)),
         );
 
-        const annotations = await Promise.all(
-            children
-                .filter(
-                    (c) =>
-                        c.syncStatus !== "deleted" &&
-                        c.itemType === "annotation",
-                )
-                .map((att: any) => this.mapToAnnotationContext(att)),
-        );
+        const annotations = (
+            await getAnnotationJson(
+                item as any,
+                this.settings.zoteroapikey,
+                (item) => item.syncStatus !== "deleted",
+            )
+        ).map((a) => this.mapToAnnotationContext(a));
 
         const attachmentAnnotations = attachments.flatMap(
             (att) => att.annotations,
@@ -321,47 +321,36 @@ export class TemplateService {
         };
     }
 
-    public async mapToAnnotationContext(
-        item: IDBZoteroItem<AnnotationData>,
-    ): Promise<AnnotationTemplateContext> {
-        const data = item.raw.data || {};
+    public mapToAnnotationContext(
+        annotation: AnnotationJSON,
+    ): AnnotationTemplateContext {
         return {
-            key: item.key,
-            libraryID: item.libraryID,
-            type: data.annotationType,
-            authorName: data.annotationAuthorName,
-            text: this.sanitizeQuotesString(data.annotationText || ""),
-            comment: this.sanitizeQuotesString(data.annotationComment),
-            color: data.annotationColor,
-            pageLabel: data.annotationPageLabel,
-            tags: data.tags || [],
-            dateCreated: item.dateAdded,
-            dateModified: item.dateModified,
+            key: annotation.id!,
+            libraryID: annotation.libraryID!,
+            type: annotation.type,
+            authorName: annotation.authorName,
+            text: this.sanitizeQuotesString(annotation.text || ""),
+            comment: this.sanitizeQuotesString(annotation.comment || ""),
+            color: annotation.color,
+            pageLabel: annotation.pageLabel,
+            tags: annotation.tags?.map((t) => ({ tag: t.name })) || [],
+            dateAdded: annotation.dateAdded,
+            dateModified: annotation.dateModified,
+
+            raw: annotation,
         };
     }
 
     public async mapToAttachmentContext(
         item: IDBZoteroItem<AttachmentData>,
     ): Promise<AttachmentTemplateContext> {
-        const children = (
-            await db.items
-                .where(["libraryID", "parentItem", "itemType", "trashed"])
-                .anyOf(
-                    getCombinations([
-                        [item.libraryID],
-                        [item.key],
-                        ["annotation"],
-                        [0],
-                    ]),
-                )
-                .toArray()
-        ).filter(
-            (i) => i.syncStatus !== "deleted",
-        ) as IDBZoteroItem<AnnotationData>[];
-
-        const annotations = await Promise.all(
-            children.map((ann) => this.mapToAnnotationContext(ann)),
-        );
+        const annotations = (
+            await getAnnotationJson(
+                item,
+                this.settings.zoteroapikey,
+                (item) => item.syncStatus !== "deleted",
+            )
+        ).map((a) => this.mapToAnnotationContext(a));
 
         const data = item.raw.data || {};
         return {
