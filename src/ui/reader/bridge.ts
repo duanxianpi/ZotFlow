@@ -133,44 +133,85 @@ export class IframeReaderBridge {
                 return services.settings;
             },
 
-            handleSetDataTransferAnnotations: (
-                dataTransfer: DataTransfer,
-                annotations: AnnotationJSON[],
-                fromText: boolean,
-            ) => {
+            getLinkToSelection: (text: string, navigationInfo: any) => {
                 if (this.isLocal && this.localAttachment) {
-                    services.logService.debug(
-                        "Handling setDataTransfer for local attachment",
-                        "IframeReaderBridge",
-                    );
                     const note = getLinkedSourceNote(
                         services.app,
                         this.localAttachment,
                     );
 
                     if (note) {
-                        const content = annotations.reduce((acc, anno) => {
-                            return acc + `![[${note.path}#^${anno.id}]]\n\n`;
-                        }, "");
-                        dataTransfer.setData("text/plain", content);
-                        return;
+                        const filePath = this.localAttachment.path;
+                        const encodedNavigationInfo = encodeURIComponent(
+                            JSON.stringify(navigationInfo),
+                        );
+
+                        return `[[${filePath}${navigationInfo.pageLabel ? `#page=${navigationInfo.pageLabel}` : ""}#annotation=${encodedNavigationInfo})|${text}]]`;
                     }
+
+                    return "";
                 } else if (!this.isLocal && this.attachmentItem) {
-                    services.logService.debug(
-                        "Handling setDataTransfer for remote attachment",
-                        "IframeReaderBridge",
-                    );
                     const note = services.indexService.getFileByKey(
                         this.attachmentItem.parentItem === ""
                             ? this.attachmentItem.key
                             : this.attachmentItem.parentItem,
                     );
                     if (note) {
-                        const content = annotations.reduce((acc, anno) => {
-                            return acc + `![[${note.path}#^${anno.id}]]\n\n`;
-                        }, "");
-                        dataTransfer.setData("text/plain", content);
-                        return;
+                        const libraryID = this.attachmentItem.libraryID;
+                        const itemKey = this.attachmentItem.key;
+                        const encodedNavigationInfo = encodeURIComponent(
+                            JSON.stringify(navigationInfo),
+                        );
+
+                        return `[${text}](obsidian://zotflow?type=open-attachment&libraryID=${libraryID}&key=${itemKey}&navigation=${encodedNavigationInfo})`;
+                    }
+                    return "";
+                }
+                return "";
+            },
+
+            handleSetDataTransferAnnotations: (
+                dataTransfer: DataTransfer,
+                annotations: AnnotationJSON[],
+                fromText?: boolean,
+            ) => {
+                if (fromText) {
+                    dataTransfer.setData(
+                        "text/plain",
+                        annotations.map((a) => a.text).join("\n"),
+                    );
+                    return;
+                } else {
+                    if (this.isLocal && this.localAttachment) {
+                        const note = getLinkedSourceNote(
+                            services.app,
+                            this.localAttachment,
+                        );
+
+                        if (note) {
+                            const content = annotations.reduce((acc, anno) => {
+                                return (
+                                    acc + `![[${note.path}#^${anno.id}]]\n\n`
+                                );
+                            }, "");
+                            dataTransfer.setData("text/plain", content);
+                            return;
+                        }
+                    } else if (!this.isLocal && this.attachmentItem) {
+                        const note = services.indexService.getFileByKey(
+                            this.attachmentItem.parentItem === ""
+                                ? this.attachmentItem.key
+                                : this.attachmentItem.parentItem,
+                        );
+                        if (note) {
+                            const content = annotations.reduce((acc, anno) => {
+                                return (
+                                    acc + `![[${note.path}#^${anno.id}]]\n\n`
+                                );
+                            }, "");
+                            dataTransfer.setData("text/plain", content);
+                            return;
+                        }
                     }
                 }
                 dataTransfer.setData("text/plain", " ");

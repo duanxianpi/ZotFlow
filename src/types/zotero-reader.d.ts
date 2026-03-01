@@ -75,10 +75,11 @@ export type ParentAPI = {
     getStyleSheets: () => StyleSheetList;
     getColorScheme: () => ColorScheme;
     getPluginSettings: () => ZotFlowSettings;
+    getLinkToSelection: (text: string, navigationInfo: any) => string;
     handleSetDataTransferAnnotations: (
         dataTransfer: DataTransfer,
         annotations: AnnotationJSON[],
-        fromText: boolean,
+        fromText?: boolean,
     ) => void;
     createAnnotationEditor: (
         container: HTMLElement,

@@ -91,7 +91,7 @@ export const DEFAULT_SETTINGS: ZotFlowSettings = {
     localSourceNoteFolder: "",
     autoImportAnnotationImages: false,
     annotationImageFolder: "",
-    overwriteViewer: false,
+    overwriteViewer: true,
     readerColorScheme: "obsidian-theme",
     defaultLightTheme: "obsidian",
     defaultDarkTheme: "obsidian",
