@@ -127,8 +127,45 @@ export class TemplateService {
         templateContent: string | null,
         originalFrontmatter: Record<string, any> = {},
     ): Promise<string> {
+        const context = await this.prepareItemContext(item);
+        return this.renderTemplate(context, templateContent, originalFrontmatter, {
+            "zotflow-locked": true,
+            "zotero-key": item.key,
+            "item-version": item.version,
+        });
+    }
+
+    /**
+     * Render a note using a pre-built template context (e.g. from workflow).
+     * The `itemContext` is the same shape as `ItemTemplateContext`.
+     */
+    async renderWithContext(
+        itemContext: ItemTemplateContext,
+        templateContent: string | null,
+        originalFrontmatter: Record<string, any> = {},
+    ): Promise<string> {
+        const context = {
+            item: itemContext,
+            settings: {
+                ...this.settings,
+                annotationImageFolder:
+                    this.settings.annotationImageFolder.replace(/\/$/, ""),
+            },
+        };
+        return this.renderTemplate(context, templateContent, originalFrontmatter, {
+            "zotflow-locked": true,
+            "zotero-key": itemContext.key,
+            "item-version": itemContext.version,
+        });
+    }
+
+    private async renderTemplate(
+        context: any,
+        templateContent: string | null,
+        originalFrontmatter: Record<string, any>,
+        mandatoryFields: Record<string, unknown>,
+    ): Promise<string> {
         try {
-            const context = await this.prepareItemContext(item);
             const template = templateContent || DEFAULT_ITEM_TEMPLATE;
 
             // Separate Frontmatter and Body
@@ -178,9 +215,7 @@ export class TemplateService {
             };
 
             // Ensure Mandatory Fields
-            finalFrontmatter["zotflow-locked"] = true;
-            finalFrontmatter["zotero-key"] = item.key;
-            finalFrontmatter["item-version"] = item.version;
+            Object.assign(finalFrontmatter, mandatoryFields);
 
             // Stringify Frontmatter
             const frontmatterString =

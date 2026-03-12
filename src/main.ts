@@ -54,6 +54,10 @@ import { switchNode } from "ui/workflow/nodes/controls/SwitchNode";
 import { applyToEachNode } from "ui/workflow/nodes/controls/ApplyToEachNode";
 import { registerNodeType } from "ui/workflow/node-registry";
 import { exampleAction } from "ui/workflow/nodes/actions/ExampleActionNode";
+import { fetchItemNode } from "ui/workflow/nodes/actions/FetchItemNode";
+import { saveAnnotationImagesNode } from "ui/workflow/nodes/actions/SaveAnnotationImagesNode";
+import { renderTemplateNode } from "ui/workflow/nodes/actions/RenderTemplateNode";
+import { writeNoteNode } from "ui/workflow/nodes/actions/WriteNoteNode";
 import { manualTrigger } from "ui/workflow/nodes/triggers/ManualTriggerNode";
 
 const SUPPORTED_EXTENSIONS = ["pdf", "epub", "html"];
@@ -176,6 +180,10 @@ export default class ZotFlow extends Plugin {
         registerNodeType(terminateNode);
         registerNodeType(switchNode);
         registerNodeType(applyToEachNode);
+        registerNodeType(fetchItemNode);
+        registerNodeType(saveAnnotationImagesNode);
+        registerNodeType(renderTemplateNode);
+        registerNodeType(writeNoteNode);
 
         this.addRibbonIcon(
             "zotero-icon",

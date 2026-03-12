@@ -1,7 +1,7 @@
 import { db } from "db/db";
 
 import type { IParentProxy } from "bridge/types";
-import type { IDBZoteroItem } from "types/db-schema";
+import type { AnyIDBZoteroItem, IDBZoteroItem } from "types/db-schema";
 import type { AttachmentData } from "types/zotero-item";
 
 /**
@@ -10,6 +10,17 @@ import type { AttachmentData } from "types/zotero-item";
  */
 export class DbHelperService {
     constructor(private parentHost: IParentProxy) {}
+
+    /**
+     * Look up any item by library + key.
+     * Returns `undefined` if the item doesn't exist.
+     */
+    async getItem(
+        libraryID: number,
+        itemKey: string,
+    ): Promise<AnyIDBZoteroItem | undefined> {
+        return db.items.get([libraryID, itemKey]);
+    }
 
     /**
      * Look up an attachment item by library + key.

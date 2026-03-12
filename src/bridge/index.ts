@@ -31,6 +31,7 @@ import type { AnnotationJSON } from "types/zotero-reader";
 import type { App } from "obsidian";
 import { services } from "services/services";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
+import type { ItemTemplateContext } from "types/template-context";
 
 /** Comlink-based RPC wrapper managing the Web Worker lifecycle and exposing all worker service proxies. */
 export class WorkerBridge {
@@ -52,6 +53,7 @@ export class WorkerBridge {
     private _pdfProcessor: PDFProcessWorker;
     private _tasks: TaskManager;
 
+    private _parentHost: ParentHost | undefined;
     private _workerBlobUrl: string;
     private _initialized = false;
 
@@ -67,9 +69,10 @@ export class WorkerBridge {
     async initialize(settings: ZotFlowSettings, app: App) {
         // Worker settings update / initialization
         const blobUrls = getBlobUrls();
+        this._parentHost = new ParentHost(app);
         await this._api.init(
             settings,
-            Comlink.proxy(new ParentHost(app)),
+            Comlink.proxy(this._parentHost),
             blobUrls,
         );
 
@@ -212,6 +215,68 @@ export class WorkerBridge {
     cancelTask(taskId: string): void {
         this.assertInitialized();
         this._api.cancelTask(taskId);
+    }
+
+    /* ================================================================ */
+    /*  Workflow-specific methods                                       */
+    /* ================================================================ */
+
+    async getItemContext(
+        libraryID: number,
+        key: string,
+    ): Promise<ItemTemplateContext & { libraryName: string }> {
+        this.assertInitialized();
+        return this._api.getItemContext(libraryID, key);
+    }
+
+    async renderNoteFromContext(
+        itemContext: ItemTemplateContext,
+        templateContent: string | null,
+        existingFrontmatter: Record<string, any>,
+    ): Promise<string> {
+        this.assertInitialized();
+        return this._api.renderNoteFromContext(
+            itemContext,
+            templateContent,
+            existingFrontmatter,
+        );
+    }
+
+    async extractAnnotationImagesForItem(
+        libraryID: number,
+        key: string,
+        force: boolean,
+    ): Promise<void> {
+        this.assertInitialized();
+        return this._api.extractAnnotationImagesForItem(libraryID, key, force);
+    }
+
+    /* ================================================================ */
+    /*  Main-thread file operations (no worker roundtrip)               */
+    /* ================================================================ */
+
+    async readTextFile(path: string): Promise<string | null> {
+        this.assertInitialized();
+        return this._parentHost!.readTextFile(path);
+    }
+
+    async writeTextFile(path: string, content: string): Promise<void> {
+        this.assertInitialized();
+        return this._parentHost!.writeTextFile(path, content);
+    }
+
+    async checkFile(path: string): Promise<{
+        exists: boolean;
+        path: string;
+        frontmatter?: Record<string, any>;
+    }> {
+        this.assertInitialized();
+        return this._parentHost!.checkFile(path);
+    }
+
+    async indexFile(path: string): Promise<void> {
+        this.assertInitialized();
+        return this._parentHost!.indexFile(path);
     }
 
     updateSettings(newSettings: ZotFlowSettings) {

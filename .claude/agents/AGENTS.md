@@ -1,4 +1,4 @@
-# ZotFlow — Agent Guide
+# ZotFlow — General Agent Guide
 
 > This document is the single source of truth for any AI agent working on this
 > codebase. Read it fully before making changes.
