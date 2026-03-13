@@ -5,17 +5,15 @@ import type { AnnotationJSON } from "types/zotero-reader";
 import type { TFileWithoutParentAndVault } from "types/zotflow";
 import { ZotFlowError, ZotFlowErrorCode } from "utils/error";
 
-/** CRUD service for local vault file notes (PDF/EPUB opened locally) with annotation management. */
+// Legacy regex patterns kept for migration fallback
+const OZRP_REGEX =
+    /%% OZRP-ANNO-BEGIN\s*({[\s\S]*?})\s*%%[\s\S]*?%% OZRP-ANNO-END %%/g;
+const ZOTFLOW_REGEX =
+    /%% ZOTFLOW_ANNO_(\w+)_BEG\s*([\s\S]*?)\s*%%[\s\S]*?%% ZOTFLOW_ANNO_\1_END %%/g;
+
+/** CRUD service for local vault file notes (PDF/EPUB opened locally). */
 export class LocalNoteService {
     private debouncers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-
-    // Regex for parsing legacy OZRP annotations
-    private readonly OZRP_REGEX =
-        /%% OZRP-ANNO-BEGIN\s*({[\s\S]*?})\s*%%[\s\S]*?%% OZRP-ANNO-END %%/g;
-
-    // Regex for parsing ZotFlow annotations
-    private readonly ZOTFLOW_REGEX =
-        /%% ZOTFLOW_ANNO_(\w+)_BEG\s*([\s\S]*?)\s*%%[\s\S]*?%% ZOTFLOW_ANNO_\1_END %%/g;
 
     constructor(
         private settings: ZotFlowSettings,
@@ -48,7 +46,10 @@ export class LocalNoteService {
      * Open note (core entry point)
      * Automatically find or create note -> Open file in Obsidian
      */
-    async openNote(localAttachment: TFileWithoutParentAndVault) {
+    async openNote(
+        localAttachment: TFileWithoutParentAndVault,
+        annotations: AnnotationJSON[] = [],
+    ) {
         try {
             const result =
                 await this.parentHost.getLinkedSourceNote(localAttachment);
@@ -66,7 +67,10 @@ export class LocalNoteService {
                     `Note not found, creating new for: ${localAttachment.basename}`,
                     "LocalNoteService",
                 );
-                const path = await this.performCreate(localAttachment, []);
+                const path = await this.performCreate(
+                    localAttachment,
+                    annotations,
+                );
                 await this.parentHost.openFile(path, true);
             }
         } catch (e) {
@@ -80,8 +84,7 @@ export class LocalNoteService {
     }
 
     /**
-     * Trigger update (for background sync or manual refresh)
-     * Support immediate execution or debounced execution
+     * Trigger note re-render (for explicit refresh or initial creation).
      */
     async triggerUpdate(
         localAttachment: TFileWithoutParentAndVault,
@@ -180,6 +183,111 @@ export class LocalNoteService {
                 `Failed to delete image ${annotationKey}: ${e.message}`,
             );
         }
+    }
+
+    /**
+     * ============================================================
+     * Legacy Annotation Parsing (migration support)
+     * ============================================================
+     */
+
+    /**
+     * Parse annotations from inline Obsidian comments in the source note.
+     * Supports both OZRP and ZOTFLOW legacy formats.
+     * Called from main thread as a fallback when no `.zf.json` file exists.
+     */
+    async parseLegacyAnnotations(
+        localAttachment: TFileWithoutParentAndVault,
+    ): Promise<AnnotationJSON[]> {
+        const annotations: AnnotationJSON[] = [];
+
+        try {
+            const notePath =
+                await this.parentHost.getLinkedSourceNote(localAttachment);
+            if (!notePath) return annotations;
+
+            const note = await this.parentHost.readTextFile(notePath.path);
+            if (!note) return annotations;
+
+            // Reset regex indices
+            OZRP_REGEX.lastIndex = 0;
+            ZOTFLOW_REGEX.lastIndex = 0;
+
+            // Parse OZRP format (Legacy)
+            let match;
+            while ((match = OZRP_REGEX.exec(note)) !== null) {
+                try {
+                    const fullBlock = match[0];
+                    const jsonStr = match[1]!;
+                    const ann = JSON.parse(jsonStr);
+
+                    const quoteMatch =
+                        /%% OZRP-ANNO-QUOTE-BEGIN %%([\s\S]*?)[>\s]*%% OZRP-ANNO-QUOTE-END %%/.exec(
+                            fullBlock,
+                        );
+                    if (quoteMatch && quoteMatch[1]) {
+                        const rawQuote = quoteMatch[1];
+                        ann.text = rawQuote
+                            .split("\n")
+                            .map((line: string) =>
+                                line.replace(/^>\s*> ?/, "").trim(),
+                            )
+                            .filter((l: string) => l !== "")
+                            .join("\n");
+                    }
+
+                    const commMatch =
+                        /%% OZRP-ANNO-COMM-BEGIN %%([\s\S]*?)%% OZRP-ANNO-COMM-END %%/.exec(
+                            fullBlock,
+                        );
+                    if (commMatch && commMatch[1]) {
+                        const rawComm = commMatch[1];
+                        ann.comment = rawComm
+                            .split("\n")
+                            .map((line: string) =>
+                                line.replace(/^> ?/, "").trim(),
+                            )
+                            .filter((l: string) => l !== "")
+                            .join("\n");
+                    }
+
+                    annotations.push(ann);
+                } catch (e) {
+                    this.parentHost.log(
+                        "warn",
+                        "Failed to parse OZRP annotation",
+                        "LocalNoteService",
+                        e,
+                    );
+                }
+            }
+
+            // Parse ZotFlow format
+            while ((match = ZOTFLOW_REGEX.exec(note)) !== null) {
+                try {
+                    const jsonStr = match[2]!;
+                    const decodedJsonStr = decodeURIComponent(jsonStr);
+                    const ann = JSON.parse(decodedJsonStr);
+                    annotations.push(ann);
+                } catch (e) {
+                    this.parentHost.log(
+                        "warn",
+                        "Failed to parse ZotFlow annotation",
+                        "LocalNoteService",
+                        e,
+                    );
+                }
+            }
+        } catch (e) {
+            this.parentHost.log(
+                "error",
+                "Error parsing legacy annotations",
+                "LocalNoteService",
+                e,
+            );
+        }
+
+        return annotations;
     }
 
     /**
@@ -301,101 +409,5 @@ export class LocalNoteService {
             `Updated note: ${fileCheck.path}`,
             "LocalNoteService",
         );
-    }
-
-    /**
-     * Parse annotations from local source note content
-     * Supports both OZRP and ZOTFLOW formats
-     */
-    async parseLocalAnnotations(
-        localAttachment: TFileWithoutParentAndVault,
-    ): Promise<AnnotationJSON[]> {
-        const annotations: AnnotationJSON[] = [];
-
-        try {
-            const notePath =
-                await this.parentHost.getLinkedSourceNote(localAttachment);
-            if (!notePath) return annotations;
-
-            const note = await this.parentHost.readTextFile(notePath.path);
-            if (!note) return annotations;
-
-            // Reset regex indices
-            this.OZRP_REGEX.lastIndex = 0;
-            this.ZOTFLOW_REGEX.lastIndex = 0;
-
-            // Parse OZRP format (Legacy)
-            let match;
-            while ((match = this.OZRP_REGEX.exec(note)) !== null) {
-                try {
-                    const fullBlock = match[0];
-                    const jsonStr = match[1]!;
-                    const ann = JSON.parse(jsonStr);
-
-                    // Extract Quote (Text)
-                    const quoteMatch =
-                        /%% OZRP-ANNO-QUOTE-BEGIN %%([\s\S]*?)[>\s]*%% OZRP-ANNO-QUOTE-END %%/.exec(
-                            fullBlock,
-                        );
-                    if (quoteMatch && quoteMatch[1]) {
-                        const rawQuote = quoteMatch[1];
-                        ann.text = rawQuote
-                            .split("\n")
-                            .map((line) => line.replace(/^>\s*> ?/, "").trim())
-                            .filter((l) => l !== "")
-                            .join("\n");
-                    }
-
-                    // Extract Comment
-                    const commMatch =
-                        /%% OZRP-ANNO-COMM-BEGIN %%([\s\S]*?)%% OZRP-ANNO-COMM-END %%/.exec(
-                            fullBlock,
-                        );
-                    if (commMatch && commMatch[1]) {
-                        const rawComm = commMatch[1];
-                        ann.comment = rawComm
-                            .split("\n")
-                            .map((line) => line.replace(/^> ?/, "").trim())
-                            .filter((l) => l !== "")
-                            .join("\n");
-                    }
-
-                    annotations.push(ann);
-                } catch (e) {
-                    this.parentHost.log(
-                        "warn",
-                        "Failed to parse OZRP annotation",
-                        "LocalNoteService",
-                        e,
-                    );
-                }
-            }
-
-            // Parse ZotFlow format (New)
-            while ((match = this.ZOTFLOW_REGEX.exec(note)) !== null) {
-                try {
-                    const jsonStr = match[2]!; // Group 2 is JSON
-                    const decodedJsonStr = decodeURIComponent(jsonStr);
-                    const ann = JSON.parse(decodedJsonStr);
-                    annotations.push(ann);
-                } catch (e) {
-                    this.parentHost.log(
-                        "warn",
-                        "Failed to parse ZotFlow annotation",
-                        "LocalNoteService",
-                        e,
-                    );
-                }
-            }
-        } catch (e) {
-            this.parentHost.log(
-                "error",
-                "Error parsing annotations",
-                "LocalNoteService",
-                e,
-            );
-        }
-
-        return annotations;
     }
 }

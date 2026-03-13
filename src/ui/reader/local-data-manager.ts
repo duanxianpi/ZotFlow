@@ -1,54 +1,82 @@
-import { TFile } from "obsidian";
+import { TFile, normalizePath } from "obsidian";
 import { workerBridge } from "bridge";
 import { services } from "services/services";
-import { getLinkedSourceNote } from "utils/file";
+import { readTextFile, saveTextFile, checkFile } from "utils/file";
 
 import type { AnnotationJSON } from "types/zotero-reader";
 
+/** Shape of the `.zf.json` sidecar file. */
+interface ZotFlowSidecarData {
+    version: number;
+    annotations: AnnotationJSON[];
+}
+
+/** Current sidecar file format version. */
+const SIDECAR_VERSION = 1;
+
 /**
  * Manages all per-attachment data for local vault files opened in the reader:
- * annotations (in-memory cache + worker sync).
+ * annotations (in-memory cache + direct .zf.json file I/O).
+ *
+ * Annotation data is stored in a sidecar `.zf.json` file co-located with
+ * the attachment (e.g., `Papers/myPaper.pdf` → `Papers/myPaper.zf.json`).
  */
 export class LocalDataManager {
     private annotationCache: Map<string, AnnotationJSON> = new Map();
-    private sourceNotePath: string | null = null;
 
-    constructor(private localAttachmentFile: TFile) {
-        // Resolve linked source note path up front
-        const sourceNote = getLinkedSourceNote(services.app, {
-            path: localAttachmentFile.path,
-            name: localAttachmentFile.name,
-            extension: localAttachmentFile.extension,
-            basename: localAttachmentFile.basename,
-        });
-        this.sourceNotePath = sourceNote?.path ?? null;
-    }
+    constructor(private localAttachmentFile: TFile) {}
 
     /* ================================================================ */
     /*  Annotations                                                    */
     /* ================================================================ */
 
     /**
-     * Load annotations from the linked source note via the worker.
+     * Load annotations for this attachment.
+     *
+     * Priority:
+     * 1. Read from sidecar `.zf.json` (new format, direct main-thread I/O)
+     * 2. Fall back to worker-side legacy parsing of inline comments
+     *    — if found, auto-migrate to `.zf.json`
      */
     async loadAnnotations(): Promise<AnnotationJSON[]> {
-        const localAttachment = this.getLocalAttachmentDescriptor();
-        if (!getLinkedSourceNote(services.app, localAttachment)) {
-            return [];
-        }
-
         try {
-            const annotations =
-                await workerBridge.localNote.parseLocalAnnotations(
+            // Try sidecar JSON first (direct main-thread read)
+            const jsonPath = this.getJsonPath();
+            const fileResult = await checkFile(services.app, jsonPath);
+
+            if (fileResult.exists) {
+                const content = await readTextFile(services.app, jsonPath);
+                if (content) {
+                    const parsed: unknown = JSON.parse(content);
+                    const annotations = this.extractAnnotations(
+                        parsed,
+                        jsonPath,
+                    );
+                    if (annotations) {
+                        this.rebuildCache(annotations);
+                        return this.getAllAnnotations();
+                    }
+                }
+            }
+
+            // Fallback: ask worker to parse legacy inline annotations
+            const localAttachment = this.getLocalAttachmentDescriptor();
+            const legacyAnnotations =
+                await workerBridge.localNote.parseLegacyAnnotations(
                     localAttachment,
                 );
 
-            this.annotationCache.clear();
-            for (const anno of annotations) {
-                this.annotationCache.set(anno.id, anno);
+            if (legacyAnnotations.length > 0) {
+                // Auto-migrate: save to .zf.json on main thread
+                services.logService.info(
+                    `Migrating ${legacyAnnotations.length} legacy annotations to .zf.json for ${this.localAttachmentFile.basename}`,
+                    "LocalDataManager",
+                );
+                await this.writeJsonFile(legacyAnnotations);
             }
 
-            return annotations;
+            this.rebuildCache(legacyAnnotations);
+            return this.getAllAnnotations();
         } catch (error) {
             services.logService.error(
                 "Failed to load annotations",
@@ -57,7 +85,7 @@ export class LocalDataManager {
             );
             services.notificationService.notify(
                 "error",
-                "Could not parse annotations.",
+                "Could not load annotations.",
             );
             return [];
         }
@@ -73,21 +101,34 @@ export class LocalDataManager {
         return this.annotationCache.get(id);
     }
 
-    /** Save/update an annotation and sync to the worker. */
+    /** Save/update an annotation and persist to .zf.json. */
     async saveAnnotation(annotation: AnnotationJSON) {
         this.annotationCache.set(annotation.id, annotation);
-        await this.syncAnnotationsToWorker();
+        await this.persistAnnotations();
     }
 
-    /** Delete an annotation and sync to the worker. */
+    /** Delete an annotation and persist to .zf.json. */
     async deleteAnnotation(annotationId: string) {
         this.annotationCache.delete(annotationId);
-        await this.syncAnnotationsToWorker();
+        await this.persistAnnotations();
     }
 
     /* ================================================================ */
     /*  Private helpers                                                */
     /* ================================================================ */
+
+    /**
+     * Derive the sidecar JSON path from the attachment file.
+     * `<attachment-folder>/<attachment-basename>.zf.json`
+     */
+    private getJsonPath(): string {
+        const dir = this.localAttachmentFile.path.substring(
+            0,
+            this.localAttachmentFile.path.lastIndexOf("/"),
+        );
+        const prefix = dir ? `${dir}/` : "";
+        return `${prefix}${this.localAttachmentFile.basename}.zf.json`;
+    }
 
     private getLocalAttachmentDescriptor() {
         return {
@@ -98,30 +139,81 @@ export class LocalDataManager {
         };
     }
 
-    private async syncAnnotationsToWorker() {
+    /** Replace the in-memory cache with the given annotations. */
+    private rebuildCache(annotations: AnnotationJSON[]) {
+        this.annotationCache.clear();
+        for (const anno of annotations) {
+            this.annotationCache.set(anno.id, anno);
+        }
+    }
+
+    /**
+     * Persist annotation cache to the sidecar `.zf.json` file,
+     * then trigger a note re-render via the worker.
+     */
+    private async persistAnnotations() {
+        const allAnnotations = this.getAllAnnotations();
         const localAttachment = this.getLocalAttachmentDescriptor();
-        const allAnnotations = Array.from(this.annotationCache.values());
+
+        try {
+            await this.writeJsonFile(allAnnotations);
+        } catch (err) {
+            services.logService.error(
+                "Failed to save annotations",
+                "LocalDataManager",
+                err,
+            );
+        }
+
+        // Also update the source note (via worker, since it uses LiquidJS templates)
         workerBridge.localNote
             .triggerUpdate(localAttachment, allAnnotations)
-            .then(() => {
-                const newSourceNote = getLinkedSourceNote(
-                    services.app,
-                    localAttachment,
-                );
-                if (!this.sourceNotePath && newSourceNote) {
-                    /**
-                     * If we didn't have a source note before but now do
-                     * save the path and load any existing view state
-                     */
-                    this.sourceNotePath = newSourceNote.path;
-                }
-            })
             .catch((err) => {
                 services.logService.error(
-                    "Failed to trigger worker update",
+                    "Failed to update source note",
                     "LocalDataManager",
                     err,
                 );
             });
+    }
+
+    /** Write structured sidecar data to the .zf.json file. */
+    private async writeJsonFile(annotations: AnnotationJSON[]) {
+        const jsonPath = this.getJsonPath();
+        const data: ZotFlowSidecarData = {
+            version: SIDECAR_VERSION,
+            annotations,
+        };
+        const content = JSON.stringify(data, null, 2);
+        await saveTextFile(services.app, jsonPath, content);
+    }
+
+    /**
+     * Extract annotations from parsed JSON.
+     * Supports the structured envelope `{ version, annotations }` format.
+     * Returns null if the shape is unrecognized.
+     */
+    private extractAnnotations(
+        parsed: unknown,
+        jsonPath: string,
+    ): AnnotationJSON[] | null {
+        // Structured envelope format: { version, annotations }
+        if (
+            parsed !== null &&
+            typeof parsed === "object" &&
+            !Array.isArray(parsed) &&
+            "annotations" in parsed
+        ) {
+            const data = parsed as ZotFlowSidecarData;
+            if (Array.isArray(data.annotations)) {
+                return data.annotations;
+            }
+        }
+
+        services.logService.warn(
+            `Unrecognized .zf.json format: ${jsonPath}`,
+            "LocalDataManager",
+        );
+        return null;
     }
 }

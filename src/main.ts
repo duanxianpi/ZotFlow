@@ -9,7 +9,9 @@ import {
     Modal,
     Plugin,
     TFile,
+    TAbstractFile,
     WorkspaceLeaf,
+    normalizePath,
     type ObsidianProtocolData,
 } from "obsidian";
 
@@ -191,17 +193,19 @@ export default class ZotFlow extends Plugin {
 
         this.addSettingTab(new ZotFlowSettingTab(this.app, this));
 
-        // Track file renames to keep viewStates keys in sync
+        // Track file renames to keep viewStates and .zf.json sidecar in sync
         this.registerEvent(
             this.app.vault.on("rename", (file, oldPath) => {
                 services.viewStateService.renameViewState(oldPath, file.path);
+                this.handleSidecarRename(file, oldPath);
             }),
         );
 
-        // Clean up view state when an attachment is deleted
+        // Clean up view state and .zf.json sidecar when an attachment is deleted
         this.registerEvent(
             this.app.vault.on("delete", (file) => {
                 services.viewStateService.deleteViewState(file.path);
+                this.handleSidecarDelete(file);
             }),
         );
     }
@@ -370,6 +374,76 @@ export default class ZotFlow extends Plugin {
                 `Protocol Error: ${error.message || "Unknown error"}`,
             );
         }
+    }
+
+    /**
+     * When a supported attachment is renamed/moved, rename/move its
+     * co-located `.zf.json` sidecar file to keep them in sync.
+     */
+    private handleSidecarRename(file: TAbstractFile, oldPath: string) {
+        if (!(file instanceof TFile)) return;
+        if (!SUPPORTED_EXTENSIONS.includes(file.extension.toLowerCase()))
+            return;
+
+        const oldJsonPath = this.getSidecarPath(oldPath);
+        const newJsonPath = this.getSidecarPathFromFile(file);
+        if (oldJsonPath === newJsonPath) return;
+
+        const jsonFile = this.app.vault.getAbstractFileByPath(
+            normalizePath(oldJsonPath),
+        );
+        if (jsonFile instanceof TFile) {
+            this.app.vault.rename(jsonFile, newJsonPath).catch((err) => {
+                services.logService.error(
+                    `Failed to rename sidecar ${oldJsonPath} → ${newJsonPath}`,
+                    "Main",
+                    err,
+                );
+            });
+        }
+    }
+
+    /**
+     * When a supported attachment is deleted, delete its
+     * co-located `.zf.json` sidecar file.
+     */
+    private handleSidecarDelete(file: TAbstractFile) {
+        if (!(file instanceof TFile)) return;
+        if (!SUPPORTED_EXTENSIONS.includes(file.extension.toLowerCase()))
+            return;
+
+        const jsonPath = this.getSidecarPathFromFile(file);
+        const jsonFile = this.app.vault.getAbstractFileByPath(
+            normalizePath(jsonPath),
+        );
+        if (jsonFile instanceof TFile) {
+            this.app.vault.trash(jsonFile, true).catch((err) => {
+                services.logService.error(
+                    `Failed to delete sidecar ${jsonPath}`,
+                    "Main",
+                    err,
+                );
+            });
+        }
+    }
+
+    /**
+     * Derive sidecar `.zf.json` path from a raw file path string.
+     * `Papers/myPaper.pdf` → `Papers/myPaper.zf.json`
+     */
+    private getSidecarPath(filePath: string): string {
+        const lastDot = filePath.lastIndexOf(".");
+        const basePath = lastDot !== -1 ? filePath.substring(0, lastDot) : filePath;
+        return `${basePath}.zf.json`;
+    }
+
+    /**
+     * Derive sidecar `.zf.json` path from a TFile.
+     */
+    private getSidecarPathFromFile(file: TFile): string {
+        const dir = file.path.substring(0, file.path.lastIndexOf("/"));
+        const prefix = dir ? `${dir}/` : "";
+        return `${prefix}${file.basename}.zf.json`;
     }
 
     async handleFileOpen(file: TFile | null) {

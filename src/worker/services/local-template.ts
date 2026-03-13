@@ -17,7 +17,7 @@ zotflow-local-attachment: [[{{ path }}]]
 {%- if item.annotations.length > 0 -%}
 ## Annotations
 {%- for annotation in item.annotations -%}
-%% ZOTFLOW_ANNO_{{ annotation.key }}_BEG {{ annotation.raw | process_raw_anno_json }} %%
+
 > [!zotflow-{{ annotation.type }}-{{ annotation.color }}] [[{{item.path}}#page={{ annotation.pageLabel }}#annotation={{ annotation.key | process_nav_info }}|{{ item.name }}, p.{{ annotation.pageLabel }}]]
 {%- if annotation.type == "ink" or annotation.type == "image"-%}
 > > ![[{{settings.annotationImageFolder}}/{{ annotation.key }}.png]]
@@ -29,8 +29,6 @@ zotflow-local-attachment: [[{{ path }}]]
 > {{ annotation.comment | replace: newline, quote_string }}
 {%- endif -%}
 ^{{ annotation.key }}
-
-%% ZOTFLOW_ANNO_{{ annotation.key }}_END %%
 
 {%- endfor -%}
 {%- endif -%}
@@ -63,16 +61,7 @@ export class LocalTemplateService {
             return encodeURIComponent(JSON.stringify(navInfo));
         });
 
-        this.engine.registerFilter("process_raw_anno_json", (input: string) => {
-            try {
-                const anno =
-                    typeof input === "string" ? JSON.parse(input) : input;
-                if (anno.image) anno.image = "";
-                return encodeURIComponent(JSON.stringify(anno));
-            } catch (e) {
-                return "";
-            }
-        });
+
     }
 
     updateSettings(newSettings: ZotFlowSettings) {
