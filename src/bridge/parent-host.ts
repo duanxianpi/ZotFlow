@@ -126,6 +126,26 @@ export class ParentHost implements IParentProxy {
         await deleteFile(this.app, path);
     }
 
+    public async readExternalBinaryFile(
+        absolutePath: string,
+    ): Promise<ArrayBuffer> {
+        try {
+            // Use Node.js fs directly — FileSystemAdapter prepends vault path
+            // which breaks absolute OS paths. fs is available in Electron.
+            const fs = require("fs").promises;
+            const nodeBuffer: Buffer = await fs.readFile(absolutePath);
+            const arrayBuffer = nodeBuffer.buffer.slice(
+                nodeBuffer.byteOffset,
+                nodeBuffer.byteOffset + nodeBuffer.byteLength,
+            ) as ArrayBuffer;
+            return Comlink.transfer(arrayBuffer, [arrayBuffer]);
+        } catch (e: any) {
+            throw new Error(
+                `Failed to read external file: ${e.message}`,
+            );
+        }
+    }
+
     public async parseYaml(text: string): Promise<any> {
         return parseYaml(text);
     }

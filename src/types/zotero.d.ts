@@ -112,6 +112,7 @@ declare module "./zotero-item" {
         contentType: string;
         filename: string;
         md5?: string;
+        path?: string; // Absolute OS path (linked_file only)
     }
 
     interface NoteData {

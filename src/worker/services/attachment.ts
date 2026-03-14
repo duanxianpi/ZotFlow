@@ -127,12 +127,23 @@ export class AttachmentService {
 
         // Download Strategy
         switch (linkMode) {
-            case "linked_file":
-                throw new ZotFlowError(
-                    ZotFlowErrorCode.UNKNOWN,
+            case "linked_file": {
+                const filePath = item.raw.data.path;
+                if (!filePath) {
+                    throw new ZotFlowError(
+                        ZotFlowErrorCode.RESOURCE_MISSING,
+                        "AttachmentService",
+                        `No path for linked_file ${item.key}`,
+                    );
+                }
+                this.parentHost.log(
+                    "info",
+                    `Reading linked file: ${filePath}`,
                     "AttachmentService",
-                    `Linked file detected for ${item.key}. Not implemented.`,
                 );
+                buffer = await this.parentHost.readExternalBinaryFile(filePath);
+                break;
+            }
             case "imported_file":
             case "imported_url":
                 // Try WebDAV first if enabled

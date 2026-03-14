@@ -43,7 +43,9 @@ export class ZoteroReaderView extends ItemView {
     }
 
     getDisplayText() {
-        return this.attachmentItem?.raw.data.filename || "Zotero Reader";
+        return this.attachmentItem?.raw.data.filename
+            ?? this.attachmentItem?.raw.data.title
+            ?? "Zotero Reader";
     }
 
     getIcon() {
@@ -87,7 +89,11 @@ export class ZoteroReaderView extends ItemView {
             this.keyInfo = _keyInfo;
             this.containerEl
                 .getElementsByClassName("view-header-title")[0]
-                ?.setText(this.attachmentItem.raw.data.filename);
+                ?.setText(
+                    this.attachmentItem.raw.data.filename
+                    ?? this.attachmentItem.raw.data.title
+                    ?? "Zotero Reader",
+                );
             this.loadDocument();
         }
 

@@ -33,6 +33,7 @@ export interface IParentProxy {
         frontmatter?: Record<string, any>;
     }>;
     deleteFile(path: string): Promise<void>;
+    readExternalBinaryFile(absolutePath: string): Promise<ArrayBuffer>;
     openFile(path: string, newLeaf: boolean): Promise<void>;
 
     // Index
